@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-300: #99ffff;
+  --color-brand-400: #4dffff;
+  --color-brand-500: #00ffff;
+  --font-syncopate: 'Syncopate', sans-serif;
+  --font-michroma: 'Michroma', sans-serif;
+}
+
+/* Heavy, slow-paced cinematic light sweep across text from J to I */
+@keyframes text-shine-sweep {
+  0% {
+    background-position: 180% 0;
+  }
+  75% {
+    background-position: -180% 0;
+  }
+  100% {
+    background-position: -180% 0;
+  }
+}
+
+.text-sweep-shine {
+  background: linear-gradient(
+    110deg,
+    #94a3b8 0%,
+    #94a3b8 36%,
+    #cbd5e1 44%,
+    #ffffff 49%,
+    #38bdf8 51%,
+    #ffffff 53%,
+    #cbd5e1 58%,
+    #94a3b8 66%,
+    #94a3b8 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-shine-sweep 7.5s cubic-bezier(0.35, 0, 0.25, 1) infinite;
+}
+
+/* Ethereal rising smoke / vapor plumes next to the name */
+@keyframes smoke-plume-1 {
+  0% {
+    transform: translateY(0) translateX(0) scale(0.5);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.55;
+  }
+  60% {
+    opacity: 0.35;
+    transform: translateY(-8px) translateX(2px) scale(1.1);
+  }
+  100% {
+    transform: translateY(-18px) translateX(-3px) scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes smoke-plume-2 {
+  0% {
+    transform: translateY(0) translateX(0) scale(0.4);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.45;
+  }
+  70% {
+    opacity: 0.25;
+    transform: translateY(-10px) translateX(-2px) scale(1.2);
+  }
+  100% {
+    transform: translateY(-22px) translateX(3px) scale(1.9);
+    opacity: 0;
+  }
+}
+
+.smoke-wisp-1 {
+  animation: smoke-plume-1 3s ease-out infinite;
+}
+
+.smoke-wisp-2 {
+  animation: smoke-plume-2 3.6s ease-out 1.2s infinite;
+}
+
+.smoke-wisp-3 {
+  animation: smoke-plume-1 4s ease-out 2s infinite;
+}
+
+/* Hide scrollbar for clean horizontal single-line icon bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Mobile GPU scroll stabilization and antialiasing */
+html, body {
+  background-color: #020617;
+  color: #f8fafc;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-overflow-scrolling: touch;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(51, 65, 85, 0.8);
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 255, 0.8);
+  }
+
+  /* Clean, slender & Engraved Roboto signature font with slow light sweep from j to i */
+  .roboto-engraved,
+  .roboto-engraved-shimmer {
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    display: inline-block;
+    background: linear-gradient(
+      110deg,
+      #64748b 0%,
+      #64748b 38%,
+      #94a3b8 44%,
+      #f8fafc 50%,
+      #38bdf8 54%,
+      #94a3b8 60%,
+      #64748b 66%,
+      #64748b 100%
+    );
+    background-size: 300% 100%;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
+    animation: lightSweepSlow 8s ease-in-out infinite;
+    transition: all 0.3s ease;
+  }
+
+  .roboto-engraved:hover,
+  .roboto-engraved-shimmer:hover {
+    filter: brightness(1.2) drop-shadow(0 0 8px rgba(56, 189, 248, 0.45));
+  }
+}
+
+@keyframes lightSweepSlow {
+  0% {
+    background-position: 250% 0;
+  }
+  65% {
+    background-position: -80% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+

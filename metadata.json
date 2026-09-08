@@ -1,0 +1,6 @@
+{
+  "name": "Quantura | Institutional Quantitative Crypto Trading Terminal",
+  "description": "منصة كوانتورا (Quantura) للتداول الخوارزمي والكمي الذكي المؤسسي (Institutional-Grade) للعملات الرقمية مع بث لحظي Binance وبوت تداول آلي ومحاكي Paper Trading واختبار رجعي Backtesting وتنبيهات Telegram.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

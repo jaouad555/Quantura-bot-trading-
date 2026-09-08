@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+<script>
+window.addEventListener('error', function(e) {
+  fetch('/api/log-error', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: e.message, filename: e.filename, lineno: e.lineno }) }).catch(()=>{});
+});
+const oldError = console.error;
+console.error = function(...args) {
+  fetch('/api/log-error', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: args.join(' ') }) }).catch(()=>{});
+  oldError.apply(console, args);
+};
+</script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="description" content="Quantura (كوانتورا) - Institutional Quantitative Crypto Trading Terminal with Real-Time Binance WebSocket, Risk Engine, Auto Bot & Backtester" />
+    <meta property="og:title" content="Quantura | Institutional Quantitative Crypto Trading Terminal" />
+    <meta property="og:description" content="منصة كوانتورا (Quantura) للتداول الخوارزمي والكمي الذكي المؤسسي (Institutional-Grade) للعملات الرقمية مع بث لحظي Binance وبوت تداول آلي ومحاكي Paper Trading واختبار رجعي Backtesting وتنبيهات Telegram." />
+    <title>Quantura | Institutional Quantitative Crypto Trading Terminal</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="shortcut icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Syncopate:wght@400;700&family=Outfit:wght@400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
