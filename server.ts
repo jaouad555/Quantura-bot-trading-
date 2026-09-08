@@ -2,7 +2,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import crypto from 'crypto';
-import { createServer as createViteServer } from 'vite';
+
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
@@ -21,7 +21,7 @@ import {
 } from './src/types';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -1682,7 +1682,8 @@ server.on('error', (err: any) => {
 async function initFrontendAndServices() {
   if (process.env.NODE_ENV !== 'production') {
     try {
-      const vite = await createViteServer({
+      const { createServer } = await import('vite');
+      const vite = await createServer({
         server: { middlewareMode: true },
         appType: 'spa',
       });
