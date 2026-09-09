@@ -327,8 +327,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
                 {/* Optional 2FA Activation Checkbox */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                      <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                      <QrCode className="w-3.5 h-3.5 text-amber-400" />
                     </div>
                     <div>
                       <div className="text-xs font-bold text-slate-200">
@@ -407,9 +407,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
               </div>
 
               {/* Returning user mode: Key is securely saved in Authenticator app and permanently hidden from screen */}
-                            <div className="bg-emerald-950/25 border border-emerald-500/30 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                            <div className="bg-emerald-950/25 border border-amber-500/30 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-emerald-300">
@@ -510,8 +510,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
 
           {/* Secure Badge */}
           <div className="mt-8 flex items-center justify-center gap-1.5 opacity-60">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-[9px] font-mono tracking-widest text-emerald-400/80 uppercase">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[9px] font-mono tracking-widest text-amber-400/80 uppercase">
               {getLabel('اتصال مشفر 256-BIT', '256-BIT SECURE CONNECTION', 'CONNEXION SÉCURISÉE 256-BIT')}
             </span>
           </div>

@@ -21,7 +21,7 @@ import {
 } from './src/types';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -1711,3 +1711,11 @@ async function initFrontendAndServices() {
 }
 
 initFrontendAndServices();
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});

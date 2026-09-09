@@ -2424,8 +2424,8 @@ export const App: React.FC = () => {
               onClick={() => setActiveTab('autoBot')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
                 activeTab === 'autoBot'
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                  : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20'
+                  ? 'bg-gradient-to-r from-amber-500 to-teal-400 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                  : 'text-amber-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-amber-500/20'
               }`}
             >
               <Bot className="w-3.5 h-3.5" />
@@ -2793,11 +2793,11 @@ export const App: React.FC = () => {
               {/* Left Side: Brand & Identity */}
               <div className="flex items-center gap-4">
                 <div className="relative group cursor-pointer shrink-0" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                  <div className="absolute -inset-1.5 bg-gradient-to-r from-emerald-500/40 to-cyan-500/40 rounded-2xl blur-lg opacity-40 group-hover:opacity-90 transition duration-500"></div>
+                  <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/40 to-cyan-500/40 rounded-2xl blur-lg opacity-40 group-hover:opacity-90 transition duration-500"></div>
                   <img
                     src="/logo.png"
                     alt="Quantura Logo"
-                    className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-emerald-500/50 shadow-2xl transition-all duration-500 group-hover:scale-105 object-cover"
+                    className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-amber-500/50 shadow-2xl transition-all duration-500 group-hover:scale-105 object-cover"
                   />
                 </div>
                 <div className="flex flex-col text-left">
@@ -2840,7 +2840,7 @@ export const App: React.FC = () => {
                     <Terminal className="w-3 h-3 text-cyan-500" />
                     <span>SYS_READY</span>
                   </div>
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md px-2.5 py-1 text-emerald-500 font-mono text-[9px] tracking-wider flex items-center gap-1.5 shadow-sm">
+                  <div className="bg-emerald-500/10 border border-amber-500/20 rounded-md px-2.5 py-1 text-emerald-500 font-mono text-[9px] tracking-wider flex items-center gap-1.5 shadow-sm">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
                     <span>LIVE PING</span>
                   </div>
@@ -2980,7 +2980,7 @@ export const App: React.FC = () => {
             <div
               className={`p-4 rounded-2xl border shadow-2xl  ${
                 activeToastAlert.decision === 'LONG'
-                  ? 'bg-slate-900/95 border-emerald-500/50 shadow-emerald-500/15 ring-1 ring-emerald-500/30'
+                  ? 'bg-slate-900/95 border-amber-500/50 shadow-emerald-500/15 ring-1 ring-emerald-500/30'
                   : activeToastAlert.decision === 'SHORT'
                   ? 'bg-slate-900/95 border-rose-500/50 shadow-rose-500/15 ring-1 ring-rose-500/30'
                   : 'bg-slate-900/95 border-sky-500/50 shadow-sky-500/15 ring-1 ring-sky-500/30'
@@ -2991,7 +2991,7 @@ export const App: React.FC = () => {
                 <div
                   className={`p-2.5 rounded-xl border shrink-0 ${
                     activeToastAlert.decision === 'LONG'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-md shadow-emerald-500/10'
+                      ? 'bg-emerald-500/20 text-amber-400 border-amber-500/40 shadow-md shadow-emerald-500/10'
                       : activeToastAlert.decision === 'SHORT'
                       ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-md shadow-rose-500/10'
                       : 'bg-sky-500/20 text-sky-400 border-sky-500/40 shadow-md shadow-sky-500/10'
@@ -3015,7 +3015,7 @@ export const App: React.FC = () => {
                       </span>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
                         activeToastAlert.decision === 'LONG'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-amber-500/40'
                           : activeToastAlert.decision === 'SHORT'
                           ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                           : 'bg-sky-500/20 text-sky-300 border-sky-500/40'

@@ -280,12 +280,12 @@ export const Header: React.FC<HeaderProps> = ({
     switch (connectionState) {
       case 'CONNECTED':
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-medium shrink-0">
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-amber-400 border border-amber-500/30 text-[10px] font-mono font-medium shrink-0">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
             </span>
-            <Radio className="w-2.5 h-2.5 text-emerald-400" />
+            <Radio className="w-2.5 h-2.5 text-amber-400" />
             <span className="hidden xl:inline">{t.status.connected}</span>
             <span className="xl:hidden">LIVE</span>
           </span>
@@ -341,12 +341,12 @@ export const Header: React.FC<HeaderProps> = ({
               title="Quantura Terminal"
             >
               <div className="relative shrink-0">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/50 to-cyan-500/50 rounded-xl blur-[2px] opacity-40 group-hover:opacity-90 transition duration-300"></div>
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/50 to-cyan-500/50 rounded-xl blur-[2px] opacity-40 group-hover:opacity-90 transition duration-300"></div>
                 <img
                   src="/logo.png"
                   alt="Quantura Logo"
                   referrerPolicy="no-referrer"
-                  className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-emerald-500/60 shadow-md group-hover:scale-105 transition-transform"
+                  className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-amber-500/60 shadow-md group-hover:scale-105 transition-transform"
                 />
               </div>
               <div className="hidden xs:flex flex-col">
@@ -354,7 +354,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-sm sm:text-base font-black tracking-wider bg-gradient-to-r from-white via-slate-100 to-emerald-400 bg-clip-text text-transparent font-mono">
                     QUANTURA
                   </span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-bold border border-emerald-500/40">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-amber-400 font-mono font-bold border border-amber-500/40">
                     v2.5
                   </span>
                 </div>
@@ -391,7 +391,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition flex items-center gap-1 ${
                       marketType === 'FUTURES'
                         ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-amber-500/40 hover:bg-emerald-500/30'
                     }`}
                     title={isArabic ? 'اضغط للتبديل بين Spot و Futures' : 'Cliquer pour basculer entre Spot et Futures'}
                   >
@@ -407,7 +407,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <div
                   className={`text-xs sm:text-sm md:text-base font-mono font-black transition-colors duration-300 ${
                     priceFlash === 'UP'
-                      ? 'text-emerald-400'
+                      ? 'text-amber-400'
                       : priceFlash === 'DOWN'
                       ? 'text-rose-400'
                       : 'text-white'
@@ -418,7 +418,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div
                   className={`text-[11px] font-mono font-bold flex items-center ${
-                    isPricePositive ? 'text-emerald-400' : 'text-rose-400'
+                    isPricePositive ? 'text-amber-400' : 'text-rose-400'
                   }`}
                 >
                   <span>{isPricePositive ? '+' : ''}{(ticker.priceChangePercent24h ?? 0).toFixed(2)}%</span>
@@ -432,7 +432,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800/50 hover:bg-slate-700/60 border border-slate-700/60 transition disabled:opacity-50 shrink-0 ml-1"
                   title={isArabic ? 'تحديث البيانات' : 'Actualiser'}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
                 </button>
                 <div className="hidden md:inline-block">
                   {getConnectionBadge()}
@@ -448,12 +448,12 @@ export const Header: React.FC<HeaderProps> = ({
             {onOpenCustomBalanceModal && (
               <button
                 onClick={onOpenCustomBalanceModal}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-mono font-bold transition shadow-sm shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-amber-500/30 hover:border-amber-500/50 text-xs font-mono font-bold transition shadow-sm shrink-0"
                 title={isArabic ? 'تخصيص الرصيد الوهمي' : 'Définir le solde virtuel'}
               >
-                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                <Wallet className="w-3.5 h-3.5 text-amber-400" />
                 <span>${(paperWallet?.balance ?? 10000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-                <span className="text-[10px] text-emerald-400/80 font-normal hidden sm:inline">USDT</span>
+                <span className="text-[10px] text-amber-400/80 font-normal hidden sm:inline">USDT</span>
               </button>
             )}
 
@@ -597,7 +597,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onSelectPair(pair)}
                 className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer border ${
                   isSelected
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/20 ring-1 ring-emerald-500/30'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-amber-500/50 shadow-sm shadow-emerald-500/20 ring-1 ring-emerald-500/30'
                     : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800 hover:border-slate-700'
                 }`}
                 title={isArabic ? pair.arabicName : pair.displayName}
@@ -630,7 +630,7 @@ export const Header: React.FC<HeaderProps> = ({
             dir={isArabic ? 'rtl' : 'ltr'}
           >
             {/* Top Accent Gradient Bar */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-indigo-500"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-cyan-400 to-indigo-500"></div>
 
             {/* Header with Close Button */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -646,7 +646,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <h3 className="text-sm font-black text-white font-mono uppercase tracking-wider">
                       {displayUsername}
                     </h3>
-                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-mono font-bold">
+                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-amber-500/40 text-[9px] font-mono font-bold">
                       PRO VIP
                     </span>
                   </div>
@@ -671,10 +671,10 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-[10px] uppercase font-mono text-slate-500 block mb-1">
                   {isArabic ? 'حالة الأمان' : 'Sécurité'}
                 </span>
-                <div className={`flex items-center gap-1.5 text-xs font-mono font-bold ${is2FAActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                <div className={`flex items-center gap-1.5 text-xs font-mono font-bold ${is2FAActive ? 'text-amber-400' : 'text-slate-400'}`}>
                   {is2FAActive ? (
                     <>
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>{isArabic ? '2FA مفعل 🟢' : '2FA Actif 🟢'}</span>
                     </>
                   ) : (
@@ -707,7 +707,7 @@ export const Header: React.FC<HeaderProps> = ({
                       Binance Live
                     </span>
                   ) : (
-                    <span className="text-emerald-400 flex items-center gap-1">
+                    <span className="text-amber-400 flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                       Paper Trading
                     </span>
@@ -751,10 +751,10 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-xs font-medium text-slate-200 transition group cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <QrCode className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <QrCode className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
                   <span>{isArabic ? 'إعدادات 2FA (اختيارية)' : 'Gestion 2FA (Optionnelle)'}</span>
                 </span>
-                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${is2FAActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${is2FAActive ? 'bg-emerald-500/20 text-emerald-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                   {is2FAActive ? (isArabic ? 'مفعل 🟢' : 'Actif 🟢') : (isArabic ? 'معطل ⚪' : 'Désactivé ⚪')}
                 </span>
               </button>
@@ -794,12 +794,12 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={(e) => e.stopPropagation()}
             dir={isArabic ? 'rtl' : 'ltr'}
           >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-400"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-cyan-400"></div>
             
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                  <QrCode className="w-5 h-5 text-emerald-400" />
+                  <QrCode className="w-5 h-5 text-amber-400" />
                 </div>
                 <h3 className="text-sm font-bold uppercase tracking-wide">
                   {isArabic ? 'إعداد المصادقة الثنائية (2FA)' : 'Configuration 2FA'}
@@ -822,7 +822,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${is2FAActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${is2FAActive ? 'bg-emerald-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'}`}>
                       {is2FAActive ? <ShieldCheck className="w-5 h-5" /> : <ShieldOff className="w-5 h-5" />}
                     </div>
                     <div>
@@ -832,7 +832,7 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                       <div className="text-[11px] font-mono mt-0.5">
                         {is2FAActive ? (
-                          <span className="text-emerald-400 font-bold">{isArabic ? '🟢 مفعلة ونشطة' : '🟢 Activée'}</span>
+                          <span className="text-amber-400 font-bold">{isArabic ? '🟢 مفعلة ونشطة' : '🟢 Activée'}</span>
                         ) : (
                           <span className="text-slate-400">{isArabic ? '⚪ معطلة (دخول مباشر)' : '⚪ Désactivée'}</span>
                         )}
@@ -900,8 +900,8 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
 
                     {test2FAResult === 'SUCCESS' && (
-                      <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div className="p-2 rounded-lg bg-emerald-500/20 border border-amber-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
                         <span>{isArabic ? '✅ الرمز صحيح ومطابق مع هاتفك!' : '✅ Code valide et synchronisé avec succès !'}</span>
                       </div>
                     )}
@@ -989,7 +989,7 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         {copiedKey ? (
                           <>
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
                             <span className="text-emerald-300">{isArabic ? 'تم' : 'OK'}</span>
                           </>
                         ) : (
@@ -1036,8 +1036,8 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
 
                     {test2FAResult === 'SUCCESS' && (
-                      <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div className="p-2 rounded-lg bg-emerald-500/20 border border-amber-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
                         <span>{isArabic ? '✅ تم تفعيل المصادقة الثنائية بنجاح!' : '✅ 2FA activée avec succès !'}</span>
                       </div>
                     )}
@@ -1053,9 +1053,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <button
                     type="button"
                     onClick={() => handleToggle2FA(true)}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                    className="w-full py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-amber-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                   >
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
                     <span>{isArabic ? 'تفعيل 2FA مباشرة بدون اختبار' : 'Activer 2FA directement'}</span>
                   </button>
                 </div>

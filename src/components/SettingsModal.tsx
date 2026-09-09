@@ -69,18 +69,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3.5">
             <div className="relative group shrink-0">
-              <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/40 to-cyan-500/40 rounded-2xl blur opacity-50"></div>
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/40 to-cyan-500/40 rounded-2xl blur opacity-50"></div>
               <img
                 src="/logo.png"
                 alt="Quantura Logo"
                 referrerPolicy="no-referrer"
-                className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-emerald-500/60 shadow-xl shadow-emerald-950/60"
+                className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-amber-500/60 shadow-xl shadow-emerald-950/60"
               />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-white text-lg font-mono tracking-wide">QUANTURA</h3>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-bold border border-emerald-500/30">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-amber-400 font-mono font-bold border border-amber-500/30">
                   v2.5
                 </span>
               </div>
@@ -99,10 +99,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
           {/* Paper Trading Custom Balance Card */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-teal-500/5 border border-emerald-500/30 space-y-3">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-teal-500/5 border border-amber-500/30 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-amber-400 border border-amber-500/30">
                   <Wallet className="w-4 h-4" />
                 </div>
                 <div>
@@ -156,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
                   binanceConfig?.isConnected
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    ? 'bg-emerald-500/20 text-amber-400 border-amber-500/40'
                     : 'bg-slate-800 text-slate-400 border-slate-700'
                 }`}>
                   {binanceConfig?.isConnected ? 'CONNECTED' : 'DISCONNECTED'}
@@ -315,7 +315,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Config Export / Import */}
           <div className="space-y-3 pt-3 border-t border-slate-800">
             <div className="flex items-center gap-2">
-              <Download className="w-4 h-4 text-emerald-400" />
+              <Download className="w-4 h-4 text-amber-400" />
               <span className="text-sm font-bold text-white">
                 {isArabic ? 'حفظ / استعادة الإعدادات' : 'Export / Import Configuration'}
               </span>
