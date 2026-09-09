@@ -1,3 +1,4 @@
+console.log("Starting Quantura Server...");
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import path from 'path';

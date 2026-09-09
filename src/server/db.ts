@@ -8,9 +8,18 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'bot_database.sqlite');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+
+let db;
+try {
+  const dbPath = path.join(dataDir, 'bot_database.sqlite');
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+} catch (error) {
+  console.error("CRITICAL: Failed to initialize SQLite database:", error);
+  // Fallback to in-memory to prevent crash
+  db = new Database(':memory:');
+}
+
 
 // Initialize schema
 export const initDb = () => {
@@ -51,7 +60,7 @@ export const initDb = () => {
       timestamp INTEGER
     )
   `);
-  console.log('Local SQLite Database initialized at:', dbPath);
+  console.log('Local SQLite Database initialized successfully');
 };
 
 // Helper for Key-Value store (Async wrapper to match the previous API)
