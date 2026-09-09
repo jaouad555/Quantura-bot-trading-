@@ -165,6 +165,7 @@ export interface MTFConfluenceData {
 }
 
 export interface AIAnalysisResult {
+  timestamp?: number; // Added to prevent immediate execution of stale signals
   decision: DecisionType;
   bias: BiasType;
   tradeType: TradeType;
@@ -406,6 +407,7 @@ export interface MultiCoinBacktestResult {
 
 export interface AutoBotConfig {
   enabled: boolean;
+  enabledAt?: number;
   timeframe?: BotTimeframe; // 'AUTO' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
   tradeAllocationPercent: number; // e.g. 20% of wallet balance per trade
   minConfidence: number; // e.g. 75%

@@ -1642,11 +1642,17 @@ export const App: React.FC = () => {
 
     // 1. Check New Position Entry
     if (currentSignal && (currentSignal.decision === 'LONG' || currentSignal.decision === 'SHORT') && !botConfig.circuitBreakerTripped) {
+      
+      // Prevent immediate trading of stale signals generated before the bot was turned on
+      const signalTimestamp = currentSignal.timestamp || 0;
+      const botEnabledAt = botConfig.enabledAt || 0;
+      const isFreshSignal = signalTimestamp >= botEnabledAt;
+
       // Check if current symbol is in the allowed whitelist
       const allowed = botConfig.allowedSymbols || [];
       const isAllowed = allowed.length === 0 ? false : allowed.some(a => currentSym.toUpperCase().startsWith(a.toUpperCase()));
       
-      if (isAllowed) {
+      if (isAllowed && isFreshSignal) {
         const modePositions = currentPositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
         const maxTrades = botConfig.maxOpenTrades || 3;
         const canOpen = modePositions.length < maxTrades && !modePositions.some(p => normalizeSymbol(p.symbol) === normalizeSymbol(currentSym));
@@ -2581,12 +2587,13 @@ export const App: React.FC = () => {
                     return {
                       ...prev,
                       enabled: true,
+                      enabledAt: Date.now(),
                       circuitBreakerTripped: false,
                       circuitBreakerTrippedAt: undefined,
                       circuitBreakerResetAt: Date.now(),
                     };
                   }
-                  return { ...prev, enabled: nextEnabled };
+                  return { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
                 });
               }}
               onUpdateConfig={(partial) => {

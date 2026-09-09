@@ -577,6 +577,7 @@ export function generateQuantitativePlan(
   };
 
   return {
+    timestamp: Date.now(),
     decision,
     bias,
     tradeType,
