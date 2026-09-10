@@ -163,7 +163,7 @@ export function calculateQuantitativeScore(
   // 3. Momentum Factor (Weight: 15%)
   let momBull = 50;
   let momBear = 50;
-  const { rsi14, macd } = indicators;
+  const { rsi14, macd, stoch } = indicators;
 
   let rsiBull = 50;
   if (rsi14 >= 50 && rsi14 <= 68) rsiBull = 80;
@@ -179,7 +179,14 @@ export function calculateQuantitativeScore(
   else if (macd.macdLine < macd.signalLine && macd.histogram < 0) macdBull = 15;
   else macdBull = 40;
 
-  momBull = Math.round(rsiBull * 0.5 + macdBull * 0.5);
+  let stochBull = 50;
+  if (stoch) {
+    if (stoch.k < 20 && stoch.d < 20 && stoch.k > stoch.d) stochBull = 90;
+    else if (stoch.k > 80 && stoch.d > 80 && stoch.k < stoch.d) stochBull = 10;
+    else if (stoch.k > stoch.d) stochBull = 65;
+    else stochBull = 35;
+  }
+  momBull = Math.round(rsiBull * 0.4 + macdBull * 0.4 + stochBull * 0.2);
   momBear = 100 - momBull;
 
   // 4. Volume & Flow Factor (Weight: 10%)
@@ -212,8 +219,15 @@ export function calculateQuantitativeScore(
   // 6. Support / Resistance Proximity (Weight: 10%)
   let srBull = 50;
   let srBear = 50;
-  const nearestSupport = (indicators.supportLevels && indicators.supportLevels[0]) || currentPrice * 0.98;
-  const nearestResistance = (indicators.resistanceLevels && indicators.resistanceLevels[0]) || currentPrice * 1.02;
+  let nearestSupport = (indicators.supportLevels && indicators.supportLevels[0]) || currentPrice * 0.98;
+  let nearestResistance = (indicators.resistanceLevels && indicators.resistanceLevels[0]) || currentPrice * 1.02;
+  if (indicators.fibonacci) {
+    const fibs = Object.values(indicators.fibonacci).sort((a, b) => a - b);
+    const below = fibs.filter(f => f < currentPrice);
+    const above = fibs.filter(f => f > currentPrice);
+    if (below.length > 0) nearestSupport = Math.max(nearestSupport, below[below.length - 1]);
+    if (above.length > 0) nearestResistance = Math.min(nearestResistance, above[0]);
+  }
   const distToSup = Math.abs(currentPrice - nearestSupport);
   const distToRes = Math.abs(nearestResistance - currentPrice);
 
@@ -557,7 +571,7 @@ export function generateQuantitativePlan(
 • **القرار** : ${decision === 'LONG' ? 'شراء (LONG)' : decision === 'SHORT' ? 'بيع (SHORT)' : 'انتظار (WAIT)'} (قوة الإشارة: ${quantScore.signalStrength}%)
 • **حالة السوق** : ${marketRegime}
 • **هيكل السوق** : ${msTrend} (${msStructure})
-• **المؤشرات الفنية** : RSI14 (${indicators?.rsi14 || 50}) | MACD (${indicators?.macd?.histogram || 0}) | EMA200 ($${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
+• **المؤشرات الفنية** : RSI14 (${indicators?.rsi14 || 50}) | Stochastic (${indicators?.stoch?.k || 50}) | MACD (${indicators?.macd?.histogram || 0}) | EMA200 (${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
 • **خطة التداول** :
   - سعر الدخول المثالي : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'غير متاح'}
   - وقف الخسارة (SL) : ${stopLoss ? `$${formatCoinPrice(stopLoss, symbol)}` : 'غير متاح'}

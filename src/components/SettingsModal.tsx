@@ -27,6 +27,7 @@ interface SettingsModalProps {
   onConfidenceChange: (val: number) => void;
   onTelegramConfigChange?: (token: string, chatId: string) => void;
   onLogout?: () => void;
+  onFullReset?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -51,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onConfidenceChange,
   onTelegramConfigChange,
   onLogout,
+  onFullReset,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [localTgToken, setLocalTgToken] = useState(telegramBotToken);
@@ -110,7 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {isArabic ? 'الرصيد الوهمي للتداول التجريبي' : 'Capital Virtuel de Trading (Paper)'}
                   </h4>
                   <span className="text-xs text-emerald-300 font-mono font-bold">
-                    ${(paperWallet?.balance ?? 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                    ${(paperWallet?.balance ?? 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                   </span>
                 </div>
               </div>
@@ -430,8 +432,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </h4>
                 <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
                   {isArabic 
-                    ? 'سيتم مسح جميع الصفقات، التنبيهات، مفاتيح بايننس وإعادة المحفظة إلى 10,000 USDT.'
-                    : 'Toutes les données locales, alertes et clés seront effacées. Le portefeuille sera réinitialisé à 10 000 USDT.'}
+                    ? 'سيتم مسح جميع الصفقات، التنبيهات، مفاتيح بايننس وإعادة المحفظة إلى 1,000 USDT.'
+                    : 'Toutes les données locales, alertes et clés seront effacées. Le portefeuille sera réinitialisé à 1 000 USDT.'}
                 </p>
               </div>
             </div>
@@ -444,15 +446,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {isArabic ? 'إلغاء' : 'Annuler'}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    apiStorage.clear();
-                    sessionStorage.clear();
-                    if ('caches' in window) {
-                      caches.keys().then((names) => {
-                        names.forEach((name) => caches.delete(name));
-                      });
+                    if (onFullReset) {
+                      await onFullReset();
                     }
+                    await apiStorage.resetTradingData();
+                    apiStorage.clear();
                   } catch {}
                   window.location.reload();
                 }}

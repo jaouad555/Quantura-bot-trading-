@@ -32,6 +32,7 @@ interface RiskCalculatorViewProps {
   paperWallet: PaperWallet;
   onUpdatePaperWallet: (wallet: PaperWallet) => void;
   onOpenCustomBalanceModal?: () => void;
+  onFullReset?: () => void;
   executionMode?: 'PAPER' | 'BINANCE_LIVE';
   binanceConfig?: BinanceApiConfig;
   selectedSymbol?: string;
@@ -44,6 +45,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
   paperWallet,
   onUpdatePaperWallet,
   onOpenCustomBalanceModal,
+  onFullReset,
   executionMode = 'PAPER',
   binanceConfig,
   selectedSymbol = 'BTCUSDT',
@@ -65,7 +67,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
     ? binanceConfig.accountInfo.totalUsdtEquity
     : paperWallet.balance || 0;
 
-  const [capital, setCapital] = useState<number>(effectiveBalance || 10000);
+  const [capital, setCapital] = useState<number>(effectiveBalance || 1000);
   
   useEffect(() => {
     setCapital(effectiveBalance);
@@ -250,7 +252,12 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
     setDepositAmountInput('');
   };
 
-  const handleResetPaperWallet = () => {
+  const handleResetPaperWallet = async () => {
+    if (onFullReset) {
+      try {
+        await onFullReset();
+      } catch (e) {}
+    }
     onUpdatePaperWallet({
       balance: 1000,
       realizedPnl: 0,

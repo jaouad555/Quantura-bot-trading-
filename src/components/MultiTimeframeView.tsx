@@ -151,6 +151,12 @@ export const MultiTimeframeView: React.FC<MultiTimeframeViewProps> = ({
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-slate-500">Stoch (K,D) :</span>
+                      <span className="text-slate-300 font-bold">
+                        {inds.stoch ? Math.round(inds.stoch.k) + '/' + Math.round(inds.stoch.d) : '--'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-slate-500">EMA 20 / 50 :</span>
                       <span className="text-slate-300">${formatCoinPrice(inds.ema20, ticker?.symbol || 'BTCUSDT')} / ${formatCoinPrice(inds.ema50, ticker?.symbol || 'BTCUSDT')}</span>
                     </div>

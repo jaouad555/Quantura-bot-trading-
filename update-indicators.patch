@@ -1,0 +1,102 @@
+--- src/utils/indicators.ts
++++ src/utils/indicators.ts
+@@ -432,6 +432,77 @@
+   };
+ }
+ 
++/**
++ * Calculates Stochastic Oscillator (14, 3, 3)
++ */
++export function calculateStochastic(klines: KlineCandle[], period = 14, smoothK = 3, smoothD = 3) {
++  if (klines.length < period) return { k: 50, d: 50 };
++
++  const rawK: number[] = [];
++  for (let i = period - 1; i < klines.length; i++) {
++    const slice = klines.slice(i - period + 1, i + 1);
++    const highestHigh = Math.max(...slice.map(k => k.high));
++    const lowestLow = Math.min(...slice.map(k => k.low));
++    const currentClose = klines[i].close;
++
++    const k = highestHigh === lowestLow ? 50 : ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
++    rawK.push(k);
++  }
++
++  const kSeries = calculateSMA(rawK, smoothK);
++  const dSeries = calculateSMA(kSeries, smoothD);
++
++  return {
++    k: Math.round((kSeries[kSeries.length - 1] || 50) * 100) / 100,
++    d: Math.round((dSeries[dSeries.length - 1] || 50) * 100) / 100,
++  };
++}
++
++/**
++ * Calculates Ichimoku Cloud (9, 26, 52)
++ */
++export function calculateIchimoku(klines: KlineCandle[], tenkan = 9, kijun = 26, senkou = 52) {
++  if (klines.length < senkou) return undefined;
++
++  const getMid = (slice: KlineCandle[]) => {
++    const high = Math.max(...slice.map(k => k.high));
++    const low = Math.min(...slice.map(k => k.low));
++    return (high + low) / 2;
++  };
++
++  const tenkanVal = getMid(klines.slice(-tenkan));
++  const kijunVal = getMid(klines.slice(-kijun));
++  const senkouAVal = (tenkanVal + kijunVal) / 2;
++  const senkouBVal = getMid(klines.slice(-senkou));
++
++  return {
++    tenkan: Math.round(tenkanVal * 100) / 100,
++    kijun: Math.round(kijunVal * 100) / 100,
++    senkouA: Math.round(senkouAVal * 100) / 100,
++    senkouB: Math.round(senkouBVal * 100) / 100,
++  };
++}
++
++/**
++ * Calculates Fibonacci Retracement Levels based on recent high/low
++ */
++export function calculateFibonacci(klines: KlineCandle[]) {
++  if (klines.length < 20) return undefined;
++  const recent = klines.slice(-60); // lookback 60 candles
++  const high = Math.max(...recent.map(k => k.high));
++  const low = Math.min(...recent.map(k => k.low));
++  const diff = high - low;
++
++  return {
++    level0: Math.round(high * 100) / 100,
++    level236: Math.round((high - diff * 0.236) * 100) / 100,
++    level382: Math.round((high - diff * 0.382) * 100) / 100,
++    level500: Math.round((high - diff * 0.5) * 100) / 100,
++    level618: Math.round((high - diff * 0.618) * 100) / 100,
++    level786: Math.round((high - diff * 0.786) * 100) / 100,
++    level100: Math.round(low * 100) / 100,
++  };
++}
++
+ /**
+  * Calculates Full Technical Indicators for a timeframe series
+  */
+@@ -458,6 +529,10 @@
+   const { vwap, obv, volumeAvg20 } = calculateVolumeMetrics(klines);
+   const marketStructure = calculateMarketStructure(klines);
+   const { supportLevels, resistanceLevels, liquidityZones } = calculateSupportResistance(klines, lastClose);
++  
++  const stoch = calculateStochastic(klines);
++  const ichimoku = calculateIchimoku(klines);
++  const fibonacci = calculateFibonacci(klines);
+ 
+   return {
+     ema20,
+@@ -469,6 +544,9 @@
+     macd,
+     atr14,
+     adx14,
++    stoch,
++    ichimoku,
++    fibonacci,
+     bollingerBands,
+     volume: klines[klines.length - 1].volume,
+     volumeAvg20,

@@ -129,6 +129,24 @@ app.post('/api/config/clear', async (req, res) => {
   }
 });
 
+app.post('/api/trading/reset', async (req, res) => {
+  try {
+    await kv.set('btc_active_bot_positions', '[]');
+    await kv.set('btc_trade_history', '[]');
+    await kv.set('btc_bot_logs', '[]');
+    await kv.set('btc_paper_wallet', JSON.stringify({
+      balance: 1000,
+      realizedPnl: 0,
+      openPosition: null,
+      history: [],
+    }));
+    await kv.set('btc_push_alerts', '[]');
+    res.json({ success: true, message: 'Trading state wiped and reset to default $1000' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset trading data' });
+  }
+});
+
 app.post('/api/config/batch', async (req, res) => {
   const { data } = req.body;
   if (!data || typeof data !== 'object') {

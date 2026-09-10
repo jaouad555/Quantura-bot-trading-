@@ -25,7 +25,11 @@ import {
   Flame,
   Activity,
   Gauge,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  X,
+  Coins,
+  BarChart2,
 } from 'lucide-react';
 import { 
   AutoBotConfig, 
@@ -64,6 +68,7 @@ interface AutoTradingBotProps {
   onPanicCloseAll?: () => void;
   onResetCircuitBreaker?: () => void;
   onTrimExcessPositions?: () => void;
+  onFullReset?: () => void;
 }
 
 const LEVERAGE_PRESETS = [1, 2, 3, 5, 10, 20, 25, 50];
@@ -92,6 +97,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   onPanicCloseAll,
   onResetCircuitBreaker,
   onTrimExcessPositions,
+  onFullReset,
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
@@ -163,7 +169,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     setShowConfigModal(false);
   };
 
-  const handleApplyStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING') => {
+  const handleApplyStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
     const isFutures = botConfig.marketType === 'FUTURES';
     
     let currentPresets = botConfig.activePresets || [];
@@ -219,14 +225,53 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           trailingActivationProfitPercent: isFutures ? 2.0 : 4.0,
           sizingMode: 'FIXED_PERCENT'
         };
+      } else if (activeStr === 'BREAKOUT') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '30m',
+          leverage: isFutures ? 4 : 1,
+          tradeAllocationPercent: 20,
+          minConfidence: 70,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.0 : 1.8,
+          trailingActivationProfitPercent: isFutures ? 1.2 : 2.2,
+          sizingMode: 'FIXED_PERCENT'
+        };
+      } else if (activeStr === 'MEAN_REVERSION') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '15m',
+          leverage: isFutures ? 3 : 1,
+          tradeAllocationPercent: 15,
+          minConfidence: 68,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 0.9 : 1.6,
+          trailingActivationProfitPercent: isFutures ? 1.1 : 2.0,
+          sizingMode: 'FIXED_PERCENT'
+        };
+      } else if (activeStr === 'INSTITUTIONAL_SMC') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '1h',
+          leverage: isFutures ? 2 : 1,
+          tradeAllocationPercent: 25,
+          minConfidence: 75,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.5 : 2.5,
+          trailingActivationProfitPercent: isFutures ? 2.0 : 3.5,
+          sizingMode: 'FIXED_PERCENT'
+        };
       }
     } else if (currentPresets.length > 1) {
       // Multi-Strategy Mode (Adaptive)
       let maxLev = 1;
       if (isFutures) {
         if (currentPresets.includes('SCALPER')) maxLev = 5;
+        else if (currentPresets.includes('BREAKOUT')) maxLev = 4;
         else if (currentPresets.includes('MOMENTUM')) maxLev = 3;
+        else if (currentPresets.includes('MEAN_REVERSION')) maxLev = 3;
         else if (currentPresets.includes('SWING')) maxLev = 2;
+        else if (currentPresets.includes('INSTITUTIONAL_SMC')) maxLev = 2;
         else maxLev = 3;
       }
       newConfig = {
@@ -709,7 +754,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </span>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* Preset 1: Momentum */}
           <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-brand-500/50 transition-colors">
             <div>
@@ -754,7 +799,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 5x • فريم 15m • أهداف سريعة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
+                  ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
                   : (isArabic ? 'صفقات سريعة 15m • استهداف أرباح صغيرة متكررة' : '15m Spot entries • Fast incremental gains')}
               </p>
             </div>
@@ -780,7 +825,112 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </button>
           </div>
 
-          {/* Preset 3: Swing */}
+          {/* Preset 3: Breakout Sniper */}
+          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-purple-500/50 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300 mb-1.5">
+                <Target className="w-3.5 h-3.5 text-purple-400" />
+                <span>{isArabic ? 'اختراق المستويات 🚀 (Breakout)' : 'Breakout Sniper 🚀'}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                {botConfig.marketType === 'FUTURES' 
+                  ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m • High-volume support/resistance breakouts')
+                  : (isArabic ? 'فوري 30m • اقتناص الانفجارات السعرية بعد تجميع طويل' : '30m Spot • Range expansion breakouts with volume spikes')}
+              </p>
+            </div>
+            <button
+              onClick={() => handleApplyStrategy('BREAKOUT')}
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                botConfig.activePresets?.includes('BREAKOUT') && botConfig.enabled
+                  ? 'bg-purple-500 text-slate-950 border-purple-500 shadow-lg shadow-purple-500/20'
+                  : 'bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-slate-950 border-purple-500/30 hover:border-purple-500'
+              }`}
+            >
+              {botConfig.activePresets?.includes('BREAKOUT') && botConfig.enabled ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Preset 4: Mean Reversion */}
+          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-teal-500/50 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-teal-300 mb-1.5">
+                <Activity className="w-3.5 h-3.5 text-teal-400" />
+                <span>{isArabic ? 'ارتداد القمم والقيعان 🎯 (Reversion)' : 'Mean Reversion 🎯'}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                {botConfig.marketType === 'FUTURES' 
+                  ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند' : '3x Leverage • 15m • Counter-trend RSI extremes & Bollinger bounces')
+                  : (isArabic ? 'اقتناص القيعان 15m • شراء عند ذروة البيع وبيع عند ذروة الشراء' : '15m Spot • Buy oversold dips and take quick rebounds')}
+              </p>
+            </div>
+            <button
+              onClick={() => handleApplyStrategy('MEAN_REVERSION')}
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                botConfig.activePresets?.includes('MEAN_REVERSION') && botConfig.enabled
+                  ? 'bg-teal-500 text-slate-950 border-teal-500 shadow-lg shadow-teal-500/20'
+                  : 'bg-teal-500/10 hover:bg-teal-500 text-teal-400 hover:text-slate-950 border-teal-500/30 hover:border-teal-500'
+              }`}
+            >
+              {botConfig.activePresets?.includes('MEAN_REVERSION') && botConfig.enabled ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Preset 5: Smart Money SMC */}
+          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-cyan-500/50 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300 mb-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isArabic ? 'الاتجاه المؤسسي الذكي 🏛️ (SMC)' : 'Smart Money SMC 🏛️'}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                {botConfig.marketType === 'FUTURES' 
+                  ? (isArabic ? 'رافعة 2x • فريم 1H • تتبع صانع السوق وكتل الأوامر Order Blocks وFVG' : '2x Leverage • 1H • Institutional Order Blocks & Fair Value Gaps')
+                  : (isArabic ? 'تجميع مؤسسي 1H • أعلى نسبة دقة مع مناطق السيولة الكبرى' : '1H Spot • Smart Money accumulation zones with institutional bias')}
+              </p>
+            </div>
+            <button
+              onClick={() => handleApplyStrategy('INSTITUTIONAL_SMC')}
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                botConfig.activePresets?.includes('INSTITUTIONAL_SMC') && botConfig.enabled
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-500 shadow-lg shadow-cyan-500/20'
+                  : 'bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-500'
+              }`}
+            >
+              {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') && botConfig.enabled ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Preset 6: Swing */}
           <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-emerald-500/50 transition-colors">
             <div>
               <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-300 mb-1.5">
@@ -789,7 +939,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 2x • فريم 4H • استهداف قمم وقيعان المدى المتوسط' : '2x Leverage • Swing trades on 4H with lowest Drawdown')
+                  ? (isArabic ? 'رافعة 2x • فريم 4H • استهداف قمم وقيعان المدى المتوسط بأمان' : '2x Leverage • Swing trades on 4H with lowest Drawdown')
                   : (isArabic ? 'تخزين آمن 4H • ثقة عالية مع وقف خسارة واسع' : 'Safe accumulation 4H • High filter swing trades')}
               </p>
             </div>
@@ -1030,14 +1180,38 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       {/* Active Positions Cards List */}
       {displayPositions.length > 0 ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300">
             <span className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-brand-400" />
               <span>{isArabic ? `العقود المفتوحة قيد المراقبة اللحظية (${displayPositions.length})` : `Active Futures Positions (${displayPositions.length})`}</span>
             </span>
-            <span className="text-[11px] text-slate-500">
-              {isArabic ? 'تحديث لحظي للأسعار وحساب ROE عبر Binance WebSocket ⚡' : 'Live WebSocket Feeds ⚡'}
-            </span>
+            <div className="flex items-center gap-2">
+              {onPanicCloseAll && (
+                <button
+                  type="button"
+                  onClick={onPanicCloseAll}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  title={isArabic ? 'إغلاق فوري لجميع العقود المفتوحة' : 'Close all active positions'}
+                >
+                  <X className="w-3 h-3" />
+                  <span>{isArabic ? 'إغلاق كل الصفقات' : 'Fermer toutes'}</span>
+                </button>
+              )}
+              {onFullReset && (
+                <button
+                  type="button"
+                  onClick={onFullReset}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/70 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  title={isArabic ? 'إغلاق كل الصفقات ومسح الأرشيف وإعادة ضبط المحفظة 1000$' : 'Tout réinitialiser (1000$)'}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>{isArabic ? 'إعادة ضبط شاملة (1000$)' : 'Reset tout (1000$)'}</span>
+                </button>
+              )}
+              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                {isArabic ? 'تحديث لحظي ⚡' : 'Live WebSocket ⚡'}
+              </span>
+            </div>
           </div>
           {displayPositions.map((pos, idx) => renderActiveCard(pos, idx))}
         </div>

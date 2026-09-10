@@ -1,0 +1,74 @@
+--- src/utils/quantEngine.ts
++++ src/utils/quantEngine.ts
+@@ -128,14 +128,24 @@
+   // 1. Trend Factor (Weight: 20%)
+   let trendBull = 50;
+   let trendBear = 50;
+-  const { ema20, ema50, ema100, ema200, sma200 } = indicators;
++  const { ema20, ema50, ema100, ema200, sma200, ichimoku } = indicators;
+   let emaBullCount = 0;
+   if (currentPrice > ema20) emaBullCount++;
+   if (ema20 > ema50) emaBullCount++;
+   if (ema50 > ema100) emaBullCount++;
+   if (ema100 > ema200) emaBullCount++;
+   if (currentPrice > sma200) emaBullCount++;
+-  trendBull = (emaBullCount / 5) * 100;
++  let baseTrendBull = (emaBullCount / 5) * 100;
++  if (ichimoku) {
++    let ichiScore = 50;
++    if (currentPrice > ichimoku.senkouA && currentPrice > ichimoku.senkouB) ichiScore += 25;
++    else if (currentPrice < ichimoku.senkouA && currentPrice < ichimoku.senkouB) ichiScore -= 25;
++    if (ichimoku.tenkan > ichimoku.kijun) ichiScore += 15;
++    else if (ichimoku.tenkan < ichimoku.kijun) ichiScore -= 15;
++    baseTrendBull = (baseTrendBull * 0.7) + (ichiScore * 0.3);
++  }
++  trendBull = Math.round(Math.min(100, Math.max(0, baseTrendBull)));
+   trendBear = 100 - trendBull;
+ 
+   // 2. Market Structure Factor (Weight: 20%)
+@@ -163,7 +173,7 @@
+   // 3. Momentum Factor (Weight: 15%)
+   let momBull = 50;
+   let momBear = 50;
+-  const { rsi14, macd } = indicators;
++  const { rsi14, macd, stoch } = indicators;
+   
+   let rsiBull = 50;
+   if (rsi14 >= 50 && rsi14 <= 68) rsiBull = 80;
+@@ -179,7 +189,14 @@
+   else if (macd.macdLine < macd.signalLine && macd.histogram < 0) macdBull = 15;
+   else macdBull = 40;
+ 
+-  momBull = Math.round(rsiBull * 0.5 + macdBull * 0.5);
++  let stochBull = 50;
++  if (stoch) {
++    if (stoch.k < 20 && stoch.d < 20 && stoch.k > stoch.d) stochBull = 90;
++    else if (stoch.k > 80 && stoch.d > 80 && stoch.k < stoch.d) stochBull = 10;
++    else if (stoch.k > stoch.d) stochBull = 65;
++    else stochBull = 35;
++  }
++  momBull = Math.round(rsiBull * 0.4 + macdBull * 0.4 + stochBull * 0.2);
+   momBear = 100 - momBull;
+ 
+   // 4. Volume & Flow Factor (Weight: 10%)
+@@ -204,11 +221,17 @@
+   // 6. Support / Resistance Proximity (Weight: 10%)
+   let srBull = 50;
+   let srBear = 50;
+-  const nearestSupport = (indicators.supportLevels && indicators.supportLevels[0]) || currentPrice * 0.98;
+-  const nearestResistance = (indicators.resistanceLevels && indicators.resistanceLevels[0]) || currentPrice * 1.02;
+-  const distToSup = Math.abs(currentPrice - nearestSupport);
+-  const distToRes = Math.abs(nearestResistance - currentPrice);
++  let nearestSupport = (indicators.supportLevels && indicators.supportLevels[0]) || currentPrice * 0.98;
++  let nearestResistance = (indicators.resistanceLevels && indicators.resistanceLevels[0]) || currentPrice * 1.02;
++  if (indicators.fibonacci) {
++    const fibs = Object.values(indicators.fibonacci).sort((a, b) => a - b);
++    const below = fibs.filter(f => f < currentPrice);
++    const above = fibs.filter(f => f > currentPrice);
++    if (below.length > 0) nearestSupport = Math.max(nearestSupport, below[below.length - 1]);
++    if (above.length > 0) nearestResistance = Math.min(nearestResistance, above[0]);
++  }
++  const distToSup = Math.abs(currentPrice - nearestSupport);
++  const distToRes = Math.abs(nearestResistance - currentPrice);
+ 
+   if (distToSup + distToRes > 0) {

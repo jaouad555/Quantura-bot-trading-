@@ -84,11 +84,51 @@ class ApiStorage {
     }).catch(() => {});
   }
 
+  async resetTradingData() {
+    this.mem['btc_active_bot_positions'] = '[]';
+    this.mem['btc_trade_history'] = '[]';
+    this.mem['btc_bot_logs'] = '[]';
+    this.mem['btc_paper_wallet'] = JSON.stringify({
+      balance: 1000,
+      realizedPnl: 0,
+      openPosition: null,
+      history: [],
+    });
+    this.mem['btc_push_alerts'] = '[]';
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('btc_active_bot_positions', '[]');
+        window.localStorage.setItem('btc_trade_history', '[]');
+        window.localStorage.setItem('btc_bot_logs', '[]');
+        window.localStorage.setItem('btc_paper_wallet', JSON.stringify({
+          balance: 1000,
+          realizedPnl: 0,
+          openPosition: null,
+          history: [],
+        }));
+        window.localStorage.setItem('btc_push_alerts', '[]');
+      } catch (e) {}
+    }
+
+    try {
+      await fetch('/api/trading/reset', { method: 'POST' });
+    } catch {}
+  }
+
   clear() {
     this.mem = {};
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        window.localStorage.clear();
+        const authPrefixes = ['firebase', 'auth', 'user', 'session', 'clerk', 'supabase', 'google'];
+        const keysToRemove = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && !authPrefixes.some(p => k.toLowerCase().includes(p))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => window.localStorage.removeItem(k));
       } catch (e) {}
     }
     fetch('/api/config/clear', { method: 'POST' }).catch(() => {});

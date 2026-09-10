@@ -452,7 +452,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'تخصيص الرصيد الوهمي' : 'Définir le solde virtuel'}
               >
                 <Wallet className="w-3.5 h-3.5 text-amber-400" />
-                <span>${(paperWallet?.balance ?? 10000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                <span>${(paperWallet?.balance ?? 1000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                 <span className="text-[10px] text-amber-400/80 font-normal hidden sm:inline">USDT</span>
               </button>
             )}
@@ -720,7 +720,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {isArabic ? 'رصيد المحفظة' : 'Solde Portefeuille'}
                 </span>
                 <div className="text-xs font-mono font-bold text-emerald-300 truncate">
-                  ${(paperWallet?.balance ?? 10000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT
+                  ${(paperWallet?.balance ?? 1000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT
                 </div>
               </div>
             </div>

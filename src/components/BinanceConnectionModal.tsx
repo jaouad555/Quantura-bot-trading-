@@ -446,7 +446,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                   )}
                 </div>
                 <div className="text-base font-black font-mono text-emerald-400">
-                  ${(paperWallet?.balance ?? 10000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-sans">USDT</span>
+                  ${(paperWallet?.balance ?? 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-sans">USDT</span>
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1 font-sans">
                   {isArabic ? 'أموال محاكاة تجريبية بدون مخاطرة' : 'Fonds virtuels de simulation'}

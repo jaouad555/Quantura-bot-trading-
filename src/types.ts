@@ -92,6 +92,27 @@ export interface TechnicalIndicators {
   // Trend strength
   adx14: number;
 
+  // Advanced Oscillators & Overlays
+  stoch?: {
+    k: number;
+    d: number;
+  };
+  ichimoku?: {
+    tenkan: number;
+    kijun: number;
+    senkouA: number;
+    senkouB: number;
+  };
+  fibonacci?: {
+    level0: number;
+    level236: number;
+    level382: number;
+    level500: number;
+    level618: number;
+    level786: number;
+    level100: number;
+  };
+
   // Volume & price levels
   volume: number;
   volumeAvg20: number;
@@ -430,7 +451,7 @@ export interface AutoBotConfig {
   cooldownMinutes?: number; // Minimum wait after closing before re-entering same symbol
   allowedSymbols?: string[]; // Whitelist of symbols to monitor and trade
   multiPairScanning?: boolean; // Autonomous scanning across top watchlist symbols
-  activePresets?: ('MOMENTUM' | 'SCALPER' | 'SWING')[]; // Currently selected presets in UI
+  activePresets?: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[]; // Currently selected presets in UI
 }
 
 export interface ActiveBotPosition {

@@ -567,11 +567,18 @@ export const App: React.FC = () => {
   const botConfigRef = useRef<AutoBotConfig>(botConfig);
   botConfigRef.current = botConfig;
 
+  const tradeHistoryRef = useRef<TradeHistoryItem[]>(tradeHistory);
+  useEffect(() => {
+    tradeHistoryRef.current = tradeHistory;
+  }, [tradeHistory]);
+
   const activeSignalRef = useRef<AIAnalysisResult | null>(activeSignal);
   activeSignalRef.current = activeSignal;
 
   const paperWalletRef = useRef<PaperWallet>(paperWallet);
-  paperWalletRef.current = paperWallet;
+  useEffect(() => {
+    paperWalletRef.current = paperWallet;
+  }, [paperWallet]);
 
   const selectedSymbolRef = useRef<string>(selectedSymbol);
   selectedSymbolRef.current = selectedSymbol;
@@ -804,7 +811,7 @@ export const App: React.FC = () => {
             setPaperWallet((prev) => ({
               ...prev,
               balance: prev.balance + prevCashReturned,
-              realizedPnl: prev.realizedPnl + prevTotalTradePnlUsdt,
+              realizedPnl: prev.realizedPnl + prevPnlUsdt,
             }));
           }
 
@@ -1029,7 +1036,7 @@ export const App: React.FC = () => {
           trailingStopPrice: stopLoss,
         };
 
-        lastBotActionTimeRef.current = Date.now();
+        lastBotActionTimeRef.current = Date.now() + 2000;
         if (signal) {
           lastTradedSignalKeyRef.current = `${decision}_${currentSym}_${Math.round(signal.entryZone?.ideal || 0)}_${Math.round(signal.stopLoss || 0)}`;
         }
@@ -1167,7 +1174,7 @@ export const App: React.FC = () => {
 
       // 2b. TP1 HANDLER (50% scale-out, SL to breakeven)
       if (actionType === 'TP1' && !pos.tp1Hit) {
-        lastBotActionTimeRef.current = Date.now();
+        lastBotActionTimeRef.current = Date.now() + 2000;
         const marginClosed = pos.remainingAmountUsdt * 0.5;
         const pnlUsdt = marginClosed * (roePercent / 100);
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
@@ -1242,7 +1249,7 @@ export const App: React.FC = () => {
 
       // 2c. REBUY HANDLER (Smart Dip Re-entry)
       if (actionType === 'REBUY' && pos.tp1Hit && pos.rebuysCount < 1) {
-        lastBotActionTimeRef.current = Date.now();
+        lastBotActionTimeRef.current = Date.now() + 2000;
         const availableBalance = isLiveMode && currentBinance.accountInfo?.freeUsdt
           ? currentBinance.accountInfo.freeUsdt
           : currentWallet.balance;
@@ -1292,7 +1299,7 @@ export const App: React.FC = () => {
 
       // 2d. TP2 HANDLER (50% of remaining)
       if (actionType === 'TP2' && !pos.tp2Hit) {
-        lastBotActionTimeRef.current = Date.now();
+        lastBotActionTimeRef.current = Date.now() + 2000;
         const marginClosed = pos.remainingAmountUsdt * 0.5;
         const pnlUsdt = marginClosed * (roePercent / 100);
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
@@ -1360,7 +1367,7 @@ export const App: React.FC = () => {
           setPaperWallet((prev) => ({
             ...prev,
             balance: prev.balance + cashReturned,
-            realizedPnl: prev.realizedPnl + totalTradePnlUsdt,
+            realizedPnl: prev.realizedPnl + finalPnlUsdt,
           }));
         }
 
@@ -1420,14 +1427,15 @@ export const App: React.FC = () => {
   // Emergency Panic Close All handler
   const handlePanicCloseAll = useCallback(async () => {
     const isArabicLang = language === 'ar';
-    const currentPositions = activeBotPositionsRef.current;
     const isLiveMode = executionModeRef.current === 'BINANCE_LIVE';
+    const currentPositions = activeBotPositionsRef.current;
+    const targetPositions = currentPositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
     const currentBinance = binanceConfigRef.current;
     const currentP = ticker?.price || 0;
 
-    if (currentPositions.length === 0) return;
+    if (targetPositions.length === 0) return;
 
-    for (const pos of currentPositions) {
+    for (const pos of targetPositions) {
       const p = pos.symbol.toLowerCase() === selectedSymbolRef.current.toLowerCase() && currentP > 0 ? currentP : pos.currentPrice || pos.entryPrice;
       const isLong = pos.decision === 'LONG';
       const lev = pos.leverage || 1;
@@ -1447,7 +1455,7 @@ export const App: React.FC = () => {
         setPaperWallet((prev) => ({
           ...prev,
           balance: prev.balance + cashReturned,
-          realizedPnl: prev.realizedPnl + totalTradePnlUsdt,
+          realizedPnl: prev.realizedPnl + finalPnlUsdt,
         }));
       }
 
@@ -1475,7 +1483,7 @@ export const App: React.FC = () => {
       setTradeHistory((prev) => [closedHistoryItem, ...prev].slice(0, 500));
     }
 
-    updateBotPositionsSync(() => []);
+    updateBotPositionsSync((prev) => prev.filter(p => isLiveMode ? p.mode !== 'BINANCE_LIVE' : (p.mode === 'BINANCE_LIVE')));
 
     const newLog: AutoTradeLog = {
       id: `log-${Date.now()}`,
@@ -1521,6 +1529,38 @@ export const App: React.FC = () => {
     addBotLog(resetLog);
     playAudioChime();
   }, [language, ticker?.price, playAudioChime]);
+
+  const handleFullReset = useCallback(async () => {
+    // 1. Immediately zero out refs to prevent background intervals or ticks from writing back stale positions
+    activeBotPositionsRef.current = [];
+    botLogsRef.current = [];
+    tradeHistoryRef.current = [];
+    paperWalletRef.current = {
+      balance: 1000,
+      realizedPnl: 0,
+      openPosition: null,
+      history: [],
+    };
+
+    // 2. Clear state
+    setActiveBotPositions([]);
+    setTradeHistory([]);
+    setBotLogs([]);
+    setAlerts([]);
+    setPaperWallet({
+      balance: 1000,
+      realizedPnl: 0,
+      openPosition: null,
+      history: [],
+    });
+
+    // 3. Clear database and local storage via dedicated reset endpoint
+    try {
+      await apiStorage.resetTradingData();
+    } catch (e) {}
+
+    playAudioChime();
+  }, [playAudioChime]);
 
   // Trim excess positions if open positions exceed maxOpenTrades
   const handleTrimExcessPositions = useCallback(() => {
@@ -2128,7 +2168,14 @@ export const App: React.FC = () => {
   };
 
   const handleClearTradeHistory = () => {
+    activeBotPositionsRef.current = [];
+    tradeHistoryRef.current = [];
+    setActiveBotPositions([]);
     setTradeHistory([]);
+    try {
+      apiStorage.removeItem('btc_active_bot_positions');
+      apiStorage.removeItem('btc_trade_history');
+    } catch (e) {}
   };
 
   const handleDeleteTrade = (id: string) => {
@@ -2670,6 +2717,7 @@ export const App: React.FC = () => {
               onPanicCloseAll={handlePanicCloseAll}
               onResetCircuitBreaker={handleResetCircuitBreaker}
               onTrimExcessPositions={handleTrimExcessPositions}
+              onFullReset={handleFullReset}
             />
           )}
 
@@ -2750,6 +2798,7 @@ export const App: React.FC = () => {
               paperWallet={paperWallet}
               onUpdatePaperWallet={setPaperWallet}
               onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+              onFullReset={handleFullReset}
               executionMode={executionMode as any}
               binanceConfig={binanceConfig}
               selectedSymbol={selectedSymbol}
@@ -2786,6 +2835,7 @@ export const App: React.FC = () => {
               onDeleteTrade={handleDeleteTrade}
               onCloseActivePosition={(id) => executeAutoTradeAction('SL', ticker?.price || 0, isArabic ? 'إغلاق يدوي من سجل الصفقات' : 'Manual close from Trade Journal', id)}
               onSeedSampleData={handleSeedSampleHistory}
+              onFullReset={handleFullReset}
             />
           )}
         </main>
@@ -2923,6 +2973,7 @@ export const App: React.FC = () => {
             setTelegramChatId(chatId);
           }}
           onLogout={handleLogout}
+          onFullReset={handleFullReset}
         />
 
         {/* Custom Paper Balance Management Modal */}
