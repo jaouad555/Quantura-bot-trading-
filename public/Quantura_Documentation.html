@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quantura | Institutional Terminal & Bot - Full Documentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Outfit:wght@400;500;600;700&family=Syncopate:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #111827;
+      --border-color: #1f2937;
+      --brand: #00ffff;
+      --brand-glow: rgba(0, 255, 255, 0.15);
+      --emerald: #10b981;
+      --rose: #f43f5e;
+      --amber: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      line-height: 1.7;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Print / Action Header */
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .print-btn {
+      background: linear-gradient(135deg, #00ffff, #0284c7);
+      color: #020617;
+      border: none;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 900;
+      font-family: 'Cairo', sans-serif;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
+    }
+
+    .print-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 255, 255, 0.4);
+    }
+
+    .lang-btn {
+      background: #1f2937;
+      color: #d1d5db;
+      border: 1px solid #374151;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    /* Hero Branding */
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 40px;
+      padding-bottom: 30px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .hero-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      border: 2px solid rgba(0, 255, 255, 0.4);
+      object-fit: cover;
+      box-shadow: 0 0 20px var(--brand-glow);
+    }
+
+    .hero-info h1 {
+      font-family: 'Syncopate', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      background: rgba(0, 255, 255, 0.15);
+      color: var(--brand);
+      border: 1px solid rgba(0, 255, 255, 0.3);
+      border-radius: 6px;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .hero-sub {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Section Styles */
+    .section-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 35px 0 15px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid rgba(0, 255, 255, 0.2);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 15px;
+    }
+
+    .feature-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+
+    .feature-card h3 {
+      font-size: 15px;
+      color: var(--brand);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card p, .feature-card ul {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .feature-card ul {
+      padding-right: 18px;
+      margin-top: 6px;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      margin: 2px 4px 2px 0;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+
+    .badge-emerald { color: #34d399; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+    .badge-rose { color: #fb7185; background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.3); }
+    .badge-amber { color: #fbbf24; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+
+    .separator {
+      margin: 50px 0;
+      border: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #374151, transparent);
+    }
+
+    /* French Section styling */
+    .french-section {
+      direction: ltr;
+      text-align: left;
+      font-family: 'Outfit', sans-serif;
+    }
+    .french-section .feature-card ul {
+      padding-left: 18px;
+      padding-right: 0;
+    }
+
+    /* Print optimization */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+      }
+      .container {
+        max-width: 100% !important;
+        border: none !important;
+        padding: 20px !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+      }
+      .action-bar {
+        display: none !important;
+      }
+      .feature-card {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #1e293b !important;
+        page-break-inside: avoid;
+      }
+      .feature-card h3 {
+        color: #0369a1 !important;
+      }
+      .feature-card p, .feature-card ul {
+        color: #334155 !important;
+      }
+      .section-title {
+        color: #0f172a !important;
+        border-bottom-color: #0284c7 !important;
+        page-break-after: avoid;
+      }
+      .hero-info h1 {
+        color: #0f172a !important;
+      }
+      .hero-sub {
+        color: #475569 !important;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <button class="print-btn" onclick="window.print()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        تحميل وحفظ كـ PDF (Imprimer / Télécharger en PDF)
+      </button>
+
+      <div style="display: flex; gap: 8px;">
+        <a href="#arabic" class="lang-btn">العربية</a>
+        <a href="#french" class="lang-btn">Français</a>
+      </div>
+    </div>
+
+    <!-- Header Hero -->
+    <div class="hero">
+      <img src="/logo.png" alt="Quantura Logo" class="hero-logo" onerror="this.style.display='none'">
+      <div class="hero-info">
+        <h1>QUANTURA <span class="hero-badge">v2.5.0</span></h1>
+        <p class="hero-sub">Institutional-Grade Algorithmic Crypto Trading Terminal & Autonomous Bot Engine</p>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- ARABIC SECTION                                                    -->
+    <!-- ================================================================= -->
+    <div id="arabic">
+      <h2 class="section-title">📊 أولاً: دليل منصة Quantura الشامل</h2>
+      <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+        <strong>Quantura</strong> هي محطة تداول كمّي مؤسسية متقدمة مبنية لتداول العملات الرقمية بالاعتماد على النماذج الرياضية، وتدفق السيولة الحية، والذكاء الاصطناعي مع ربط مباشر بمنصة Binance (Spot & Futures).
+      </p>
+
+      <div class="card-grid">
+        <div class="feature-card">
+          <h3>🎯 1. محرك الإشارات الكمية</h3>
+          <p>تحليل متعدد العوامل لتحديد صفقات عالية الجودة:</p>
+          <ul>
+            <li><strong>تحديد نظام السوق (Market Regime):</strong> كشف اتجاه السوق (ترند صاعد، ترند هابط، تذبذب، تقلبات حادة).</li>
+            <li><strong>خطة تنفيذ دقيقة:</strong> أهداف واضحة (TP1, TP2, TP3) مع وقف الخسارة (Stop Loss) ونسبة R:R.</li>
+            <li><strong>تقرير تحليلي ذكي:</strong> شرح أسباب الدخول بثلاث لغات (العربية، الفرنسية، الإنجليزية).</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>⏱️ 2. مصفوفة الأطر الزمنية (MTF)</h3>
+          <p>تحليل فني متزامن عبر 7 فريمات زمنية (5m, 15m, 30m, 1h, 4h, 1d, 1w):</p>
+          <ul>
+            <li>حساب نسبة التوافق الإجمالي (Confluence Alignment %).</li>
+            <li>التأكد من عدم معاكسة الاتجاه المؤسسي العام.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🌊 3. عمق السيولة وبيانات المشتقات</h3>
+          <p>مراقبة مباشرة لدفتر الأوامر والفيوتشرز:</p>
+          <ul>
+            <li><strong>Whale Walls:</strong> رصد جدران السيولة الكبيرة للمشترين والبائعين.</li>
+            <li><strong>Funding Rate & Open Interest:</strong> قياس معنويات المتداولين ومعدلات الفائدة التمويلية في Binance Futures.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🧪 4. محرك الاختبار التاريخي (Backtesting)</h3>
+          <p>محاكاة صفقات حقيقية تصل إلى 24 شهراً:</p>
+          <ul>
+            <li>اختبار سلة كاملة من العملات (Portfolio) أو كل عملة بمفردها.</li>
+            <li>حساب دقيق لـ: Win Rate, Profit Factor, Drawdown, مع تصدير CSV.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2 class="section-title">🤖 ثانياً: بوت التداول الآلي (Auto-Trading Bot)</h2>
+      <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+        نظام خوارزمي مستقل يعمل 24/7 لتنفيذ الصفقات وإدارتها دون تدخل بشري، وفق منظومة أمان مؤسسية صارمة.
+      </p>
+
+      <div class="card-grid">
+        <div class="feature-card">
+          <h3>⚡ 1. استراتيجيات تداول فورية (Presets)</h3>
+          <p>أنماط مسبقة الإعداد للتداول بنقرة واحدة:</p>
+          <ul>
+            <li><span class="badge-pill badge-emerald">Momentum:</span> تتبع الاتجاه القوي (فريم 1h، رافعة 3x).</li>
+            <li><span class="badge-pill badge-amber">Scalper:</span> صفقات سريعة بأهداف قريبة (فريم 15m، رافعة 5x).</li>
+            <li><span class="badge-pill">Breakout Sniper:</span> تداول اختراق مستويات الدعم والمقاومة.</li>
+            <li><span class="badge-pill">Smart Money SMC:</span> اقتناص الأوردر بلوك (Order Blocks) والفجوات السعرية.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🎯 2. جني الأرباح المجزأ (Scale-Out)</h3>
+          <ul>
+            <li><strong>إغلاق 50% عند TP1:</strong> تأمين نصف الأرباح فوراً.</li>
+            <li><strong>نقل الوقف للدخول (Breakeven):</strong> تصبح الصفقة خالية من المخاطر بنسبة 100%.</li>
+            <li><strong>إعادة الشراء الذكية (Smart Rebuy):</strong> تزويد العقد عند الارتداد التصحيحي.</li>
+            <li><strong>إطلاق العنان للـ Runner:</strong> ترك النصف الآخر لتحقيق TP2 و TP3.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🛡️ 3. درع إدارة المخاطر الصارم</h3>
+          <ul>
+            <li><strong>الوقف المتحرك (Trailing Stop):</strong> حجز الأرباح تصاعدياً مع تحرك السعر.</li>
+            <li><strong>متابعة الأرباح (Trailing Take Profit):</strong> ترك الأرباح تنمو حتى يبدأ السعر بالارتداد.</li>
+            <li><strong>قاطع الدائرة (Circuit Breaker):</strong> تجميد آلي للبوت إذا بلغت الخسارة اليومية حداً معيناً (مثل 5%).</li>
+            <li><strong>الحماية من الانزلاق (Slippage Shield):</strong> رفض الدخول إذا كان السبريد متباعداً.</li>
+            <li><strong>إغلاق الطوارئ (Panic Close All):</strong> تسييل جميع الصفقات بنقرة واحدة.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>📲 4. بيئة التنفيذ والتنبيهات</h3>
+          <ul>
+            <li><strong>Paper Trading:</strong> محاكاة واقعية برصيد افتراضي حر.</li>
+            <li><strong>Binance Live API:</strong> تداول حقيقي مع تشفير المفاتيح بـ AES-256.</li>
+            <li><strong>تنبيهات Telegram الفورية:</strong> تقارير فورية على هاتفك عند أي إجراء.</li>
+            <li><strong>أمان 2FA:</strong> دعم المصادقة الثنائية لحماية حسابك.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Break for Clean Printing -->
+    <div class="page-break"></div>
+    <hr class="separator">
+
+    <!-- ================================================================= -->
+    <!-- FRENCH SECTION                                                    -->
+    <!-- ================================================================= -->
+    <div id="french" class="french-section">
+      <h2 class="section-title">📊 1. Documentation Complète du Terminal Quantura</h2>
+      <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+        <strong>Quantura</strong> est un terminal de trading quantitatif de qualité institutionnelle développé pour le marché des cryptomonnaies, combinant mathématiques appliquées, flux de liquidité, IA et intégration directe à l'API Binance (Spot & Futures).
+      </p>
+
+      <div class="card-grid">
+        <div class="feature-card">
+          <h3>🎯 1. Moteur de Signaux Quantitatifs</h3>
+          <p>Analyse multi-facteurs pour identifier des opportunités à haute probabilité :</p>
+          <ul>
+            <li><strong>Régime de Marché :</strong> Détection mathématique (Tendance forte, Range, Haute volatilité).</li>
+            <li><strong>Plan de Trade Structuré :</strong> Entrée idéale, 3 cibles (TP1, TP2, TP3), Stop Loss et ratio R:R.</li>
+            <li><strong>Rapport IA Tri-lingue :</strong> Explications techniques en français, arabe et anglais.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>⏱️ 2. Matrice Multi-Timeframes (MTF)</h3>
+          <p>Scan simultané sur 7 unités de temps (5m à 1w) :</p>
+          <ul>
+            <li>Score de confluence globale pour trader dans le sens du flux institutionnel.</li>
+            <li>Alignement directionnel pour filtrer les faux signaux de court terme.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🌊 3. Carnet d'Ordres & Dérivés Binance</h3>
+          <p>Surveillance en temps réel de la liquidité :</p>
+          <ul>
+            <li><strong>Whale Walls :</strong> Visualisation des ordres blocs majeurs (Bids/Asks).</li>
+            <li><strong>Funding Rate & Open Interest :</strong> Analyse du sentiment et des taux de levier sur Binance Futures.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🧪 4. Moteur de Backtest Historique</h3>
+          <p>Simulations quantitatives réelles jusqu'à 24 mois :</p>
+          <ul>
+            <li>Backtest de portefeuille complet ou par actif spécifique.</li>
+            <li>Métriques précises : Win Rate, Profit Factor, Max Drawdown et export CSV.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2 class="section-title">🤖 2. Le Bot de Trading Automatisé (Auto-Trading Bot)</h2>
+      <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+        Système d'exécution autonome 24/7 conçu pour exécuter et sécuriser vos positions selon des règles strictes de préservation du capital.
+      </p>
+
+      <div class="card-grid">
+        <div class="feature-card">
+          <h3>⚡ 1. Stratégies Prêtes à l'Emploi</h3>
+          <ul>
+            <li><span class="badge-pill badge-emerald">Momentum :</span> Suivi de tendance confirmée (1h, levier 3x).</li>
+            <li><span class="badge-pill badge-amber">Scalper :</span> Gains rapides et fréquents (15m, levier 5x).</li>
+            <li><span class="badge-pill">Breakout Sniper :</span> Franchissement de structures (BOS) et résistances.</li>
+            <li><span class="badge-pill">Smart Money SMC :</span> Blocs d'ordres institutionnels et Fair Value Gaps.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🎯 2. Prise de Profit Progressive (Scale-Out)</h3>
+          <ul>
+            <li><strong>Sortie 50% au TP1 :</strong> Sécurisation immédiate d'un gain certain.</li>
+            <li><strong>Déplacement du Stop au Breakeven :</strong> Position 100% sans risque.</li>
+            <li><strong>Smart Rebuy :</strong> Rechargement du contrat sur repli technique favorable.</li>
+            <li><strong>Macro Runners :</strong> Exploitation maximale des mouvements vers TP2 et TP3.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>🛡️ 3. Bouclier de Gestion du Risque</h3>
+          <ul>
+            <li><strong>Trailing Stop Loss :</strong> Remontée automatique du stop au fil des gains.</li>
+            <li><strong>Trailing Take Profit (TTP) :</strong> Laisse courir les profits au-delà des cibles.</li>
+            <li><strong>Daily Circuit Breaker :</strong> Arrêt d'urgence du bot si la perte journalière atteint un seuil défini (ex. 5%).</li>
+            <li><strong>Slippage & Spread Shield :</strong> Rejet des ordres lors de fortes anomalies de prix.</li>
+            <li><strong>Panic Close All :</strong> Clôture instantanée de toutes les positions au marché.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>📲 4. Exécution & Connectivité</h3>
+          <ul>
+            <li><strong>Paper Trading :</strong> Portefeuille de simulation avec cours réels de Binance.</li>
+            <li><strong>Binance Live API :</strong> Ordres réels avec chiffrement AES-256 des clés API.</li>
+            <li><strong>Alertes Telegram :</strong> Notification instantanée de chaque trade sur votre téléphone.</li>
+            <li><strong>Sécurité 2FA :</strong> Authentification à deux facteurs pour protéger l'accès.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-color); text-align: center; font-size: 12px; color: var(--text-muted);">
+      <p>© 2026 Quantura Terminal. Engineered by <strong>jaouad abdechchafi</strong>. All Rights Reserved.</p>
+    </div>
+
+  </div>
+
+</body>
+</html>

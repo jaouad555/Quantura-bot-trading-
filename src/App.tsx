@@ -404,6 +404,8 @@ export const App: React.FC = () => {
   const [ticker, setTicker] = useState<BinanceTicker | null>(null);
   const [klines, setKlines] = useState<KlineCandle[]>([]);
   const [marketData, setMarketData] = useState<MarketDataResponse | null>(null);
+  const marketDataRef = useRef<MarketDataResponse | null>(null);
+  useEffect(() => { marketDataRef.current = marketData; }, [marketData]);
   const [activeSignal, setActiveSignal] = useState<AIAnalysisResult | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -779,6 +781,38 @@ export const App: React.FC = () => {
         try {
           // Circuit Breaker check
           if (currentConfig.circuitBreakerTripped) return;
+
+          // Advanced Slippage & Spread Protection
+          if (currentConfig.maxSlippageSpreadPercent && marketDataRef.current) {
+            let effectiveSlippage = 0;
+            const md = marketDataRef.current;
+            if (md.orderBook && md.orderBook.topBids.length > 0 && md.orderBook.topAsks.length > 0) {
+              const bestBid = md.orderBook.topBids[0].price;
+              const bestAsk = md.orderBook.topAsks[0].price;
+              effectiveSlippage = ((bestAsk - bestBid) / bestBid) * 100;
+            } else if (md.indicators) {
+              effectiveSlippage = (md.indicators.atr14 / currentP) * 100 * 0.15; // fallback ATR proxy
+            }
+            if (effectiveSlippage > currentConfig.maxSlippageSpreadPercent && !customDecision) {
+              const rejectMsg = isArabicLang
+                ? `رفض التداول: الانزلاق أو السبريد مرتفع جداً (${effectiveSlippage.toFixed(2)}% > ${currentConfig.maxSlippageSpreadPercent}%)`
+                : `Trade Blocked: Slippage/Spread too high (${effectiveSlippage.toFixed(2)}% > limit ${currentConfig.maxSlippageSpreadPercent}%)`;
+              addBotLog({
+                id: `log-rejected-slip-${Date.now()}`,
+                timestamp: Date.now(),
+                type: 'ERROR' as any,
+                symbol: currentSym,
+                side: (customDecision || signal?.decision) === 'LONG' ? 'BUY' : 'SELL',
+                price: currentP,
+                amountUsdt: 0,
+                reason: rejectMsg,
+                mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+                marketType: currentConfig.marketType || 'FUTURES',
+                leverage: currentConfig.leverage || 1,
+              });
+              return;
+            }
+          }
 
         const decision: 'LONG' | 'SHORT' = customDecision || (signal?.decision === 'SHORT' ? 'SHORT' : 'LONG');
         // Re-read synchronously to prevent concurrent open race conditions
@@ -1350,7 +1384,11 @@ export const App: React.FC = () => {
       }
 
       // 2e. TP3 or SL HANDLER (Close full position)
-      if (actionType === 'TP3' || actionType === 'SL') {
+      if (actionType === 'TP3' || actionType === 'SL' || actionType === 'TP1' || actionType === 'TP2') {
+        if (actionType === 'TP1' && !pos.tp1Hit) {
+          // It was already handled by the specific TP1 scale out logic above if it was a partial close.
+          // If we reach here, it's a TTP forced close or normal TP execution wasn't caught.
+        }
         lastBotActionTimeRef.current = Date.now() + 2000;
         const marginClosed = pos.remainingAmountUsdt;
         const finalPnlUsdt = marginClosed * (roePercent / 100);
@@ -1405,13 +1443,13 @@ export const App: React.FC = () => {
           amountUsdt: marginClosed * lev,
           pnlUsdt: finalPnlUsdt,
           pnlPercent: roePercent,
-          reason: isArabicLang 
+          reason: customReason || (isArabicLang 
             ? (actionType === 'SL' 
                 ? (pos.isTrailingActive ? `إغلاق وتأمين الأرباح بالوقف المتحرك (${lev}x Trailing SL) 🎯` : `إغلاق كامل بوقف الخسارة (${lev}x SL) 🛑`) 
                 : `إغلاق كامل بالهدف الثالث (${lev}x TP3) 🚀`) 
             : (actionType === 'SL' 
                 ? (pos.isTrailingActive ? `Trailing Stop Triggered (${lev}x) — Profits Locked 🎯` : `Closed at SL (${lev}x) 🛑`) 
-                : `Closed at TP3 (${lev}x) 🚀`),
+                : `Closed at TP3 (${lev}x) 🚀`)),
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: pos.marketType,
           leverage: lev,
@@ -2859,7 +2897,7 @@ export const App: React.FC = () => {
                 </div>
                 <div className="flex flex-col text-left">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-black tracking-widest text-xl font-sans">QUANTURA</span>
+                    <span className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-lg sm:text-xl uppercase text-sweep-shine">QUANTURA</span>
                     <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono text-[9px] font-bold tracking-wider">v2.5.0</span>
                   </div>
                   <span className="text-slate-400 text-[11px] font-mono tracking-widest uppercase mt-0.5">Algorithmic Trading Terminal</span>

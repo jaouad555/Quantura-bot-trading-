@@ -442,6 +442,9 @@ export interface AutoBotConfig {
   trailingStopEnabled?: boolean;
   trailingStopPercent?: number; // e.g. 1.2%
   trailingActivationProfitPercent?: number; // e.g. +1.5% profit before trailing activates
+  maxSlippageSpreadPercent?: number; // Slippage & Spread protection limit
+  trailingTakeProfitEnabled?: boolean; // Trailing Take Profit (TTP)
+  trailingTakeProfitDeviationPercent?: number; // TTP deviation % before execution
   dailyDrawdownLimitPercent?: number; // Circuit breaker e.g. 5% max daily loss
   circuitBreakerTripped?: boolean;
   circuitBreakerTrippedAt?: number;
@@ -490,6 +493,9 @@ export interface ActiveBotPosition {
   peakPrice?: number;
   isTrailingActive?: boolean;
   trailingStopPrice?: number;
+  isTtpActive?: boolean;
+  ttpPeakPrice?: number;
+  ttpTargetType?: 'TP1' | 'TP2' | 'TP3';
 }
 
 export interface AutoTradeLog {

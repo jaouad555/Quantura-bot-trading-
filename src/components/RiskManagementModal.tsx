@@ -37,6 +37,9 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
   const [sizingMode, setSizingMode] = useState<'FIXED_PERCENT' | 'RISK_BASED'>(botConfig.sizingMode || 'FIXED_PERCENT');
   const [riskPerTrade, setRiskPerTrade] = useState((botConfig.riskPerTradePercent || 1.0).toString());
   const [tradeAllocation, setTradeAllocation] = useState((botConfig.tradeAllocationPercent || 20).toString());
+  const [maxSlippage, setMaxSlippage] = useState((botConfig.maxSlippageSpreadPercent || 0.5).toString());
+  const [ttpEnabled, setTtpEnabled] = useState(botConfig.trailingTakeProfitEnabled ?? false);
+  const [ttpDeviation, setTtpDeviation] = useState((botConfig.trailingTakeProfitDeviationPercent || 0.4).toString());
 
   // Calculate current daily drawdown
   const startOfTodayUtc = new Date().setUTCHours(0, 0, 0, 0);
@@ -53,7 +56,10 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
       maxOpenTrades: Math.max(1, Math.min(20, Number(maxOpenTrades) || 3)),
       sizingMode,
       riskPerTradePercent: Math.max(0.1, Math.min(10.0, Number(riskPerTrade) || 1.0)),
-      tradeAllocationPercent: Math.max(1, Math.min(100, Number(tradeAllocation) || 20))
+      tradeAllocationPercent: Math.max(1, Math.min(100, Number(tradeAllocation) || 20)),
+      maxSlippageSpreadPercent: Math.max(0.1, Math.min(5.0, Number(maxSlippage) || 0.5)),
+      trailingTakeProfitEnabled: ttpEnabled,
+      trailingTakeProfitDeviationPercent: Math.max(0.1, Math.min(5.0, Number(ttpDeviation) || 0.4))
     });
     onClose();
   };
@@ -195,6 +201,63 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Advanced Risk Management (Slippage & Trailing TP) */}
+            <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  <span>{isArabic ? 'الحماية من الانزلاق (Slippage)' : 'Max Slippage / Spread %'}</span>
+                </label>
+                <span className="text-amber-400 text-xs font-mono">{maxSlippage}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.1" max="5.0" step="0.1"
+                value={maxSlippage}
+                onChange={(e) => setMaxSlippage(e.target.value)}
+                className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-amber-500 cursor-pointer"
+              />
+              <p className="text-[10px] text-slate-500">
+                {isArabic ? 'يمنع الدخول في الصفقات إذا كان السبريد أو الانزلاق المتوقع أكبر من هذه القيمة.' : 'Blocks market orders if volatility or bid/ask spread exceeds this.'}
+              </p>
+
+              <div className="border-t border-slate-800/50 pt-4 mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span>{isArabic ? 'متابعة الأرباح (Trailing TP)' : 'Trailing Take Profit (TTP)'}</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setTtpEnabled(!ttpEnabled)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      ttpEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {ttpEnabled ? (isArabic ? 'مفعل' : 'Active') : (isArabic ? 'معطل' : 'Off')}
+                  </button>
+                </div>
+                {ttpEnabled && (
+                  <div className="space-y-2 animate-in fade-in">
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-slate-400">{isArabic ? 'نسبة الارتداد %' : 'TTP Deviation %'}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">{ttpDeviation}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.1" max="5.0" step="0.1"
+                      value={ttpDeviation}
+                      onChange={(e) => setTtpDeviation(e.target.value)}
+                      className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-emerald-500 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      {isArabic ? 'يسمح للأرباح بالاستمرار فوق الهدف حتى يتراجع السعر بهذه النسبة.' : 'Allows profit to run past TP levels until price drops by this %.'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
