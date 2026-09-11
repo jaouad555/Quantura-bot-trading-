@@ -56,6 +56,7 @@ class ApiStorage {
     return null;
   }
 
+  
   setItem(key: string, value: string) {
     this.mem[key] = value;
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -63,12 +64,19 @@ class ApiStorage {
         window.localStorage.setItem(key, value);
       } catch (e) {}
     }
+    
+    // Fire event for UI to update
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('apiStorage_updated', { detail: { key, value } }));
+    }
+
     fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, value }),
     }).catch(() => {});
   }
+
 
   removeItem(key: string) {
     delete this.mem[key];

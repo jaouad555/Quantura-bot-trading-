@@ -81,7 +81,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-lg font-mono tracking-wide">QUANTURA</h3>
+                <h3 className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-base sm:text-lg uppercase text-sweep-shine">QUANTURA</h3>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-amber-400 font-mono font-bold border border-amber-500/30">
                   v2.5
                 </span>

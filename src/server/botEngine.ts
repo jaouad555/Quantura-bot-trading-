@@ -170,6 +170,260 @@ export const startTelegramSync = () => {
   console.log('📢 Telegram Periodic Sync Started!');
 };
 
-export const startBotEngine = () => {
-  console.log("🤖 Background Bot Engine is currently disabled to prevent conflicts with frontend engine.");
+
+// Add helper to fetch binance config
+const getBinanceConfig = async () => {
+  const apiKey = await kv.get('app_binance_api_key');
+  const apiSecret = await kv.get('app_binance_api_secret');
+  const useTestnet = await kv.get('app_binance_use_testnet') === 'true';
+  const marketType = (await kv.get('app_binance_market_type')) || 'FUTURES';
+  return { apiKey, apiSecret, useTestnet, marketType, isConnected: !!(apiKey && apiSecret) };
 };
+
+
+import crypto from 'crypto';
+
+// Binance Utilities
+const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
+const getBinanceFuturesApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
+
+const createBinanceSignature = (queryString: string, apiSecret: string) => {
+  return crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
+};
+
+// Simulate or real execute order
+const serverExecuteOrder = async (symbol: string, side: string, quoteOrderQty: number, quantity: number, currentPrice: number) => {
+    const config = await getBinanceConfig();
+    if (!config.isConnected) {
+      return { success: false, error: 'Not connected' };
+    }
+    
+    console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${quantity} Price: ${currentPrice}`);
+    
+    try {
+        let formattedQty = quantity;
+        if (quantity && currentPrice) {
+          if (currentPrice > 1000) formattedQty = Number(quantity.toFixed(3)); // BTC, ETH
+          else if (currentPrice > 10) formattedQty = Number(quantity.toFixed(1)); // SOL, BNB
+          else if (currentPrice > 1) formattedQty = Math.floor(quantity); // low price coins
+          else formattedQty = Math.floor(quantity); // DOGE, SHIB, PEPE etc
+        } else if (quantity) {
+          formattedQty = Number(quantity.toFixed(3)); // fallback
+        }
+
+        const params: Record<string, string> = {
+          symbol: symbol.toUpperCase(),
+          side: side.toUpperCase(),
+          type: 'MARKET',
+          timestamp: Date.now().toString(),
+          recvWindow: '10000',
+        };
+
+        if (config.marketType === 'FUTURES') {
+            params.quantity = Number(formattedQty).toString();
+        } else {
+            if (quoteOrderQty && quoteOrderQty > 0) {
+              params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
+            } else if (formattedQty && formattedQty > 0) {
+              params.quantity = Number(formattedQty).toString();
+            }
+        }
+
+        const queryString = new URLSearchParams(params).toString();
+        const signature = createBinanceSignature(queryString, config.apiSecret!);
+        
+        let orderUrl = '';
+        if (config.marketType === 'FUTURES') {
+          const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
+          orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+        } else {
+          const baseUrl = getBinanceApiBase(config.useTestnet);
+          orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000);
+
+        const response = await fetch(orderUrl, {
+          method: 'POST',
+          headers: {
+            'X-MBX-APIKEY': config.apiKey!,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        const data = await response.json();
+
+        if (!response.ok) {
+           console.error("[SERVER ENGINE] Binance Error:", data);
+           return { success: false, error: data.msg };
+        }
+
+        return { success: true, orderId: data.orderId || Date.now().toString() };
+    } catch (err) {
+        console.error("[SERVER ENGINE] Fetch Error:", err);
+        return { success: false, error: 'Network error executing order' };
+    }
+}
+
+
+export const startBotEngine = () => {
+  console.log("🤖 Initializing Server-Side Bot Execution Engine...");
+
+  if (engineInterval) clearInterval(engineInterval);
+
+  engineInterval = setInterval(async () => {
+    try {
+      const botConfigStr = await kv.get('app_auto_bot_config');
+      if (!botConfigStr) return;
+      const botConfig = JSON.parse(botConfigStr);
+      
+      if (!botConfig.enabled) return;
+
+      const positionsStr = await kv.get('btc_active_bot_positions');
+      if (!positionsStr) return;
+      
+      let positions = JSON.parse(positionsStr);
+      if (!Array.isArray(positions) || positions.length === 0) return;
+
+      let stateChanged = false;
+      const logsToAdd: any[] = [];
+      const historyToAdd: any[] = [];
+
+      // Update Wallet
+      const walletStr = await kv.get('btc_paper_wallet');
+      let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+
+      // Group by symbol to fetch prices efficiently
+      const symbols = Array.from(new Set(positions.map((p: any) => p.symbol)));
+      const priceResults = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s)));
+      const prices: Record<string, number> = {};
+      symbols.forEach((sym, idx) => {
+        const res = priceResults[idx];
+        if (res.status === 'fulfilled' && (res.value as number) > 0) {
+          prices[sym as string] = res.value as number;
+        }
+      });
+
+      const binanceConfig = await getBinanceConfig();
+      const isLiveMode = await kv.get('app_execution_mode') === 'BINANCE_LIVE';
+
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
+        const currentP = prices[pos.symbol];
+        
+        if (!currentP) continue;
+
+        const isLong = pos.decision === 'LONG';
+        const lev = pos.leverage || 1;
+        const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+        const roePercent = priceDiffPct * lev;
+
+        // TP1 Hit
+        if ((isLong && !pos.tp1Hit && currentP >= pos.tp1) || (!isLong && !pos.tp1Hit && currentP <= pos.tp1)) {
+            console.log(`[SERVER ENGINE] TP1 Hit for ${pos.symbol} at ${currentP}`);
+            const marginClosed = pos.remainingAmountUsdt * 0.5;
+            const pnlUsdt = marginClosed * (roePercent / 100);
+            
+            if (isLiveMode && binanceConfig.isConnected) {
+                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+            } else {
+                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
+                wallet.realizedPnl += pnlUsdt;
+            }
+            
+            pos.tp1Hit = true;
+            pos.remainingAmountUsdt *= 0.5;
+            pos.remainingAmountBtc *= 0.5;
+            pos.realizedPnlUsdt += pnlUsdt;
+            pos.stopLoss = pos.entryPrice; // Breakeven
+            pos.lastAction = 'TP1 hit: 50% closed, SL moved to breakeven ✓ (Server Executed)';
+            stateChanged = true;
+        }
+        
+        // TP2 Hit
+        else if ((isLong && pos.tp1Hit && !pos.tp2Hit && currentP >= pos.tp2) || (!isLong && pos.tp1Hit && !pos.tp2Hit && currentP <= pos.tp2)) {
+            console.log(`[SERVER ENGINE] TP2 Hit for ${pos.symbol} at ${currentP}`);
+            const marginClosed = pos.remainingAmountUsdt * 0.5;
+            const pnlUsdt = marginClosed * (roePercent / 100);
+            
+            if (isLiveMode && binanceConfig.isConnected) {
+                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+            } else {
+                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
+                wallet.realizedPnl += pnlUsdt;
+            }
+
+            pos.tp2Hit = true;
+            pos.remainingAmountUsdt *= 0.5;
+            pos.remainingAmountBtc *= 0.5;
+            pos.realizedPnlUsdt += pnlUsdt;
+            pos.lastAction = 'TP2 hit: 50% of remaining closed ✓ (Server Executed)';
+            stateChanged = true;
+        }
+        
+        // TP3 / SL Hit
+        else if (
+            (isLong && currentP >= pos.tp3) || (!isLong && currentP <= pos.tp3) || // TP3
+            (isLong && currentP <= pos.stopLoss) || (!isLong && currentP >= pos.stopLoss) // SL
+        ) {
+            const isTp3 = (isLong && currentP >= pos.tp3) || (!isLong && currentP <= pos.tp3);
+            console.log(`[SERVER ENGINE] ${isTp3 ? 'TP3' : 'SL'} Hit for ${pos.symbol} at ${currentP}`);
+            
+            const marginClosed = pos.remainingAmountUsdt;
+            const pnlUsdt = marginClosed * (roePercent / 100);
+            const finalPnlUsdt = pos.realizedPnlUsdt + pnlUsdt;
+
+            if (isLiveMode && binanceConfig.isConnected) {
+                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+            } else {
+                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
+                wallet.realizedPnl += pnlUsdt;
+            }
+            
+            historyToAdd.push({
+                id: `history-server-${Date.now()}`,
+                timestamp: Date.now(),
+                symbol: pos.symbol,
+                decision: pos.decision,
+                timeframe: '1h',
+                entryPrice: pos.entryPrice,
+                exitPrice: currentP,
+                tp1: pos.tp1,
+                tp2: pos.tp2,
+                tp3: pos.tp3,
+                stopLoss: pos.stopLoss,
+                status: isTp3 ? 'TP3_HIT' : 'SL_HIT',
+                profitPercent: (finalPnlUsdt / pos.initialAmountUsdt) * 100,
+                profitUsdt: finalPnlUsdt,
+                confidence: 75,
+                strategyName: pos.strategyName,
+            });
+
+            // Mark for deletion
+            pos._delete = true;
+            stateChanged = true;
+        }
+      }
+
+      // Apply state changes
+      if (stateChanged) {
+          const remainingPositions = positions.filter((p: any) => !p._delete);
+          await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
+          await kv.set('btc_paper_wallet', JSON.stringify(wallet));
+          
+          if (historyToAdd.length > 0) {
+              const histStr = await kv.get('btc_trade_history');
+              const history = histStr ? JSON.parse(histStr) : [];
+              await kv.set('btc_trade_history', JSON.stringify([...historyToAdd, ...history].slice(0, 500)));
+          }
+      }
+
+    } catch (err) {
+      console.error("[SERVER ENGINE] Error evaluating positions:", err);
+    }
+  }, 3000); // Run every 3 seconds independently
+};
+

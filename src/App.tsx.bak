@@ -1214,11 +1214,11 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
-            if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
-            }
-          });
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          if (!orderRes || orderRes.error) {
+            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+            return;
+          }
         } else {
           setPaperWallet((prev) => ({
             ...prev,
@@ -1298,11 +1298,11 @@ export const App: React.FC = () => {
             lastAction: isArabicLang ? `تعزيز العقد الآجل على الارتداد ✓` : `Smart Futures Rebuy on pullback ✓`,
           };
           if (isLiveMode && currentBinance.isConnected) {
-            executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, currentP).then((orderRes) => {
-              if (!orderRes || orderRes.error) {
-                setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: currentP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
-              }
-            });
+            executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, currentP);
+            if (!orderRes || orderRes.error) {
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: currentP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+              return;
+            }
           } else {
             setPaperWallet((prev) => ({
               ...prev,
@@ -1339,11 +1339,11 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
-            if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
-            }
-          });
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          if (!orderRes || orderRes.error) {
+            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+            return;
+          }
         } else {
           setPaperWallet((prev) => ({
             ...prev,
@@ -1396,11 +1396,11 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + finalPnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP).then((orderRes) => {
-            if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
-            }
-          });
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+          if (!orderRes || orderRes.error) {
+            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+            return;
+          }
         } else {
           setPaperWallet((prev) => ({
             ...prev,
@@ -1484,11 +1484,11 @@ export const App: React.FC = () => {
       const cashReturned = Math.max(0, pos.remainingAmountUsdt + finalPnlUsdt);
 
       if (isLiveMode && currentBinance.isConnected) {
-        executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', pos.remainingAmountUsdt * lev, pos.remainingAmountBtc, p).then((orderRes) => {
-          if (!orderRes || orderRes.error) {
-            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: pos.remainingAmountUsdt * lev, reason: 'SL/CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...prev.slice(0, 49)]);
-          }
-        });
+        executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', pos.remainingAmountUsdt * lev, pos.remainingAmountBtc, p);
+        if (!orderRes || orderRes.error) {
+          setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: pos.remainingAmountUsdt * lev, reason: 'SL/CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...prev.slice(0, 49)]);
+          return;
+        }
       } else {
         setPaperWallet((prev) => ({
           ...prev,
@@ -1820,10 +1820,74 @@ export const App: React.FC = () => {
     }
 
     // 3. Execution Check for Open Positions
-    // 🛑 SERVER-SIDE EXECUTION MIGRATION 🛑
-    // The frontend no longer automatically triggers TP/SL/LIQUIDATION/REBUY.
-    // This is now handled safely 24/7 by the backend engine (src/server/botEngine.ts)
-    // The frontend will receive state updates from apiStorage automatically.
+    // We use the potentially updated stop loss values.
+    const positionsForExecution = currentPositions.map(p => trailingUpdates[p.id] ? { ...p, ...trailingUpdates[p.id] } : p);
+
+    for (const pos of positionsForExecution) {
+      const normPosSym = normalizeSymbol(pos.symbol);
+      // STRICT SAFETY: Only execute TP/SL against a LIVE, verified ticker of the EXACT same symbol!
+      if (normTickerSym !== normPosSym) continue;
+
+      // Anomaly Spike Guard: Ignore disconnection/reconnection glitches or sudden spikes (>75% jump in 1 tick)
+      const priceDeltaPct = Math.abs(currentP - pos.entryPrice) / pos.entryPrice;
+      if (priceDeltaPct > 0.75) {
+        continue;
+      }
+
+      const isLong = pos.decision === 'LONG';
+
+      // 0. Check Futures Liquidation Threshold
+      if (pos.liquidationPrice && pos.liquidationPrice > 0) {
+        if ((isLong && currentP <= pos.liquidationPrice) || (!isLong && currentP >= pos.liquidationPrice)) {
+          executeAutoTradeAction('LIQUIDATION', currentP, undefined, pos.id);
+          return;
+        }
+      }
+
+      if (isLong) {
+        if (!pos.tp1Hit && currentP >= pos.tp1) {
+          executeAutoTradeAction('TP1', currentP, undefined, pos.id);
+          return;
+        }
+        if (pos.tp1Hit && pos.rebuysCount < 1 && currentP <= pos.entryPrice * 1.004 && currentP >= pos.entryPrice * 0.998) {
+          executeAutoTradeAction('REBUY', currentP, undefined, pos.id);
+          return;
+        }
+        if (!pos.tp2Hit && currentP >= pos.tp2) {
+          executeAutoTradeAction('TP2', currentP, undefined, pos.id);
+          return;
+        }
+        if (currentP >= pos.tp3) {
+          executeAutoTradeAction('TP3', currentP, undefined, pos.id);
+          return;
+        }
+        if (currentP <= pos.stopLoss) {
+          executeAutoTradeAction('SL', currentP, pos.isTrailingActive ? (isArabicLang ? 'إغلاق بربح محمي عبر الوقف المتحرك (Trailing SL) 🎯' : 'Trailing Stop Hit - Accrued Profits Locked 🎯') : undefined, pos.id);
+          return;
+        }
+      } else {
+        if (!pos.tp1Hit && currentP <= pos.tp1) {
+          executeAutoTradeAction('TP1', currentP, undefined, pos.id);
+          return;
+        }
+        if (pos.tp1Hit && pos.rebuysCount < 1 && currentP >= pos.entryPrice * 0.996 && currentP <= pos.entryPrice * 1.002) {
+          executeAutoTradeAction('REBUY', currentP, undefined, pos.id);
+          return;
+        }
+        if (!pos.tp2Hit && currentP <= pos.tp2) {
+          executeAutoTradeAction('TP2', currentP, undefined, pos.id);
+          return;
+        }
+        if (currentP <= pos.tp3) {
+          executeAutoTradeAction('TP3', currentP, undefined, pos.id);
+          return;
+        }
+        if (currentP >= pos.stopLoss) {
+          executeAutoTradeAction('SL', currentP, pos.isTrailingActive ? (isArabicLang ? 'إغلاق بربح محمي عبر الوقف المتحرك (Trailing SL) 🎯' : 'Trailing Stop Hit - Accrued Profits Locked 🎯') : undefined, pos.id);
+          return;
+        }
+      }
+    }
   }, [ticker?.price, botConfig.enabled, botConfig.minConfidence, botConfig.maxOpenTrades, botConfig.trailingStopEnabled, botConfig.trailingStopPercent, botConfig.trailingActivationProfitPercent, botConfig.dailyDrawdownLimitPercent, botConfig.circuitBreakerTripped, botConfig.circuitBreakerResetAt, botConfig.cooldownMinutes, executeAutoTradeAction, language, playAudioChime]);
 
   const lastAnalysisCallRef = useRef<number>(0);
@@ -1934,83 +1998,7 @@ export const App: React.FC = () => {
     [timeframe, selectedSymbol, botConfig.marketType, isDeveloperMode, runAnalysis]
   );
 
-  
-  // Listen for backend state updates
-  useEffect(() => {
-    const handleStorageUpdate = (e: any) => {
-        if (!e.detail) return;
-        const { key, value } = e.detail;
-        
-        if (key === 'btc_active_bot_positions' && value) {
-            try {
-                if (JSON.stringify(activeBotPositionsRef.current) !== value) {
-                    const positions = JSON.parse(value);
-                    setActiveBotPositions(positions);
-                    activeBotPositionsRef.current = positions;
-                }
-            } catch(e) {}
-        }
-        else if (key === 'btc_paper_wallet' && value) {
-            try {
-                if (JSON.stringify(paperWalletRef.current) !== value) {
-                    const wallet = JSON.parse(value);
-                    setPaperWallet(wallet);
-                    paperWalletRef.current = wallet;
-                }
-            } catch(e) {}
-        }
-        else if (key === 'btc_bot_logs' && value) {
-            try {
-                if (JSON.stringify(botLogsRef.current) !== value) {
-                    const logs = JSON.parse(value);
-                    setBotLogs(logs);
-                    botLogsRef.current = logs;
-                }
-            } catch(e) {}
-        }
-    };
-    
-    window.addEventListener('apiStorage_updated', handleStorageUpdate);
-    return () => window.removeEventListener('apiStorage_updated', handleStorageUpdate);
-  }, []);
-
-  // Poll for background server state changes 
-  // (because server writing to kv won't trigger frontend events automatically without WS)
-  useEffect(() => {
-     const interval = setInterval(async () => {
-         try {
-             // We just re-init apiStorage memory with latest server data
-             const res = await fetch('/api/config/all');
-             if (res.ok) {
-                 const serverData = await res.json();
-                 
-                 // Check if positions changed on server
-                 if (serverData.btc_active_bot_positions) {
-                     const currentLocal = JSON.stringify(activeBotPositionsRef.current);
-                     if (serverData.btc_active_bot_positions !== currentLocal) {
-                         const positions = JSON.parse(serverData.btc_active_bot_positions);
-                         setActiveBotPositions(positions);
-                         activeBotPositionsRef.current = positions;
-                     }
-                 }
-                 
-                 // Check if wallet changed on server
-                 if (serverData.btc_paper_wallet) {
-                     const currentLocal = JSON.stringify(paperWalletRef.current);
-                     if (serverData.btc_paper_wallet !== currentLocal) {
-                         const wallet = JSON.parse(serverData.btc_paper_wallet);
-                         setPaperWallet(wallet);
-                         paperWalletRef.current = wallet;
-                     }
-                 }
-             }
-         } catch(e) {}
-     }, 2500);
-     return () => clearInterval(interval);
-  }, []);
-
-
-   // (Alerts only)
+  // Background Global Scanner for all pairs (Alerts only)
   useEffect(() => {
     let currentIndex = 0;
     let isActive = true;
