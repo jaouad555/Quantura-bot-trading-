@@ -1,3 +1,8 @@
+[![Installation Guide](https://img.shields.io/badge/Guide-Installation%20VPS-blue?style=for-the-badge&logo=ubuntu)](INSTALLATION.md)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-v22-green?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+
+---
 # ⚡ Quantura | Institutional Algorithmic Crypto Trading Terminal & Autonomous Bot
 
 ![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-red.svg?style=for-the-badge)
