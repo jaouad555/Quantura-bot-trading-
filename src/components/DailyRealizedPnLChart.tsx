@@ -301,7 +301,7 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
       const isProfit = data.netPnlUsdt >= 0;
 
       return (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-700/90 p-3.5 rounded-2xl shadow-2xl text-xs font-mono space-y-2 min-w-[210px]">
+        <div className="bg-slate-950 border border-slate-700/90 p-3.5 rounded-2xl shadow-2xl text-xs font-mono space-y-2 min-w-[210px]">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-white">
@@ -378,7 +378,7 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
         {/* Action Controls & Selectors */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* USD ($) vs Percent (%) Metric Toggle */}
-          <div className="flex items-center gap-1 bg-slate-950 transform-gpu isolate p-1 rounded-xl border border-slate-800 text-xs font-mono">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
             <button
               onClick={() => setMetricType('USD')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
@@ -404,7 +404,7 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
           </div>
 
           {/* Timeframe Filter (7D, 14D, 30D, ALL) */}
-          <div className="flex items-center gap-1 bg-slate-950 transform-gpu isolate p-1 rounded-xl border border-slate-800 text-xs font-mono">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
             <Clock className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
             {(['7D', '14D', '30D', 'ALL'] as const).map((r) => (
               <button
@@ -428,7 +428,7 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
           </div>
 
           {/* Chart Display Mode: Bars vs Composed */}
-          <div className="flex items-center gap-1 bg-slate-950 transform-gpu isolate p-1 rounded-xl border border-slate-800 text-xs font-mono">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
             <button
               onClick={() => setChartMode('BARS')}
               className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${

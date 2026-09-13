@@ -228,16 +228,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
 
       <div className="w-full max-w-md z-10 relative">
         {/* Logo and Branding Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-7">
           <div className="inline-flex items-center justify-center p-3 bg-slate-900/90 border border-slate-800 shadow-[0_0_35px_rgba(34,211,238,0.2)] rounded-3xl mb-4 relative group">
             <div className="absolute inset-0 bg-cyan-500/20 rounded-3xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <img src="/logo.png" alt="Quantura Logo" className="w-24 h-24 relative z-10 object-contain drop-shadow-md" />
           </div>
-          <h1 className="text-3xl font-['Syncopate',sans-serif] font-bold text-white tracking-widest uppercase mb-2 text-sweep-shine">
+          <h1 className="text-3xl font-['Syncopate',sans-serif] font-bold text-white tracking-widest uppercase mb-1 text-sweep-shine">
             Quantura
           </h1>
-          <p className="text-slate-400 text-xs font-mono tracking-[0.2em] uppercase">
-            {getLabel('المحطة الخوارزمية للتداول', 'Algorithmic Trading Terminal', 'Terminal de Trading Algorithmique')}
+          <p className="text-cyan-400 text-xs font-mono font-black tracking-[0.3em] uppercase mb-1.5">
+            TRADE SMARTER
+          </p>
+          <p className="text-slate-400 text-[11px] font-mono tracking-[0.15em] uppercase">
+            {getLabel('المحطة الخوارزمية للتداول الكمي والذكاء الاصطناعي', 'Quantitative AI & Algorithmic Trading Terminal', 'Terminal de Trading Quantitatif & IA')}
           </p>
         </div>
 

@@ -267,7 +267,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-700/80 p-3 rounded-xl shadow-2xl text-xs font-mono space-y-1.5 min-w-[170px]">
+        <div className="bg-slate-950 border border-slate-700/80 p-3 rounded-xl shadow-2xl text-xs font-mono space-y-1.5 min-w-[170px]">
           <div className="flex items-center justify-between border-b border-slate-800 pb-1">
             <span className="font-bold text-white flex items-center gap-1.5">
               <span className="px-1.5 py-0.5 rounded bg-slate-800 text-brand-400 text-[10px]">
@@ -326,7 +326,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
     if (active && payload && payload.length) {
       const data = payload[0];
       return (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono">
+        <div className="bg-slate-950 border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono">
           <div className="flex items-center gap-2">
             <div
               className="w-2.5 h-2.5 rounded-full"
@@ -355,7 +355,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono space-y-1">
+        <div className="bg-slate-950 border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono space-y-1">
           <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1">
             <span className="font-bold text-white">{data.name} ({data.symbol})</span>
             <span
@@ -390,7 +390,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono space-y-1">
+        <div className="bg-slate-950 border border-slate-700/80 p-2.5 rounded-xl shadow-2xl text-xs font-mono space-y-1">
           <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1">
             <span className="font-bold text-white flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-brand-400" />
@@ -456,7 +456,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
           {/* Quick Actions & Pair Selector */}
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             {availableSymbols.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-slate-950 transform-gpu isolate border border-slate-800 rounded-xl p-1 text-xs">
+              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs">
                 <Filter className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
                 <button
                   onClick={() => setSelectedPairFilter('ALL')}
@@ -620,7 +620,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
         {/* Chart Tab Navigation */}
         <div className="pt-2 border-t border-slate-800/80 w-full">
           <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent py-1 touch-pan-x">
-            <div className="inline-flex items-center gap-1.5 bg-slate-950 transform-gpu isolate p-1 rounded-xl border border-slate-800 text-xs min-w-max">
+            <div className="inline-flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs min-w-max">
               <button
                 onClick={() => setActiveChartTab('ALL_GRID')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap shrink-0 ${

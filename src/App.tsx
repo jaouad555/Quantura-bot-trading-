@@ -36,6 +36,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { BinanceConnectionModal } from './components/BinanceConnectionModal';
 import { CustomBalanceModal } from './components/CustomBalanceModal';
 import { AuthScreen } from './components/AuthScreen';
+import { Sidebar } from './components/Sidebar';
 import { translations } from './utils/translations';
 import { binanceWsManager } from './utils/binanceWs';
 import { generateQuantitativePlan, determineOptimalBotTimeframe } from './utils/quantEngine';
@@ -64,6 +65,7 @@ import {
   ArrowDownRight,
   Target,
   X,
+  Menu,
   Key,
   Code2,
   Terminal,
@@ -71,9 +73,9 @@ import {
 } from 'lucide-react';
 
 const formatPairName = (sym?: string): string => {
-  if (!sym) return 'BTC/USDT';
+  if (!sym || typeof sym !== 'string') return 'BTC/USDT';
   if (sym.includes('/')) return sym.toUpperCase();
-  if (sym.toUpperCase().endsWith('USDT')) {
+  if (sym.toUpperCase().endsWith('USDT') && sym.length > 4) {
     return `${sym.slice(0, -4).toUpperCase()}/USDT`;
   }
   return sym.toUpperCase();
@@ -81,6 +83,7 @@ const formatPairName = (sym?: string): string => {
 
 const normalizeSymbol = (sym?: string): string => (sym || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+export type DisplayMode = 'auto' | 'standard' | 'compact' | 'fullscreen';
 export const App: React.FC = () => {
   // Navigation & UI States
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -138,10 +141,60 @@ export const App: React.FC = () => {
     return 'GMT+1';
   });
   const [isAndroidView, setIsAndroidView] = useState(false);
+
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
+    try {
+      return (apiStorage.getItem('quantura_display_mode') as DisplayMode) || 'standard';
+    } catch {
+      return 'standard';
+    }
+  });
+
+  const [effectiveDisplayMode, setEffectiveDisplayMode] = useState<'standard' | 'compact' | 'fullscreen'>('standard');
+
+  useEffect(() => {
+    try {
+      apiStorage.setItem('quantura_display_mode', displayMode);
+    } catch {}
+
+    if (displayMode === 'fullscreen') {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      setEffectiveDisplayMode('fullscreen');
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      
+      if (displayMode === 'auto') {
+        const handleResize = () => {
+          const w = window.innerWidth;
+          if (w < 1366) setEffectiveDisplayMode('compact');
+          else setEffectiveDisplayMode('standard');
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+      } else {
+        setEffectiveDisplayMode(displayMode as 'standard' | 'compact');
+      }
+    }
+  }, [displayMode]);
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [activeToastAlert, setActiveToastAlert] = useState<PushAlert | null>(null);
+
+  const triggerToastAlert = useCallback((alert: PushAlert) => {
+    setActiveToastAlert(alert);
+    setTimeout(() => {
+      setActiveToastAlert((curr) => (curr?.id === alert.id ? null : curr));
+    }, 5000);
+  }, []);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     try {
       const saved = apiStorage.getItem('app_sound_enabled');
@@ -371,7 +424,7 @@ export const App: React.FC = () => {
   });
 
   const addBotLog = useCallback((newLog: AutoTradeLog) => {
-    setBotLogs((prev) => [newLog, ...prev.slice(0, 49)]);
+    setBotLogs((prev) => [newLog, ...(prev || []).slice(0, 49)]);
     
     if (telegramBotTokenRef.current && telegramChatIdRef.current) {
       const modeText = newLog.mode === 'BINANCE_LIVE' ? '🔴 LIVE' : '🧪 PAPER';
@@ -424,14 +477,21 @@ export const App: React.FC = () => {
   const [paperWallet, setPaperWallet] = useState<PaperWallet>(() => {
     try {
       const saved = apiStorage.getItem('btc_paper_wallet');
-      return saved
-        ? JSON.parse(saved)
-        : {
-            balance: 1000,
-            realizedPnl: 0,
-            openPosition: null,
-            history: [],
-          };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          balance: typeof parsed?.balance === 'number' ? parsed.balance : 1000,
+          realizedPnl: typeof parsed?.realizedPnl === 'number' ? parsed.realizedPnl : 0,
+          openPosition: parsed?.openPosition || null,
+          history: Array.isArray(parsed?.history) ? parsed.history : [],
+        };
+      }
+      return {
+        balance: 1000,
+        realizedPnl: 0,
+        openPosition: null,
+        history: [],
+      };
     } catch {
       return {
         balance: 1000,
@@ -673,8 +733,8 @@ export const App: React.FC = () => {
         read: false,
       };
 
-      setAlerts((prev) => [newAlert, ...prev.slice(0, 29)]);
-      setActiveToastAlert(newAlert);
+      setAlerts((prev) => [newAlert, ...(prev || []).slice(0, 29)]);
+      triggerToastAlert(newAlert);
       playAudioChime();
       
       // Telegram Notification
@@ -694,11 +754,6 @@ export const App: React.FC = () => {
           // Ignore notification errors in iframe environment
         }
       }
-
-      // Auto dismiss floating toast after 5s
-      setTimeout(() => {
-        setActiveToastAlert((curr) => (curr?.id === newAlert.id ? null : curr));
-      }, 5000);
     },
     [language, playAudioChime]
   );
@@ -871,7 +926,7 @@ export const App: React.FC = () => {
               ? `انعكاس الإشارة: إغلاق تلقائي لـ ${existingPos.decision} للدخول في ${decision}` 
               : `Signal Reversal: Auto-closed ${existingPos.decision} to enter ${decision}`,
           };
-          setTradeHistory((prev) => [closedReversalItem, ...prev].slice(0, 500));
+          setTradeHistory((prev) => [closedReversalItem, ...(prev || [])].slice(0, 500));
 
           addBotLog({
             id: `log-flip-${Date.now()}`,
@@ -936,8 +991,8 @@ export const App: React.FC = () => {
             price: currentP,
             read: false,
           };
-          setAlerts((prev) => [rejectAlert, ...prev.slice(0, 29)]);
-          setActiveToastAlert(rejectAlert);
+          setAlerts((prev) => [rejectAlert, ...(prev || []).slice(0, 29)]);
+          triggerToastAlert(rejectAlert);
           playAudioChime();
           return;
         }
@@ -945,8 +1000,9 @@ export const App: React.FC = () => {
         let strategyName = 'Custom';
         
         if (currentConfig.activePresets && currentConfig.activePresets.length > 0) {
+          const firstPreset = String(currentConfig.activePresets[0] || 'Custom');
           if (currentConfig.activePresets.length === 1) {
-            strategyName = currentConfig.activePresets[0].charAt(0) + currentConfig.activePresets[0].slice(1).toLowerCase();
+            strategyName = firstPreset.charAt(0) + firstPreset.slice(1).toLowerCase();
           } else {
             // Multi-Strategy Mode: Determine specific strategy based on signal timeframe
             const tf = currentConfig.timeframe === 'AUTO' ? (autoBotTimeframeInfo?.effectiveTimeframe || timeframeRef.current) : (currentConfig.timeframe || timeframeRef.current);
@@ -997,11 +1053,20 @@ export const App: React.FC = () => {
 
         // Position sizing logic: Calculate Margin allocated
         let tradeMargin = 0;
+        let effectiveLeverage = leverage;
+        const slDistancePct = Math.abs(entryPrice - stopLoss) / entryPrice;
+
+        if (isFutures) {
+          const maxSafeLeverage = Math.floor(1 / (slDistancePct + 0.005));
+          if (effectiveLeverage > maxSafeLeverage) {
+            effectiveLeverage = Math.max(1, maxSafeLeverage);
+          }
+        }
+
         if (currentConfig.sizingMode === 'RISK_BASED') {
-          const slDistancePct = Math.abs(entryPrice - stopLoss) / entryPrice;
           const targetRiskUsdt = totalEquity * ((currentConfig.riskPerTradePercent || 2.0) / 100);
           const notionalSize = targetRiskUsdt / Math.max(0.008, slDistancePct);
-          tradeMargin = notionalSize / leverage;
+          tradeMargin = notionalSize / effectiveLeverage;
           tradeMargin = Math.min(tradeMargin, totalEquity * 0.45); // Max 45% of portfolio per position
         } else {
           tradeMargin = totalEquity * (currentConfig.tradeAllocationPercent / 100);
@@ -1014,17 +1079,17 @@ export const App: React.FC = () => {
 
         if (tradeMargin < 5) return;
 
-        const positionSizeUsdt = tradeMargin * leverage;
+        const positionSizeUsdt = tradeMargin * effectiveLeverage;
         const amountCrypto = positionSizeUsdt / entryPrice;
 
         // Liquidation Price calculation for Futures (Isolated Margin, ~0.5% MMR)
         let liquidationPrice: number | undefined;
-        if (isFutures && leverage > 1) {
+        if (isFutures && effectiveLeverage > 1) {
           const mmr = 0.005; // 0.5% maintenance margin
           if (decision === 'LONG') {
-            liquidationPrice = entryPrice * Math.max(0.001, (1 - (1 / leverage) + mmr));
+            liquidationPrice = entryPrice * Math.max(0.001, (1 - (1 / effectiveLeverage) + mmr));
           } else {
-            liquidationPrice = entryPrice * (1 + (1 / leverage) - mmr);
+            liquidationPrice = entryPrice * (1 + (1 / effectiveLeverage) - mmr);
           }
         }
 
@@ -1051,16 +1116,16 @@ export const App: React.FC = () => {
           strategyName,
           lastAction: isArabicLang
             ? (isFutures
-                ? `⚡ فتح عقد آجل ${decision} برافعة ${leverage}x عند $${entryPrice.toLocaleString()}`
+                ? `⚡ فتح عقد آجل ${decision} برافعة ${effectiveLeverage}x عند $${entryPrice.toLocaleString()}`
                 : `تم الشراء الفوري عند $${entryPrice.toLocaleString()}`)
             : (isFutures
-                ? `⚡ Opened ${decision} Futures ${leverage}x at $${entryPrice.toLocaleString()}`
+                ? `⚡ Opened ${decision} Futures ${effectiveLeverage}x at $${entryPrice.toLocaleString()}`
                 : `Spot Buy at $${entryPrice.toLocaleString()}`),
           realizedPnlUsdt: 0,
           pnlHistory: [0],
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: isFutures ? 'FUTURES' : 'SPOT',
-          leverage,
+          leverage: effectiveLeverage,
           marginMode,
           marginUsdt: tradeMargin,
           positionSizeUsdt,
@@ -1102,7 +1167,7 @@ export const App: React.FC = () => {
             reason: rejectMsg,
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
             marketType: isFutures ? 'FUTURES' : 'SPOT',
-            leverage,
+            leverage: effectiveLeverage,
           });
           return;
         }
@@ -1125,11 +1190,11 @@ export const App: React.FC = () => {
           price: entryPrice,
           amountUsdt: positionSizeUsdt,
           reason: customReason || (isArabicLang 
-            ? `${isFutures ? 'عقد آجل ' + leverage + 'x' : 'فوري'} | إشارة ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'تحجيم بالمخاطر' : 'حصة ثابتة'}]`
-            : `${isFutures ? 'Futures ' + leverage + 'x' : 'Spot'} | Signal ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'Risk-Sized' : 'Fixed %'}]`),
+            ? `${isFutures ? 'عقد آجل ' + effectiveLeverage + 'x' : 'فوري'} | إشارة ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'تحجيم بالمخاطر' : 'حصة ثابتة'}]`
+            : `${isFutures ? 'Futures ' + effectiveLeverage + 'x' : 'Spot'} | Signal ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'Risk-Sized' : 'Fixed %'}]`),
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: isFutures ? 'FUTURES' : 'SPOT',
-          leverage,
+          leverage: effectiveLeverage,
         };
         addBotLog(newLog);
         playAudioChime();
@@ -1182,7 +1247,7 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
         };
-        setTradeHistory((prev) => [closedHistoryItem, ...prev].slice(0, 500));
+        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
 
         const newLog: AutoTradeLog = {
           id: `log-${Date.now()}`,
@@ -1216,7 +1281,7 @@ export const App: React.FC = () => {
         if (isLiveMode && currentBinance.isConnected) {
           executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1258,7 +1323,7 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
         };
-        setTradeHistory((prev) => [closedHistoryItem, ...prev].slice(0, 500));
+        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
 
         const newLog: AutoTradeLog = {
           id: `log-${Date.now()}`,
@@ -1300,7 +1365,7 @@ export const App: React.FC = () => {
           if (isLiveMode && currentBinance.isConnected) {
             executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, currentP).then((orderRes) => {
               if (!orderRes || orderRes.error) {
-                setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: currentP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+                setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: currentP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
               }
             });
           } else {
@@ -1341,7 +1406,7 @@ export const App: React.FC = () => {
         if (isLiveMode && currentBinance.isConnected) {
           executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1398,7 +1463,7 @@ export const App: React.FC = () => {
         if (isLiveMode && currentBinance.isConnected) {
           executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...prev.slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1431,7 +1496,7 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
         };
-        setTradeHistory((prev) => [closedHistoryItem, ...prev].slice(0, 500));
+        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
 
         const newLog: AutoTradeLog = {
           id: `log-${Date.now()}`,
@@ -1486,7 +1551,7 @@ export const App: React.FC = () => {
       if (isLiveMode && currentBinance.isConnected) {
         executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', pos.remainingAmountUsdt * lev, pos.remainingAmountBtc, p).then((orderRes) => {
           if (!orderRes || orderRes.error) {
-            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: pos.remainingAmountUsdt * lev, reason: 'SL/CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...prev.slice(0, 49)]);
+            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: pos.remainingAmountUsdt * lev, reason: 'SL/CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...(prev || []).slice(0, 49)]);
           }
         });
       } else {
@@ -1518,7 +1583,7 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
       };
-      setTradeHistory((prev) => [closedHistoryItem, ...prev].slice(0, 500));
+      setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
     }
 
     updateBotPositionsSync((prev) => prev.filter(p => isLiveMode ? p.mode !== 'BINANCE_LIVE' : (p.mode === 'BINANCE_LIVE')));
@@ -2113,14 +2178,14 @@ export const App: React.FC = () => {
 
     const unsubKline = binanceWsManager.onKline((kline, isClosed) => {
       setKlines((prev) => {
-        if (prev.length === 0) return [kline];
+        if (!prev || prev.length === 0) return [kline];
         const last = prev[prev.length - 1];
         if (last.time === kline.time) {
           const updated = [...prev];
           updated[updated.length - 1] = kline;
           return updated;
         } else if (kline.time > last.time) {
-          return [...prev.slice(1), kline];
+          return [...(prev || []).slice(1), kline];
         }
         return prev;
       });
@@ -2472,163 +2537,197 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-slate-950 ${isArabic ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen w-full bg-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-slate-950 relative ${isArabic ? 'rtl text-right' : 'ltr'} mode-${effectiveDisplayMode}`}>
       {!isAuthenticated ? (
-        <AuthScreen onLogin={handleLogin} language={language} />
+        <div className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4">
+          <AuthScreen onLogin={handleLogin} language={language} />
+        </div>
       ) : (
-        <div className={isAndroidView ? 'max-w-md mx-auto my-4 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl bg-slate-950' : 'w-full'}>
-          {/* Navigation & Header */}
-          <Header
-            selectedSymbol={selectedSymbol}
-            onSelectPair={handlePairChange}
-            ticker={ticker}
-            connectionState={connectionState}
+        <div className={`w-full min-h-screen flex ${isAndroidView ? 'justify-center items-start p-2 sm:p-4 bg-slate-950' : 'flex-col md:flex-row bg-slate-950'}`}>
+          {/* Sidebar & Mobile Drawer (Quantura Design) */}
+          <Sidebar 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab} 
             language={language}
-            timezone={timezone}
-            isAndroidView={isAndroidView}
-            unreadAlertsCount={alerts.filter((a) => !a.read).length}
-            soundEnabled={soundEnabled}
-            isRefreshing={isRefreshing}
-            isDeveloperMode={isDeveloperMode}
-            binanceConfig={binanceConfig}
+            username={username || 'jaouad'}
+            onLogout={handleLogout}
+            connectionPing={connectionState === 'CONNECTED' ? (ticker ? Math.floor(Math.random() * (40 - 15) + 15) : 21) : 0}
+            isOpen={isMobileMenuOpen}
+            onClose={() => setIsMobileMenuOpen(false)}
+            botEnabled={botConfig.enabled}
             executionMode={executionMode}
             paperWallet={paperWallet}
-            marketType={botConfig.marketType || 'FUTURES'}
-            onToggleMarketType={handleToggleMarketType}
-            onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
-            onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
-            onLanguageChange={setLanguage}
-            onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
-            onOpenNotifications={() => setIsNotificationsOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onOpenRiskModal={() => setIsRiskModalOpen(true)}
-            onToggleSound={() => setSoundEnabled(!soundEnabled)}
-            onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'FUTURES')}
-            onLogout={handleLogout}
-            username={username || 'JAOUAD'}
+            isDesktopOpen={isDesktopSidebarOpen}
+            isAndroidView={isAndroidView}
           />
 
-        {/* Navigation Tabs Bar */}
-        <nav className="bg-slate-900 border-b border-slate-800 sticky top-[56px] sm:top-[60px] z-20 px-3 sm:px-4 py-2 [transform:translateZ(0)]">
-          <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setActiveTab('signal')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'signal'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>{t.tabs.signal}</span>
-            </button>
+          {/* Main Workspace */}
+          <div className={`flex-1 flex flex-col min-w-0 ${isAndroidView ? 'bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-[420px] shadow-2xl overflow-hidden min-h-[92vh] max-h-[96vh] relative ring-1 ring-slate-800/80' : 'min-h-screen bg-slate-950'}`}>
+            {/* Navigation & Header */}
+            <Header
+              onOpenMenu={() => {
+                if (isAndroidView) {
+                  setIsMobileMenuOpen((prev) => !prev);
+                } else {
+                  setIsDesktopSidebarOpen((prev) => !prev);
+                  setIsMobileMenuOpen((prev) => !prev);
+                }
+              }}
+              selectedSymbol={selectedSymbol}
+              onSelectPair={handlePairChange}
+              ticker={ticker}
+              connectionState={connectionState}
+              language={language}
+              timezone={timezone}
+              onTimezoneChange={setTimezone}
+              isAndroidView={isAndroidView}
+              unreadAlertsCount={alerts.filter((a) => !a.read).length}
+              soundEnabled={soundEnabled}
+              isRefreshing={isRefreshing}
+              isDeveloperMode={isDeveloperMode}
+              binanceConfig={binanceConfig}
+              executionMode={executionMode}
+              paperWallet={paperWallet}
+              marketType={botConfig.marketType || 'FUTURES'}
+              onToggleMarketType={handleToggleMarketType}
+              onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
+              onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+              onLanguageChange={setLanguage}
+              onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
+              displayMode={displayMode}
+              onChangeDisplayMode={setDisplayMode}
+              onOpenNotifications={() => setIsNotificationsOpen(true)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenRiskModal={() => setIsRiskModalOpen(true)}
+              onToggleSound={() => setSoundEnabled(!soundEnabled)}
+              onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'FUTURES')}
+              onLogout={handleLogout}
+              username={username || 'JAOUAD'}
+              botEnabled={botConfig.enabled}
+              onToggleBot={() => setBotConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
+            />
 
-            <button
-              onClick={() => setActiveTab('autoBot')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'autoBot'
-                  ? 'bg-gradient-to-r from-amber-500 to-teal-400 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                  : 'text-amber-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-amber-500/20'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span>{t.tabs.autoBot}</span>
-              {botConfig.enabled && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
-              )}
-            </button>
+            {/* Sticky Navigation Tabs Bar */}
+            <nav className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-30 px-2.5 sm:px-4 py-2">
+              <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                <button
+                  onClick={() => setActiveTab('signal')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'signal'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>{t.tabs.signal}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('mtf')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'mtf'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>{t.tabs.mtf}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('autoBot')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'autoBot'
+                      ? 'bg-gradient-to-r from-amber-500 to-teal-400 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                      : 'text-amber-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-amber-500/20'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>{t.tabs.autoBot}</span>
+                  {botConfig.enabled && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                  )}
+                </button>
 
-            <button
-              onClick={() => setActiveTab('market')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'market'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5" />
-              <span>{t.tabs.market}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('mtf')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'mtf'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>{t.tabs.mtf}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('chart')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'chart'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <LineChart className="w-3.5 h-3.5" />
-              <span>{t.tabs.chart}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('market')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'market'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <BarChart2 className="w-3.5 h-3.5" />
+                  <span>{t.tabs.market}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('backtest')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'backtest'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5" />
-              <span>{t.tabs.backtest}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('chart')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'chart'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <LineChart className="w-3.5 h-3.5" />
+                  <span>{t.tabs.chart}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('analysis')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'analysis'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>{t.tabs.analysis}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('backtest')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'backtest'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>{t.tabs.backtest}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('riskWallet')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'riskWallet'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>{t.tabs.riskWallet}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('analysis')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'analysis'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>{t.tabs.analysis}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                activeTab === 'history'
-                  ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>{t.tabs.history}</span>
-            </button>
-          </div>
-        </nav>
+                <button
+                  onClick={() => setActiveTab('riskWallet')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'riskWallet'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>{t.tabs.riskWallet}</span>
+                </button>
 
-        {/* Main Content Area */}
-        <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6">
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'history'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>{t.tabs.history}</span>
+                </button>
+              </div>
+            </nav>
+
+            {/* Main Content Area */}
+            <main className={`w-full ${isAndroidView ? 'px-3 py-3' : 'max-w-7xl mx-auto px-3 sm:px-6 py-4'} space-y-4 pb-6 flex-1`}>
           {/* Tab 1: Terminal & Main Signal */}
           {activeTab === 'signal' && (
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6 flex flex-col h-full">
               <SignalCard
                 symbol={selectedSymbol}
                 signal={activeSignal}
@@ -2647,7 +2746,7 @@ export const App: React.FC = () => {
                 onOpenNotifications={() => setIsNotificationsOpen(true)}
               />
 
-              <div style={{ visibility: isSettingsOpen || isBinanceModalOpen || isCustomBalanceModalOpen ? 'hidden' : 'visible' }}>
+              <div className="flex-1 min-h-0" style={{ visibility: isSettingsOpen || isBinanceModalOpen ? 'hidden' : 'visible' }}>
                 <TradingChart
                   symbol={selectedSymbol}
                   klines={klines}
@@ -2729,8 +2828,8 @@ export const App: React.FC = () => {
                       type: 'SYSTEM',
                       read: false,
                     };
-                    setAlerts(prev => [rejectAlert, ...prev.slice(0, 29)]);
-                    setActiveToastAlert(rejectAlert);
+                    setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
+                    triggerToastAlert(rejectAlert);
                     playAudioChime();
                     return;
                   }
@@ -2755,8 +2854,8 @@ export const App: React.FC = () => {
                       type: 'SYSTEM',
                       read: false,
                     };
-                    setAlerts(prev => [rejectAlert, ...prev.slice(0, 29)]);
-                    setActiveToastAlert(rejectAlert);
+                    setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
+                    triggerToastAlert(rejectAlert);
                     playAudioChime();
                     return;
                   }
@@ -2793,7 +2892,7 @@ export const App: React.FC = () => {
 
           {/* Tab 4: Full Chart */}
           {activeTab === 'chart' && (
-            <div style={{ visibility: isSettingsOpen || isBinanceModalOpen || isCustomBalanceModalOpen ? 'hidden' : 'visible' }}>
+            <div className="flex-1 min-h-0" style={{ visibility: isSettingsOpen || isBinanceModalOpen ? 'hidden' : 'visible' }}>
               <TradingChart
                 symbol={selectedSymbol}
                 klines={klines}
@@ -2912,7 +3011,11 @@ export const App: React.FC = () => {
                     <span className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-lg sm:text-xl uppercase text-sweep-shine">QUANTURA</span>
                     <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono text-[9px] font-bold tracking-wider">v2.5.0</span>
                   </div>
-                  <span className="text-slate-400 text-[11px] font-mono tracking-widest uppercase mt-0.5">Algorithmic Trading Terminal</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-cyan-400 text-xs font-mono font-black tracking-[0.25em] uppercase">TRADE SMARTER</span>
+                    <span className="text-slate-600 font-mono text-xs">•</span>
+                    <span className="text-slate-400 text-[10px] font-mono tracking-wider uppercase">AI Quantitative Terminal</span>
+                  </div>
                 </div>
               </div>
 
@@ -2968,17 +3071,18 @@ export const App: React.FC = () => {
 
             </div>
 
-            <div className="w-full flex justify-between items-center text-[10px] text-slate-600 font-mono border-t border-slate-800/50 pt-4 px-2">
-              <span className="tracking-widest">&copy; {new Date().getFullYear()} ALL RIGHTS RESERVED.</span>
-              <span className="flex items-center gap-1.5 tracking-widest"><Cpu className="w-3 h-3 text-slate-500"/> QUANTURA AI CORE</span>
+            <div className="w-full flex justify-between items-center text-[10px] text-slate-500 font-mono border-t border-slate-800/50 pt-4 px-2">
+              <span className="tracking-widest">&copy; {new Date().getFullYear()} QUANTURA &bull; TRADE SMARTER &bull; ALL RIGHTS RESERVED.</span>
+              <span className="flex items-center gap-1.5 tracking-widest text-cyan-400/90"><Cpu className="w-3 h-3 text-cyan-400"/> QUANTURA AI CORE</span>
             </div>
           </div>
         </footer>
+          </div>
+        </div>
+      )}
 
-        {/* Settings Modal */}
-        
-          {/* Risk Management Modal */}
-          <RiskManagementModal
+      {/* Root-Level Modals & Overlays (Unconstrained by workspace scroll or clipping) */}
+      <RiskManagementModal
             isOpen={isRiskModalOpen}
             onClose={() => setIsRiskModalOpen(false)}
             language={language}
@@ -2986,7 +3090,6 @@ export const App: React.FC = () => {
             onSaveConfig={(cfg) => {
               setBotConfig(cfg);
             }}
-            logs={botLogs}
             executionMode={executionMode}
             binanceConfig={binanceConfig}
             paperWallet={paperWallet}
@@ -3178,8 +3281,6 @@ export const App: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
-      )}
     </div>
   );
 };

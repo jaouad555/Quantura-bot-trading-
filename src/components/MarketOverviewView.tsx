@@ -28,8 +28,10 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
   const { orderBook, derivatives, ticker } = marketData;
   const currentSymbol = ticker?.symbol || 'BTCUSDT';
   const baseAsset = currentSymbol.replace('USDT', '');
-  const maxBidQty = Math.max(...(orderBook.topBids.map((b) => b.qty) || [1]));
-  const maxAskQty = Math.max(...(orderBook.topAsks.map((a) => a.qty) || [1]));
+  const bidsList = Array.isArray(orderBook?.topBids) ? orderBook.topBids : [];
+  const asksList = Array.isArray(orderBook?.topAsks) ? orderBook.topAsks : [];
+  const maxBidQty = bidsList.length > 0 ? Math.max(...bidsList.map((b) => b.qty)) : 1;
+  const maxAskQty = asksList.length > 0 ? Math.max(...asksList.map((a) => a.qty)) : 1;
   const maxQty = Math.max(maxBidQty, maxAskQty, 1);
 
   return (
@@ -165,7 +167,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                 <span>Prix Achat</span>
                 <span>Volume {baseAsset}</span>
               </div>
-              {orderBook.topBids.slice(0, 8).map((b, i) => (
+              {bidsList.slice(0, 8).map((b, i) => (
                 <div key={i} className="relative flex justify-between items-center py-1 px-1.5 rounded overflow-hidden">
                   <div
                     className="absolute top-0 right-0 bottom-0 bg-emerald-500/15"
@@ -183,7 +185,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                 <span>Prix Vente</span>
                 <span>Volume {baseAsset}</span>
               </div>
-              {orderBook.topAsks.slice(0, 8).map((a, i) => (
+              {asksList.slice(0, 8).map((a, i) => (
                 <div key={i} className="relative flex justify-between items-center py-1 px-1.5 rounded overflow-hidden">
                   <div
                     className="absolute top-0 left-0 bottom-0 bg-rose-500/15"

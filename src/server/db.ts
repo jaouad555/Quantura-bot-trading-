@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -8,22 +8,19 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-
-let db;
+let db: DatabaseSync;
 try {
   const dbPath = path.join(dataDir, 'bot_database.sqlite');
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
+  db = new DatabaseSync(dbPath);
+  db.exec('PRAGMA journal_mode = WAL');
 } catch (error) {
   console.error("CRITICAL: Failed to initialize SQLite database:", error);
   // Fallback to in-memory to prevent crash
-  db = new Database(':memory:');
+  db = new DatabaseSync(':memory:');
 }
 
-
-// Initialize schema
 export const initDb = () => {
-  // Table for Key-Value store (settings, API keys, etc.)
+  // Initialize schema
   db.exec(`
     CREATE TABLE IF NOT EXISTS kv_store (
       key TEXT PRIMARY KEY,
@@ -60,17 +57,20 @@ export const initDb = () => {
       timestamp INTEGER
     )
   `);
-  console.log('Local SQLite Database initialized successfully');
+
+  console.log('Local SQLite Database initialized successfully using node:sqlite');
 };
 
-// Helper for Key-Value store (Async wrapper to match the previous API)
+// Helper for Key-Value store (Async wrapper)
 export const kv = {
   get: async (key: string): Promise<string | null> => {
+    if (!db) return null;
     const stmt = db.prepare('SELECT value FROM kv_store WHERE key = ?');
     const row = stmt.get(key) as { value: string } | undefined;
     return row ? row.value : null;
   },
   getAll: async (): Promise<Record<string, string>> => {
+    if (!db) return {};
     const stmt = db.prepare('SELECT key, value FROM kv_store');
     const rows = stmt.all() as { key: string, value: string }[];
     const result: Record<string, string> = {};
@@ -80,14 +80,17 @@ export const kv = {
     return result;
   },
   set: async (key: string, value: string): Promise<void> => {
+    if (!db) return;
     const stmt = db.prepare('INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?');
     stmt.run(key, value, value);
   },
   delete: async (key: string): Promise<void> => {
+    if (!db) return;
     const stmt = db.prepare('DELETE FROM kv_store WHERE key = ?');
     stmt.run(key);
   },
   clear: async (): Promise<void> => {
+    if (!db) return;
     const stmt = db.prepare('DELETE FROM kv_store');
     stmt.run();
   }

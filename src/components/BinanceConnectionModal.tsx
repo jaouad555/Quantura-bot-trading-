@@ -297,7 +297,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
   const activeAccount = testResult?.accountInfo || activeBinanceConfig.accountInfo;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950 transform-gpu isolate animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
       <div
         className={`bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${
           isArabic ? 'rtl text-right' : 'ltr'
@@ -349,7 +349,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 font-sans">
           {/* 1. Mode Switcher (Paper vs Live) */}
-          <div className="bg-slate-950 transform-gpu isolate border border-slate-800/90 rounded-2xl p-4 space-y-3">
+          <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
                 {isArabic ? 'وضع تنفيذ التداول (Execution Mode)' : 'Mode d\'Exécution'}
@@ -410,7 +410,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           </div>
 
           {/* 1.5 Dynamic Balance Source Switcher Overview */}
-          <div className="bg-slate-950 transform-gpu isolate border border-slate-800 rounded-2xl p-4 space-y-3 font-mono">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3 font-mono">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-amber-400" />
@@ -654,7 +654,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
           {/* 4. Live Binance Account Balances Overview (if connected) */}
           {activeAccount && (
-            <div className="bg-slate-950 transform-gpu isolate border border-slate-800 rounded-2xl p-4 space-y-3 font-mono">
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3 font-mono">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <div className="flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-emerald-400" />
@@ -686,7 +686,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl col-span-2 sm:col-span-1">
                   <span className="text-[10px] text-slate-400 block">Actifs Détenus (Coins)</span>
                   <span className="text-xs font-bold text-slate-200 block truncate">
-                    {activeAccount.balances
+                    {(Array.isArray(activeAccount?.balances) ? activeAccount.balances : [])
                       .filter((b) => b.asset !== 'USDT')
                       .slice(0, 3)
                       .map((b) => `${b.asset}: ${b.free.toFixed(3)}`)
@@ -762,7 +762,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
       {/* Confirmation Modal when switching to LIVE REAL MONEY */}
       {showRealMoneyConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950 transform-gpu isolate ">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
           <div className="bg-slate-900 border border-rose-500/50 rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto animate-bounce">
               <AlertTriangle className="w-7 h-7" />

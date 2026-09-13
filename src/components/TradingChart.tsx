@@ -98,22 +98,30 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       candlestickSeriesRef.current = candleSeries as any;
       volumeSeriesRef.current = volumeSeries as any;
 
-      const handleResize = () => {
-        if (chartContainerRef.current && chartApiRef.current) {
-          chartApiRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+      const resizeObserver = new ResizeObserver(entries => {
+        if (entries.length === 0 || entries[0].target !== chartContainerRef.current) { return; }
+        const newRect = entries[0].contentRect;
+        if (chartApiRef.current && newRect.width > 0) {
+          chartApiRef.current.applyOptions({ width: newRect.width, height: newRect.height || 400 });
         }
-      };
+      });
 
-      window.addEventListener('resize', handleResize);
+      resizeObserver.observe(chartContainerRef.current);
 
       return () => {
-        window.removeEventListener('resize', handleResize);
+        resizeObserver.disconnect();
         if (chartApiRef.current) {
           try {
             chartApiRef.current.remove();
           } catch (e) {
             // ignore
           }
+          chartApiRef.current = null;
+        }
+        candlestickSeriesRef.current = null;
+        volumeSeriesRef.current = null;
+        if (chartContainerRef.current) {
+          chartContainerRef.current.innerHTML = '';
         }
       };
     } catch (err) {
@@ -238,18 +246,19 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   ];
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl flex flex-col h-full min-h-[450px]">
       {/* Timeframe Switcher & Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
           {timeframes.map(({ tf, label }) => (
             <button
+              id={`btn-tf-${tf}`}
               key={tf}
               onClick={() => onTimeframeChange(tf)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer active:scale-95 shrink-0 ${
                 activeTimeframe === tf
-                  ? 'bg-brand-500 text-slate-950 font-bold shadow-md shadow-brand-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
               }`}
             >
               {label}
@@ -260,28 +269,29 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         <div className="flex items-center gap-2">
           {activeSignal && (
             <button
+              id="btn-chart-toggle-levels"
               onClick={() => setShowIndicators(!showIndicators)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer active:scale-95 ${
                 showIndicators
-                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400'
+                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 shadow-sm'
+                  : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-300'
               }`}
             >
               {showIndicators ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              <span>{showIndicators ? 'Masquer Niveaux' : 'Afficher Niveaux'}</span>
+              <span>{showIndicators ? (isArabic ? 'إخفاء المستويات' : 'Masquer Niveaux') : (isArabic ? 'إظهار المستويات' : 'Afficher Niveaux')}</span>
             </button>
           )}
 
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono">
-            <Radio className="w-3 h-3 text-brand-400" />
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800 font-mono">
+            <Radio className="w-3 h-3 text-cyan-400" />
             <span>Binance Klines Live</span>
           </div>
         </div>
       </div>
 
       {/* Chart Canvas */}
-      <div className="relative w-full overflow-hidden rounded-xl bg-slate-950 border border-slate-800/90">
-        <div ref={chartContainerRef} className="w-full h-[400px]" />
+      <div className="relative w-full flex-1 overflow-hidden rounded-xl bg-slate-950 border border-slate-800/90">
+        <div ref={chartContainerRef} className="w-full h-full min-h-[350px]" />
 
         {/* Legend Overlay */}
         <div className="absolute top-2 left-2 z-10 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-slate-300 flex items-center gap-3">

@@ -1,12 +1,13 @@
 export type DecisionType = 'LONG' | 'SHORT' | 'WAIT' | 'NO_TRADE';
 export type BiasType = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'MODERATE' | 'HIGH' | 'EXTREME';
 export type Timeframe = '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w';
 export type BotTimeframe = 'AUTO' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
 export type MarketType = 'SPOT' | 'FUTURES';
 export type Language = 'fr' | 'ar' | 'en';
 export type TimezoneMode = 'GMT+1' | 'UTC' | 'LOCAL';
 export type ConnectionState = 'CONNECTED' | 'CONNECTING' | 'RECONNECTING' | 'OFFLINE' | 'ERROR';
+export type DisplayMode = 'auto' | 'standard' | 'compact' | 'fullscreen';
 
 export type MarketRegime =
   | 'TRENDING_BULLISH'
@@ -625,5 +626,140 @@ export interface BinanceOpenOrder {
   side: 'BUY' | 'SELL';
   time: number;
 }
+
+// =====================================================
+// QUANTURA RISK MANAGEMENT ENGINE TYPES
+// =====================================================
+
+export type RiskLockStatus = 'NORMAL' | 'WARNING' | 'RESTRICTED' | 'LOCKED' | 'EMERGENCY';
+export type VolatilityRegime = 'LOW' | 'NORMAL' | 'HIGH' | 'EXTREME';
+
+export type RejectionCode =
+  | 'RISK_LOCK_ACTIVE'
+  | 'EMERGENCY_STOP_ACTIVE'
+  | 'DAILY_LOSS_LIMIT'
+  | 'MAX_DRAWDOWN'
+  | 'CONSECUTIVE_LOSS_STREAK'
+  | 'EXCESSIVE_RISK_PER_TRADE'
+  | 'EXCESSIVE_PORTFOLIO_RISK'
+  | 'MAX_LEVERAGE_EXCEEDED'
+  | 'MAX_SYMBOL_EXPOSURE_EXCEEDED'
+  | 'MAX_TOTAL_EXPOSURE_EXCEEDED'
+  | 'MAX_OPEN_POSITIONS'
+  | 'MAX_POSITIONS_PER_SYMBOL'
+  | 'HIGH_CORRELATION'
+  | 'INSUFFICIENT_EQUITY'
+  | 'INSUFFICIENT_MARGIN'
+  | 'MISSING_STOP_LOSS'
+  | 'INVALID_STOP_LOSS'
+  | 'STOP_LOSS_TOO_TIGHT'
+  | 'STOP_LOSS_TOO_WIDE'
+  | 'LOW_RISK_REWARD'
+  | 'ANTI_MARTINGALE_VIOLATION'
+  | 'EXCESSIVE_SPREAD'
+  | 'INSUFFICIENT_LIQUIDITY'
+  | 'EXCESSIVE_SLIPPAGE'
+  | 'EXTREME_VOLATILITY'
+  | 'UNCERTAIN_MARKET_REGIME'
+  | 'INVALID_PRICE'
+  | 'STALE_MARKET_DATA'
+  | 'ORDER_SIZE_TOO_SMALL'
+  | 'ORDER_SIZE_TOO_LARGE'
+  | 'DUPLICATE_ORDER'
+  | 'SYSTEM_ERROR';
+
+export interface FrontendRiskEngineConfig {
+  riskPerTradePercent: number;
+  maxDailyLossPercent: number;
+  maxDrawdownPercent: number;
+  maxOpenPositions: number;
+  maxAllowedLeverage: number;
+  minRiskRewardRatio: number;
+  maxPortfolioRiskPercent: number;
+  maxSymbolExposurePercent: number;
+  maxTotalExposurePercent: number;
+  maxCorrelatedClusterExposurePercent: number;
+  antiMartingaleEnabled: boolean;
+  emergencyStop: boolean;
+  riskLockStatus: RiskLockStatus;
+  riskLockReason?: string;
+  riskLockTimestamp?: number;
+}
+
+export interface RiskEngineMetrics {
+  currentEquity: number;
+  peakEquity: number;
+  dailyLossUsdt: number;
+  dailyLossPercent: number;
+  maxDailyLossPercent: number;
+  currentDrawdownUsdt: number;
+  currentDrawdownPercent: number;
+  maxDrawdownPercent: number;
+  consecutiveLosses: number;
+  currentPortfolioRiskPercent: number;
+  maxPortfolioRiskPercent: number;
+  totalExposureUsdt: number;
+  totalExposurePercent: number;
+  openPositionsCount: number;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  riskLockStatus: RiskLockStatus;
+  riskLockReason?: string;
+  emergencyStop: boolean;
+}
+
+export interface RiskEvaluationResult {
+  decision: 'APPROVED' | 'REJECTED';
+  reasonCode?: RejectionCode;
+  message: string;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  approvedQuantity: number;
+  approvedMarginUsdt: number;
+  approvedLeverage: number;
+  approvedStopLoss: number;
+  effectiveRiskAmountUsdt: number;
+  effectiveRiskPercent: number;
+  riskRewardRatio: number;
+  estimatedSlippagePercent: number;
+  spreadPercent: number;
+  volatilityRegime: VolatilityRegime;
+  marketRegime: MarketRegime;
+  auditId?: string;
+}
+
+export interface RiskAuditLogEntry {
+  auditId: string;
+  id?: string;
+  timestamp: number;
+  decision: 'APPROVED' | 'REJECTED';
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  marketType: 'SPOT' | 'FUTURES';
+  strategyName?: string;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit1?: number;
+  takeProfit2?: number;
+  takeProfit3?: number;
+  requestedQuantity?: number;
+  approvedQuantity?: number;
+  requestedLeverage?: number;
+  approvedLeverage?: number;
+  riskAmountUsdt: number;
+  riskPercent: number;
+  riskRewardRatio: number;
+  portfolioRiskPercent: number;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  rejectionCode?: RejectionCode;
+  rejectionReason?: string;
+  accountEquity: number;
+  availableBalance: number;
+  drawdownPercent: number;
+  dailyLossPercent: number;
+  volatilityRegime?: VolatilityRegime;
+}
+
 
 

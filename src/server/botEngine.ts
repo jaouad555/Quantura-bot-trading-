@@ -1,4 +1,5 @@
 import { kv } from './db';
+import { RiskEngine } from './riskEngine/RiskEngine';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -401,6 +402,18 @@ export const startBotEngine = () => {
                 confidence: 75,
                 strategyName: pos.strategyName,
             });
+
+            // Record outcome in Risk Management Engine Drawdown & Streak Tracker
+            try {
+              const riskEngine = RiskEngine.getInstance();
+              riskEngine.recordTradeClosed(finalPnlUsdt, 0, {
+                symbol: pos.symbol,
+                strategyName: pos.strategyName,
+                durationMs: Date.now() - (pos.openedAt || Date.now()),
+              });
+            } catch (err) {
+              console.error('[SERVER ENGINE] Risk Engine outcome record error:', err);
+            }
 
             // Mark for deletion
             pos._delete = true;

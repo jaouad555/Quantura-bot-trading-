@@ -1214,7 +1214,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   <div className="bg-gradient-to-r from-[#1e293b]/70 via-[#1e293b]/40 to-transparent border border-[#334155] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center text-brand-300 font-black text-sm">
-                        {currentSymbol.replace('USDT', '').slice(0, 4)}
+                        {(currentSymbol || 'BTC').replace('USDT', '').slice(0, 4)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -1316,7 +1316,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#334155]">
-                          {singleResult.trades.slice(0, visibleTradesLimit).map((trade) => {
+                          {(Array.isArray(singleResult?.trades) ? singleResult.trades : []).slice(0, visibleTradesLimit).map((trade) => {
                             const isWin = trade.pnlPercent > 0;
                             return (
                               <tr key={trade.id} className="hover:bg-[#1e293b]/40 transition-colors">

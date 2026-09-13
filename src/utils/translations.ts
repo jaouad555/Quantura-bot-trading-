@@ -44,9 +44,10 @@ export const translations: Record<Language, any> = {
       gradeD: 'Grade D (Éviter)',
     },
 
+    tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'Bot Auto ⚡',
+      autoBot: 'Moteur Quantitatif & Bot Auto ⚡',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Carnet & Dérivés',
       chart: 'Graphique Live',
@@ -308,9 +309,10 @@ export const translations: Record<Language, any> = {
       gradeD: 'درجة D (تجنب الدخول)',
     },
 
+    tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'المنصة والإشارة',
-      autoBot: 'البوت الآلي ⚡',
+      autoBot: 'البوت الكمي والآلي ⚡',
       mtf: 'تعدد الأطر الزمنية (MTF)',
       market: 'الدفتر والمشتقات',
       chart: 'الرسم البياني المباشر',
@@ -572,9 +574,10 @@ export const translations: Record<Language, any> = {
       gradeD: 'Grade D (Avoid Trade)',
     },
 
+    tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'Auto Bot ⚡',
+      autoBot: 'AI Quant Engine & Bot ⚡',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Order Book & Derivatives',
       chart: 'Live Chart',

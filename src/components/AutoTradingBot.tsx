@@ -552,15 +552,13 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       )}
 
       {/* Bot Master Control Card */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 sm:p-6 shadow-xl relative overflow-hidden group [transform:translateZ(0)]">
-        {/* Glow effect - safe radial gradient without heavy GPU blur filter */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-[radial-gradient(circle,rgba(99,102,241,0.12)_0%,transparent_70%)] pointer-events-none -mr-16 -mt-16" />
-
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
+        <div className="flex flex-col gap-5">
+          {/* Bot Title & Status Header */}
           <div className="flex items-start sm:items-center gap-3.5">
-            <div className={`p-3.5 rounded-2xl border flex items-center justify-center transition-all ${
+            <div className={`p-3.5 rounded-2xl border flex items-center justify-center shrink-0 ${
               botConfig.enabled 
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-lg shadow-emerald-500/20 animate-pulse' 
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' 
                 : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}>
               <Bot className="w-7 h-7" />
@@ -568,16 +566,25 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-white tracking-tight">
-                  {isArabic ? 'بوت التداول الآلي للعقود الآجلة (USDT-M Futures Bot)' : isEn ? 'USDT-M Futures Auto-Trading Bot' : 'Bot de Trading Futures USDT-M'}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+                    <span className="text-cyan-400 font-mono">🤖</span>
+                    <span className="text-white">
+                      Moteur Quantitatif IA
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-black uppercase tracking-wider flex items-center gap-1">
+                      <span>BOT</span>
+                      <span className="text-amber-400">⚡</span>
+                    </span>
+                  </h2>
+                </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-mono ${
                   botConfig.enabled 
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
                     : 'bg-slate-800 text-slate-400 border-slate-700'
                 }`}>
                   {botConfig.enabled 
-                    ? (isArabic ? 'نشط ويعمل آلياً ⚡' : 'ACTIVE ⚡') 
+                    ? (isArabic ? 'نشط ويعمل كمياً ⚡' : 'ACTIVE ⚡') 
                     : (isArabic ? 'متوقف ⏸️' : 'PAUSED ⏸️')}
                 </span>
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 flex items-center gap-1">
@@ -585,7 +592,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   <span>{botConfig.marketType === 'SPOT' ? 'SPOT 1x' : `FUTURES ${botConfig.leverage || 10}x [${botConfig.marginMode || 'ISOLATED'}]`}</span>
                 </span>
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-cyan-400" />
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
                   <span>
                     {botConfig.timeframe === 'AUTO' 
                       ? (isArabic ? `فريم تلقائي ذكي [${effectiveBotTimeframe.toUpperCase()}] ⚡` : `Dynamic AUTO [${effectiveBotTimeframe.toUpperCase()}] ⚡`)
@@ -593,96 +600,105 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   </span>
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
                 {isArabic 
-                  ? `يتداول البوت عقود ${botConfig.marketType === 'SPOT' ? 'Spot' : 'Futures'} الآلية ${botConfig.timeframe === 'AUTO' ? `بفريم تكيفي ذكي (${effectiveBotTimeframe.toUpperCase()})` : `على فريم (${botConfig.timeframe?.toUpperCase() || '1H'})`} مع إدارة مخاطر مؤسساتية وجني أرباح ذكي (Scale-Out) ووقف متحرك.` 
-                  : `Automated ${botConfig.marketType === 'SPOT' ? 'Spot' : 'Futures'} quantitative bot operating on ${botConfig.timeframe === 'AUTO' ? `dynamic adaptive timeframe (${effectiveBotTimeframe.toUpperCase()})` : `${botConfig.timeframe?.toUpperCase() || '1H'} timeframe`} with scale-out profit taking and trailing SL.`}
+                  ? `محرك خوارزمي كمي مؤسسي مدعوم بنماذج الذكاء الاصطناعي لتداول عقود ${botConfig.marketType === 'SPOT' ? 'Spot' : 'Futures'} ${botConfig.timeframe === 'AUTO' ? `بفريم تكيفي ذكي (${effectiveBotTimeframe.toUpperCase()})` : `على فريم (${botConfig.timeframe?.toUpperCase() || '1H'})`} مع جدار حماية محرك إدارة المخاطر، وجني أرباح ذكي (Scale-Out) ووقف خسارة متحرك.` 
+                  : `Moteur algorithmique & quantitatif propulsé par l'IA pour les contrats ${botConfig.marketType === 'SPOT' ? 'Spot' : 'Futures'} ${botConfig.timeframe === 'AUTO' ? `en timeframe adaptatif (${effectiveBotTimeframe.toUpperCase()})` : `sur le timeframe ${botConfig.timeframe?.toUpperCase() || '1H'}`} avec protection Risk Engine, scale-out profit et trailing SL.`}
               </p>
             </div>
           </div>
 
-          {/* Action Buttons Toolbar */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2.5 w-full lg:w-auto shrink-0">
-            {/* 1. Close All Button (Always present, active when positions > 0) */}
+          {/* Action Buttons Toolbar: Exact 2 Lines x 2 Columns (2 Rows, 2 Cols) */}
+          <div 
+            className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
+          >
+            {/* Line 1 - Column 1: Start / Stop Bot */}
             <button
+              id="btn-bot-toggle-main"
+              onClick={onToggleBot}
+              className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border min-w-0 ${
+                botConfig.enabled
+                  ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+              }`}
+              title={botConfig.enabled ? (isArabic ? 'إيقاف البوت' : 'Stop Bot') : (isArabic ? 'تشغيل البوت التلقائي' : 'Start Bot')}
+            >
+              {botConfig.enabled ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span className="truncate font-mono uppercase tracking-wide">
+                    {isArabic ? 'إيقاف البوت ⏸️' : isEn ? 'Stop Bot ⏸️' : 'Arrêter Bot ⏸️'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span className="truncate font-mono uppercase tracking-wide">
+                    {isArabic ? 'تشغيل البوت ⚡' : isEn ? 'Start Bot ⚡' : 'Lancer Bot ⚡'}
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* Line 1 - Column 2: Emergency Close All */}
+            <button
+              id="btn-bot-close-all"
               onClick={() => {
                 if (displayPositions.length > 0 && onPanicCloseAll) {
                   onPanicCloseAll();
                 }
               }}
               disabled={displayPositions.length === 0}
-              className={`h-10 px-3.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm group ${
+              className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors min-w-0 ${
                 displayPositions.length > 0
-                  ? 'bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-200 border-rose-500/50 shadow-rose-950/40 cursor-pointer animate-pulse'
-                  : 'bg-rose-950/20 text-rose-400/50 border-rose-900/40 cursor-not-allowed opacity-60'
+                  ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-200 border-rose-600 cursor-pointer'
+                  : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
               }`}
               title={isArabic ? 'إغلاق وتصفية جميع الصفقات المفتوحة فورياً' : isEn ? 'Emergency Close All Positions' : 'Clôturer d\'urgence toutes les positions'}
             >
-              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="whitespace-nowrap flex items-center gap-1">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span className="truncate font-mono flex items-center gap-1">
                 <span>🚨</span>
-                <span>{isArabic ? `Close All (${displayPositions.length})` : `Close All (${displayPositions.length})`}</span>
+                <span>{isArabic ? `إغلاق (${displayPositions.length})` : `Close (${displayPositions.length})`}</span>
               </span>
             </button>
 
-            {/* 2. Binance API Button */}
-            {onOpenBinanceModal && (
+            {/* Line 2 - Column 1: Binance API Connection */}
+            {onOpenBinanceModal ? (
               <button
+                id="btn-bot-binance-modal"
                 onClick={onOpenBinanceModal}
-                className={`h-10 px-3.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm group ${
+                className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-w-0 ${
                   executionMode === 'BINANCE_LIVE'
-                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-emerald-950/40'
-                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border-amber-500/40 hover:border-amber-500/60 shadow-amber-950/30'
+                    ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600'
+                    : 'bg-slate-800 hover:bg-slate-750 text-amber-300 border-slate-700'
                 }`}
                 title={isArabic ? 'إعدادات ربط Binance API' : isEn ? 'Binance API Connection' : 'Connexion API Binance'}
               >
-                <Key className={`w-4 h-4 transition-transform group-hover:scale-110 ${executionMode === 'BINANCE_LIVE' ? 'text-emerald-400' : 'text-amber-400'}`} />
-                <span className="whitespace-nowrap flex items-center gap-1">
+                <Key className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <span className="truncate font-mono flex items-center gap-1">
                   <span>{executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}</span>
                   <span>⚡</span>
                 </span>
-                {executionMode === 'BINANCE_LIVE' && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
-                )}
               </button>
+            ) : (
+              <div className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-[11px] sm:text-xs font-mono text-slate-500 min-w-0">
+                <span className="truncate">Binance Local</span>
+              </div>
             )}
 
-            {/* 3. Leverage & Settings Button */}
+            {/* Line 2 - Column 2: Leverage & Bot Config */}
             <button
+              id="btn-bot-config-modal"
               onClick={() => setShowConfigModal(true)}
-              className="h-10 px-3.5 bg-slate-800/90 hover:bg-slate-700/90 active:scale-95 text-slate-200 hover:text-white rounded-xl border border-slate-700/80 hover:border-slate-600 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm group"
+              className="h-9 sm:h-10 px-2 sm:px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg sm:rounded-xl border border-slate-700 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-w-0"
               title={isArabic ? 'إعدادات الرافعة وإدارة المخاطر' : isEn ? 'Bot Settings & Leverage' : 'Paramètres & Levier du Bot'}
             >
-              <Sliders className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-              <span className="whitespace-nowrap">
-                {isArabic ? 'Leverage & Settings' : 'Leverage & Settings'}
+              <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate font-mono">
+                {isArabic ? 'الرافعة ⚙️' : 'Config ⚙️'}
               </span>
-            </button>
-
-            {/* 4. Start / Stop Bot Main Action Button */}
-            <button
-              onClick={onToggleBot}
-              className={`h-10 px-4 sm:px-5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${
-                botConfig.enabled
-                  ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500/50 shadow-rose-950/50 hover:shadow-rose-600/30'
-                  : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/20 hover:shadow-emerald-500/30 font-black'
-              }`}
-            >
-              {botConfig.enabled ? (
-                <>
-                  <Pause className="w-4 h-4 fill-current shrink-0" />
-                  <span className="whitespace-nowrap">
-                    {isArabic ? 'Désactiver le Bot' : isEn ? 'Stop Bot' : 'Désactiver le Bot'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 fill-current shrink-0" />
-                  <span className="whitespace-nowrap">
-                    {isArabic ? "Activer l'Auto-Trading" : isEn ? 'Start Bot' : "Activer l'Auto-Trading"}
-                  </span>
-                </>
-              )}
             </button>
           </div>
         </div>
@@ -1326,7 +1342,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
       {/* Enhanced Quantitative Futures Settings Modal */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950 transform-gpu isolate flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-lg w-full shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-white text-base flex items-center gap-2">
               <Sliders className="w-5 h-5 text-indigo-400" />

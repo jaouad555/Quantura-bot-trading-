@@ -65,7 +65,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const isArabic = language === 'ar';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950 transform-gpu isolate ">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
       <div className={`bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden ${isArabic ? 'rtl text-right' : 'ltr'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-950/50">
@@ -86,7 +86,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   v2.5
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">{t.settings.title}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-cyan-400 text-[10px] font-mono font-black tracking-[0.2em] uppercase">TRADE SMARTER</span>
+                <span className="text-slate-600 font-mono text-[10px]">&bull;</span>
+                <p className="text-xs text-slate-400">{t.settings.title}</p>
+              </div>
             </div>
           </div>
 

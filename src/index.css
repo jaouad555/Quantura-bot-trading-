@@ -99,14 +99,13 @@
   scrollbar-width: none;
 }
 
-/* Mobile GPU scroll stabilization and antialiasing */
+/* Mobile scroll stabilization and antialiasing */
 html, body {
   background-color: #020617;
   color: #f8fafc;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  -webkit-overflow-scrolling: touch;
 }
 
 * {
@@ -183,6 +182,105 @@ html, body {
   100% {
     background-position: -80% 0;
   }
+}
+
+
+
+/* ====== DISPLAY MODES CSS ====== */
+
+/* Compact Mode */
+.mode-compact .p-4 { padding: 0.5rem; }
+.mode-compact .md\:p-6 { padding: 0.75rem; }
+.mode-compact .p-6 { padding: 1rem; }
+.mode-compact .gap-6 { gap: 0.75rem; }
+.mode-compact .gap-4 { gap: 0.5rem; }
+.mode-compact .mb-6 { margin-bottom: 0.75rem; }
+.mode-compact .mb-4 { margin-bottom: 0.5rem; }
+.mode-compact .py-4 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.mode-compact .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.mode-compact .text-2xl { font-size: 1.25rem; line-height: 1.75rem; }
+.mode-compact .text-xl { font-size: 1.125rem; line-height: 1.75rem; }
+.mode-compact .text-sm { font-size: 0.75rem; line-height: 1rem; }
+.mode-compact .h-64 { height: 12rem; }
+.mode-compact .min-h-\[400px\] { min-height: 300px; }
+.mode-compact .h-\[500px\] { height: 350px; }
+
+/* Fullscreen Mode */
+.mode-fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.mode-fullscreen .p-4, .mode-fullscreen .md\:p-6 {
+  padding: 0.5rem;
+}
+.mode-fullscreen .min-h-\[400px\] { 
+  min-height: 50vh; 
+}
+.mode-fullscreen .h-\[500px\] { 
+  height: 60vh; 
+}
+.mode-fullscreen main {
+  display: flex;
+  flex-direction: column;
+}
+.mode-fullscreen .grid {
+  flex-grow: 1;
+}
+
+/* Display Modes & Mobile Adjustments */
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+  .mode-fullscreen .min-h-\[400px\] { 
+    min-height: 300px; 
+  }
+  
+  /* Horizontal scroll for wide tables on mobile */
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+/* Additional Responsive Adjustments */
+@media (max-width: 1024px) {
+  .mode-standard .p-4, .mode-standard .md\:p-6 {
+    padding: 1rem;
+  }
+}
+
+/* Ensure no horizontal scrolling on root */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Compact specific adjustments for inner components */
+.mode-compact .text-sm {
+  font-size: 0.8rem;
+}
+.mode-compact .text-xs {
+  font-size: 0.7rem;
+}
+.mode-compact h1.text-2xl {
+  font-size: 1.25rem;
+}
+
+.mode-compact .p-3 {
+  padding: 0.5rem;
+}
+.mode-compact .py-2 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+.mode-compact .px-3 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 

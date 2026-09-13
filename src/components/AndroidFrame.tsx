@@ -44,7 +44,7 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({ children, isActive }
         </div>
 
         {/* Android Bottom Navigation Bar */}
-        <div className="bg-slate-950 transform-gpu isolate border-t border-slate-900 py-2.5 px-12 flex items-center justify-between text-slate-500 z-40 shrink-0">
+        <div className="bg-slate-950 border-t border-slate-900 py-2.5 px-12 flex items-center justify-between text-slate-500 z-40 shrink-0">
           <button className="hover:text-slate-200 transition">
             <Square className="w-4 h-4" />
           </button>

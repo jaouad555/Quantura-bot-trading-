@@ -151,13 +151,13 @@ export const QwenAnalysisView: React.FC<QwenAnalysisViewProps> = ({
               <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 grid grid-cols-2 gap-2 text-[11px]">
                 <div>
                   <span className="text-emerald-400 font-bold block mb-1">{isArabic ? 'دعوم مرصودة' : 'Supports Détectés'}</span>
-                  {indicators.supportLevels.slice(0, 3).map((s, i) => (
+                  {(Array.isArray(indicators?.supportLevels) ? indicators.supportLevels : []).slice(0, 3).map((s, i) => (
                     <div key={i} className="text-slate-300">${formatCoinPrice(s, marketData.ticker?.symbol || 'BTCUSDT')}</div>
                   ))}
                 </div>
                 <div>
                   <span className="text-rose-400 font-bold block mb-1">{isArabic ? 'مقاومات مرصودة' : 'Résistances Détectées'}</span>
-                  {indicators.resistanceLevels.slice(0, 3).map((r, i) => (
+                  {(Array.isArray(indicators?.resistanceLevels) ? indicators.resistanceLevels : []).slice(0, 3).map((r, i) => (
                     <div key={i} className="text-slate-300">${formatCoinPrice(r, marketData.ticker?.symbol || 'BTCUSDT')}</div>
                   ))}
                 </div>

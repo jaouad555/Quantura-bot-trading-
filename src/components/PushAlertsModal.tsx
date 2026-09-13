@@ -32,7 +32,7 @@ export const PushAlertsModal: React.FC<PushAlertsModalProps> = ({
   const isArabic = language === 'ar';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 transform-gpu isolate flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className={`bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl relative ${isArabic ? 'rtl text-right' : 'ltr'}`}>
         <button
           onClick={onClose}

@@ -30,19 +30,19 @@ interface NotificationCenterProps {
 
 // Helper to format pair nicely e.g. BTCUSDT -> BTC/USDT
 const formatSymbolBadge = (symbol?: string, title?: string): string => {
-  if (symbol) {
+  if (symbol && typeof symbol === 'string') {
     if (symbol.includes('/')) return symbol.toUpperCase();
-    if (symbol.toUpperCase().endsWith('USDT')) {
+    if (symbol.toUpperCase().endsWith('USDT') && symbol.length > 4) {
       return `${symbol.slice(0, -4).toUpperCase()}/USDT`;
     }
     return symbol.toUpperCase();
   }
-  if (title) {
+  if (title && typeof title === 'string') {
     const match = title.match(/([A-Z0-9]+)\/USDT|[A-Z0-9]{2,6}USDT/i);
-    if (match) {
+    if (match && match[0]) {
       const found = match[0].toUpperCase();
       if (found.includes('/')) return found;
-      if (found.endsWith('USDT')) return `${found.slice(0, -4)}/USDT`;
+      if (found.endsWith('USDT') && found.length > 4) return `${found.slice(0, -4)}/USDT`;
       return found;
     }
   }
@@ -116,7 +116,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 transform-gpu isolate flex justify-end animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200">
       <div className={`bg-slate-900 border-l border-slate-800 w-full max-w-md h-full p-4 flex flex-col shadow-2xl ${isArabic ? 'rtl text-right' : 'ltr'}`}>
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">

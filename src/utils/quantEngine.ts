@@ -126,7 +126,7 @@ export function calculateQuantitativeScore(
   // 1. Trend Factor (Weight: 20%)
   let trendBull = 50;
   let trendBear = 50;
-  const { ema20, ema50, ema100, ema200, sma200 } = indicators;
+  const { ema20, ema50, ema100, ema200, sma200, ichimoku } = indicators;
 
   let emaBullCount = 0;
   if (currentPrice > ema20) emaBullCount++;
@@ -135,7 +135,16 @@ export function calculateQuantitativeScore(
   if (ema100 > ema200) emaBullCount++;
   if (currentPrice > sma200) emaBullCount++;
 
-  trendBull = (emaBullCount / 5) * 100;
+  let baseTrendBull = (emaBullCount / 5) * 100;
+  if (ichimoku) {
+    let ichiScore = 50;
+    if (currentPrice > ichimoku.senkouA && currentPrice > ichimoku.senkouB) ichiScore += 25;
+    else if (currentPrice < ichimoku.senkouA && currentPrice < ichimoku.senkouB) ichiScore -= 25;
+    if (ichimoku.tenkan > ichimoku.kijun) ichiScore += 15;
+    else if (ichimoku.tenkan < ichimoku.kijun) ichiScore -= 15;
+    baseTrendBull = (baseTrendBull * 0.7) + (ichiScore * 0.3);
+  }
+  trendBull = Math.round(Math.min(100, Math.max(0, baseTrendBull)));
   trendBear = 100 - trendBull;
 
   // 2. Market Structure Factor (Weight: 20%)

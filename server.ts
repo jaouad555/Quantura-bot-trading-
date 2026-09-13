@@ -2,6 +2,7 @@ console.log("Starting Quantura Server...");
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
 
 import { GoogleGenAI } from '@google/genai';
@@ -10,6 +11,8 @@ import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync } from './src/server/botEngine';
+import { RiskEngine } from './src/server/riskEngine/RiskEngine';
+import { AuditTrail } from './src/server/riskEngine/AuditTrail';
 import {
   AIAnalysisResult,
   BinanceTicker,
@@ -22,7 +25,7 @@ import {
 } from './src/types';
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -1485,8 +1488,135 @@ app.post('/api/binance/account', async (req, res) => {
   }
 });
 
+// =====================================================
+// QUANTURA RISK MANAGEMENT ENGINE REST API ENDPOINTS
+// =====================================================
+
+app.post('/api/risk/evaluate', async (req, res) => {
+  try {
+    const riskEngine = RiskEngine.getInstance();
+    const proposal = req.body.proposal || req.body;
+    
+    // Fetch active positions for portfolio evaluation
+    const positionsStr = await kv.get('btc_active_bot_positions');
+    const existingPositions = positionsStr ? JSON.parse(positionsStr) : [];
+    
+    const result = await riskEngine.evaluateProposal(proposal, existingPositions);
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Risk Evaluation Error:', error);
+    return res.status(500).json({ error: error.message || 'Risk engine evaluation failed' });
+  }
+});
+
+app.get('/api/risk/config', async (req, res) => {
+  try {
+    const riskEngine = RiskEngine.getInstance();
+    const config = riskEngine.getConfig();
+    return res.json({
+      ...config,
+      maxDrawdownPercent: (config as any).maxDrawdownPercent ?? config.maxAccountDrawdownPercent,
+      antiMartingaleEnabled: (config as any).antiMartingaleEnabled ?? true,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to fetch risk config' });
+  }
+});
+
+app.post('/api/risk/config', async (req, res) => {
+  try {
+    const riskEngine = RiskEngine.getInstance();
+    const body = { ...req.body };
+    if (body.maxDrawdownPercent !== undefined && body.maxAccountDrawdownPercent === undefined) {
+      body.maxAccountDrawdownPercent = body.maxDrawdownPercent;
+    }
+    const updated = await riskEngine.updateConfig(body);
+    return res.json({ 
+      success: true, 
+      config: {
+        ...updated,
+        maxDrawdownPercent: (updated as any).maxDrawdownPercent ?? updated.maxAccountDrawdownPercent,
+        antiMartingaleEnabled: (updated as any).antiMartingaleEnabled ?? true,
+      }
+    });
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message || 'Failed to update risk config' });
+  }
+});
+
+app.get('/api/risk/metrics', async (req, res) => {
+  try {
+    const riskEngine = RiskEngine.getInstance();
+    let accountEquity = 10000;
+    const walletStr = await kv.get('btc_paper_wallet');
+    if (walletStr) {
+      const parsed = JSON.parse(walletStr);
+      if (parsed.balance) accountEquity = parsed.balance;
+    }
+    const positionsStr = await kv.get('btc_active_bot_positions');
+    const existingPositions = positionsStr ? JSON.parse(positionsStr) : [];
+    
+    const metrics = await riskEngine.getMetrics(accountEquity, existingPositions);
+    return res.json(metrics);
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to calculate risk metrics' });
+  }
+});
+
+app.post('/api/risk/emergency-stop', async (req, res) => {
+  try {
+    const { active, reason } = req.body;
+    const riskEngine = RiskEngine.getInstance();
+    const config = await riskEngine.setEmergencyStop(!!active, reason);
+    return res.json({ success: true, emergencyStop: config.emergencyStop, status: config.riskLockStatus });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to toggle emergency stop' });
+  }
+});
+
+app.post('/api/risk/unlock', async (req, res) => {
+  try {
+    const { manualAdminOverride = true } = req.body;
+    const riskEngine = RiskEngine.getInstance();
+    const config = await riskEngine.unlockRiskLock(manualAdminOverride);
+    return res.json({ success: true, status: config.riskLockStatus });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to unlock risk lock' });
+  }
+});
+
+app.get('/api/risk/audit-logs', async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 100;
+    const offset = Number(req.query.offset) || 0;
+    const symbol = req.query.symbol as string;
+    const decision = req.query.decision as 'APPROVED' | 'REJECTED';
+    
+    const logs = AuditTrail.getLogs({ limit, offset, symbol, decision });
+    const stats = AuditTrail.getStats();
+    return res.json({ logs, stats });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to fetch risk audit logs' });
+  }
+});
+
+app.post('/api/risk/record-outcome', async (req, res) => {
+  try {
+    const { pnlUsdt, feeUsdt, symbol, strategyName, durationMs } = req.body;
+    const riskEngine = RiskEngine.getInstance();
+    const updatedState = riskEngine.recordTradeClosed(Number(pnlUsdt) || 0, Number(feeUsdt) || 0, {
+      symbol,
+      strategyName,
+      durationMs,
+    });
+    return res.json({ success: true, drawdownState: updatedState });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to record trade outcome' });
+  }
+});
+
 /**
- * 2. Execute Real Spot Order on Binance
+ * 2. Execute Real Spot/Futures Order on Binance (Protected by Risk Management Engine)
  */
 app.post('/api/binance/order', async (req, res) => {
   try {
@@ -1509,6 +1639,69 @@ app.post('/api/binance/order', async (req, res) => {
     const normSide = side.toUpperCase();
     const normType = type.toUpperCase();
 
+    // -------------------------------------------------------------
+    // QUANTURA RISK MANAGEMENT ENGINE EVALUATION (MANDATORY GATEWAY)
+    // -------------------------------------------------------------
+    const riskEngine = RiskEngine.getInstance();
+    
+    const positionsStr = await kv.get('btc_active_bot_positions');
+    const existingPositions = positionsStr ? JSON.parse(positionsStr) : [];
+    
+    let accountEquity = 10000;
+    const walletStr = await kv.get('btc_paper_wallet');
+    if (walletStr) {
+      const parsedWallet = JSON.parse(walletStr);
+      if (parsedWallet.balance) accountEquity = parsedWallet.balance;
+    }
+
+    const currentTicker = await fetchBinanceTicker(normSymbol, marketType);
+    const entryPrice = Number(price) || currentTicker.price || 1;
+    
+    const proposedSide = (normSide === 'BUY' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT';
+    const stopLoss = Number(req.body.stopLoss) || (proposedSide === 'LONG' ? entryPrice * 0.98 : entryPrice * 1.02);
+    const tp1 = Number(req.body.tp1) || (proposedSide === 'LONG' ? entryPrice * 1.05 : entryPrice * 0.95);
+
+    const riskProposal = {
+      clientOrderId: req.body.clientOrderId || `order-${Date.now()}`,
+      symbol: normSymbol,
+      side: proposedSide,
+      entryPrice,
+      stopLoss,
+      takeProfit: { tp1, tp2: req.body.tp2, tp3: req.body.tp3 },
+      marketType: (marketType || 'SPOT') as 'SPOT' | 'FUTURES',
+      leverage: Number(req.body.leverage) || 1,
+      accountEquity,
+      availableBalance: accountEquity,
+      quantity: Number(quantity) || (quoteOrderQty ? quoteOrderQty / entryPrice : undefined),
+      orderType: normType as 'MARKET' | 'LIMIT',
+      timestamp: Date.now(),
+      marketData: {
+        currentPrice: entryPrice,
+        bidPrice: entryPrice * 0.9998,
+        askPrice: entryPrice * 1.0002,
+        volume24hUsdt: currentTicker.quoteVolume24h || 10000000,
+        timestamp: Date.now(),
+      },
+    };
+
+    const riskEvaluation = await riskEngine.evaluateProposal(riskProposal, existingPositions);
+
+    if (riskEvaluation.decision === 'REJECTED') {
+      return res.status(403).json({
+        error: `Trade rejected by Quantura Risk Management Engine: ${riskEvaluation.message}`,
+        rejected: true,
+        reasonCode: riskEvaluation.reasonCode,
+        message: riskEvaluation.message,
+        auditId: riskEvaluation.auditId,
+        riskScore: riskEvaluation.riskScore,
+        riskLevel: riskEvaluation.riskLevel,
+        result: riskEvaluation,
+      });
+    }
+
+    // Use safe clamped quantity and leverage approved by Risk Management Engine
+    const finalQuantity = riskEvaluation.approvedQuantity > 0 ? riskEvaluation.approvedQuantity : Number(quantity);
+
     const params: Record<string, string> = {
       symbol: normSymbol,
       side: normSide,
@@ -1518,34 +1711,28 @@ app.post('/api/binance/order', async (req, res) => {
     };
 
     if (normType === 'MARKET') {
-      // Binance Futures doesn't support quoteOrderQty, so we must calculate quantity if missing but we'll try to just pass it or return error if not computable here
-      if (marketType === 'FUTURES' && !quantity && quoteOrderQty) {
-          // It's recommended to do the conversion on the client side before calling the API for futures, but if we get here we can't do it easily without price.
-          return res.status(400).json({ error: 'Futures market orders require a specific coin quantity, not USDT amount. Please provide quantity.' });
-      }
-
       if (marketType === 'FUTURES') {
-        if (quantity && quantity > 0) {
-          params.quantity = Number(quantity).toString();
+        if (finalQuantity && finalQuantity > 0) {
+          params.quantity = Number(finalQuantity).toString();
         } else {
           return res.status(400).json({ error: 'Futures market orders require a specific coin quantity (quantity).' });
         }
       } else {
         // SPOT
-        if (quoteOrderQty && quoteOrderQty > 0) {
+        if (quoteOrderQty && quoteOrderQty > 0 && !quantity) {
           params.quoteOrderQty = Number(quoteOrderQty).toFixed(2);
-        } else if (quantity && quantity > 0) {
-          params.quantity = Number(quantity).toString();
+        } else if (finalQuantity && finalQuantity > 0) {
+          params.quantity = Number(finalQuantity).toString();
         } else {
           return res.status(400).json({ error: 'Either quantity or quoteOrderQty (USDT amount) must be provided for SPOT MARKET orders.' });
         }
       }
     } else if (normType === 'LIMIT') {
-      if (!price || !quantity) {
+      if (!price || !finalQuantity) {
         return res.status(400).json({ error: 'Price and Quantity are required for LIMIT orders.' });
       }
       params.price = Number(price).toString();
-      params.quantity = Number(quantity).toString();
+      params.quantity = Number(finalQuantity).toString();
       params.timeInForce = timeInForce || 'GTC';
     }
 
@@ -1599,6 +1786,7 @@ app.post('/api/binance/order', async (req, res) => {
     return res.json({
       success: true,
       order: data,
+      riskEvaluation,
     });
   } catch (error: any) {
     console.error('Binance Order Error:', error);
@@ -1699,11 +1887,26 @@ server.on('error', (err: any) => {
 });
 
 async function initFrontendAndServices() {
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProd = process.env.NODE_ENV === 'production' || (process.env.NODE_ENV !== 'development' && hasDist);
+
+  if (!isProd) {
     try {
       const { createServer } = await import('vite');
       const vite = await createServer({
-        server: { middlewareMode: true },
+        server: {
+          middlewareMode: true,
+          watch: {
+            ignored: [
+              '**/data/**',
+              '**/*.sqlite*',
+              '**/*.sqlite-wal',
+              '**/*.sqlite-shm',
+              '**/data/bot_database*',
+            ],
+          },
+        },
         appType: 'spa',
       });
       viteHandler = vite.middlewares;
@@ -1712,10 +1915,25 @@ async function initFrontendAndServices() {
       console.error('Failed to create Vite server:', err);
     }
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    viteHandler = (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    console.log(`Serving production frontend from ${distPath}`);
+    const staticMiddleware = express.static(distPath, {
+      index: false,
+      maxAge: '1d',
+    });
+
+    viteHandler = (req, res, next) => {
+      // 1. Try serving static assets (js, css, images, etc.)
+      staticMiddleware(req, res, (err) => {
+        if (err) return next(err);
+        // 2. If it's a GET request and not an API call, serve SPA index.html
+        if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+          const indexPath = path.join(distPath, 'index.html');
+          if (fs.existsSync(indexPath)) {
+            return res.sendFile(indexPath);
+          }
+        }
+        next();
+      });
     };
   }
 

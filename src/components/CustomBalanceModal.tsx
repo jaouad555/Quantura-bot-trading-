@@ -1,17 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Wallet, 
   X, 
   Check, 
   DollarSign, 
-  RotateCcw, 
-  Plus, 
-  Minus, 
-  TrendingUp, 
-  Sparkles, 
-  ShieldCheck, 
-  Layers,
-  ArrowRight
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import { Language, PaperWallet } from '../types';
 
@@ -37,6 +31,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   const [resetPnL, setResetPnL] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Sync state on open
   useEffect(() => {
     if (isOpen) {
       setInputVal(paperWallet.balance.toString());
@@ -45,7 +40,17 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
     }
   }, [isOpen, paperWallet.balance]);
 
-  if (!isOpen) return null;
+  // Handle ESC key to close modal smoothly
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const presets = [500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 
@@ -67,10 +72,10 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
     if (isNaN(num) || num < 10) {
       setError(
         isArabic 
-          ? 'يرجى إدخال رصيد صحيح أكبر من 10 USDT' 
+          ? 'يرجى إدخال رصيد صحيح (10 USDT على الأقل)' 
           : isEn 
-          ? 'Please enter a valid balance greater than 10 USDT' 
-          : 'Veuillez saisir un solde supérieur à 10 USDT'
+          ? 'Please enter a valid balance (min 10 USDT)' 
+          : 'Veuillez saisir un solde valide (min 10 USDT)'
       );
       return;
     }
@@ -79,68 +84,88 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
     onClose();
   };
 
+  if (!isOpen) return null;
+
+  const currentNum = parseFloat(inputVal) || 0;
+  const diff = currentNum - paperWallet.balance;
+  const diffPercent = paperWallet.balance > 0 ? (diff / paperWallet.balance) * 100 : 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950 transform-gpu isolate animate-fadeIn">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs transition-opacity duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div 
-        className={`bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden ${
+        className={`bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all duration-200 ${
           isArabic ? 'rtl text-right' : 'ltr text-left'
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-brand-500/15 text-brand-400 border border-brand-500/30">
-              <Wallet className="w-5 h-5" />
+        {/* Header - Sleek & Compact */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/70 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+              <Wallet className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <span>{isArabic ? 'تخصيص الرصيد الوهمي' : isEn ? 'Custom Virtual Balance' : 'Personnaliser le Solde Virtuel'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-brand-500/20 text-brand-300 border border-brand-500/40">
+              <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                <span>{isArabic ? 'تخصيص الرصيد' : isEn ? 'Custom Balance' : 'Solde Personnalisé'}</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   PAPER
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
-                {isArabic 
-                  ? 'حدد الرصيد الافتراضي الذي ترغب في التداول به وتجربته' 
-                  : isEn 
-                  ? 'Set the exact virtual USDT capital you want to trade with' 
-                  : 'Définissez le capital virtuel USDT souhaité pour vos simulations'}
-              </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800/80 hover:bg-slate-800 transition"
+            className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
+            aria-label="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Current State Info */}
-        <div className="bg-slate-950/40 px-5 py-3 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-          <span className="text-slate-400 flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5 text-brand-400" />
-            {isArabic ? 'الرصيد الحالي:' : isEn ? 'Current Balance:' : 'Solde Actuel:'}
-          </span>
-          <span className="text-slate-200 font-bold font-mono">
-            ${paperWallet.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
-          </span>
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Main Input */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-              <span>{isArabic ? 'المبلغ المطلوب (USDT):' : isEn ? 'Desired Amount (USDT):' : 'Montant Souhaité (USDT) :'}</span>
-              <span className="text-[11px] text-brand-400 font-mono font-normal">
-                {isArabic ? 'أي مبلغ مخصص' : 'Custom any amount'}
+        {/* Scrollable Body */}
+        <form onSubmit={handleSubmit} className="p-3.5 space-y-3 overflow-y-auto no-scrollbar flex-1">
+          {/* Current & Target Dynamic Preview */}
+          <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 flex items-center justify-between text-xs font-mono">
+            <div>
+              <span className="text-[10px] text-slate-400 block">
+                {isArabic ? 'الرصيد الحالي:' : isEn ? 'Current:' : 'Solde Actuel :'}
               </span>
+              <span className="text-slate-200 font-bold text-xs">
+                ${paperWallet.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {diff !== 0 && (
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block">
+                  {isArabic ? 'الفارق:' : isEn ? 'Difference:' : 'Écart :'}
+                </span>
+                <span className={`text-[11px] font-bold inline-flex items-center gap-0.5 ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {diff > 0 ? '+' : ''}${Math.abs(diff).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  <span className="text-[9px] opacity-80">({diff > 0 ? '+' : ''}{diffPercent.toFixed(0)}%)</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Amount Input */}
+          <div>
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">
+              {isArabic ? 'المبلغ الجديد (USDT):' : isEn ? 'New Balance (USDT):' : 'Nouveau Solde (USDT) :'}
             </label>
 
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 rtl:left-auto rtl:right-0 pl-3.5 rtl:pl-0 rtl:pr-3.5 flex items-center pointer-events-none text-slate-400 font-mono font-bold text-base">
+              <div className="absolute inset-y-0 left-0 rtl:left-auto rtl:right-0 pl-2.5 rtl:pl-0 rtl:pr-2.5 flex items-center pointer-events-none text-slate-400 font-mono font-bold text-xs">
                 $
               </div>
               <input
@@ -153,113 +178,116 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
                   setError(null);
                 }}
                 placeholder="10000"
-                className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl pl-9 rtl:pl-16 pr-16 rtl:pr-9 py-3 outline-none focus:border-brand-500 font-mono font-bold text-lg transition shadow-inner"
+                className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 focus:border-brand-500 text-white rounded-lg pl-6 rtl:pl-14 pr-14 rtl:pr-6 py-1.5 text-xs font-mono font-bold outline-none transition"
                 autoFocus
               />
-              <div className="absolute inset-y-0 right-0 rtl:right-auto rtl:left-0 pr-3.5 rtl:pr-0 rtl:pl-3.5 flex items-center pointer-events-none text-xs font-mono font-bold text-slate-400">
+              <div className="absolute inset-y-0 right-0 rtl:right-auto rtl:left-0 pr-2.5 rtl:pr-0 rtl:pl-2.5 flex items-center pointer-events-none text-[10px] font-mono font-bold text-slate-400">
                 USDT
               </div>
             </div>
 
             {error && (
-              <p className="text-rose-400 text-xs mt-1.5 font-medium">{error}</p>
+              <p className="text-rose-400 text-[10px] mt-1 font-medium">{error}</p>
             )}
           </div>
 
-          {/* Quick Increment/Decrement Step Buttons */}
+          {/* Quick Increment/Decrement Buttons - Compact */}
           <div>
-            <span className="text-[11px] text-slate-400 block mb-1.5">
-              {isArabic ? 'تعديل سريع (إضافة / خصم):' : isEn ? 'Quick Adjustments (+ / -):' : 'Ajustements Rapides :'}
+            <span className="text-[10px] text-slate-400 block mb-1">
+              {isArabic ? 'تعديل سريع:' : isEn ? 'Quick Adjust:' : 'Ajustement Rapide :'}
             </span>
-            <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+            <div className="grid grid-cols-4 gap-1 font-mono text-[10px]">
               <button
                 type="button"
                 onClick={() => handleAdjust(-1000)}
-                className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/80 transition font-bold"
+                className="py-1 bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white rounded border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
               >
                 -1,000$
               </button>
               <button
                 type="button"
                 onClick={() => handleAdjust(-500)}
-                className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/80 transition font-bold"
+                className="py-1 bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white rounded border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
               >
                 -500$
               </button>
               <button
                 type="button"
                 onClick={() => handleAdjust(500)}
-                className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/80 transition font-bold"
+                className="py-1 bg-slate-800/90 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
               >
                 +500$
               </button>
               <button
                 type="button"
                 onClick={() => handleAdjust(1000)}
-                className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/80 transition font-bold"
+                className="py-1 bg-slate-800/90 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
               >
                 +1,000$
               </button>
             </div>
           </div>
 
-          {/* Popular Presets */}
+          {/* Presets - Compact grid */}
           <div>
-            <span className="text-[11px] text-slate-400 block mb-1.5">
-              {isArabic ? 'مبالغ جاهزة وموصى بها:' : isEn ? 'Recommended Presets:' : 'Montants Prédéfinis :'}
+            <span className="text-[10px] text-slate-400 block mb-1">
+              {isArabic ? 'مبالغ شائعة:' : isEn ? 'Presets:' : 'Montants Prédéfinis :'}
             </span>
-            <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
-              {presets.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => handleApplyPreset(preset)}
-                  className={`py-2 rounded-lg border font-bold transition ${
-                    parseFloat(inputVal) === preset
-                      ? 'bg-brand-500 text-slate-950 border-brand-400 shadow-md shadow-brand-500/20'
-                      : 'bg-slate-950 transform-gpu isolate hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  ${preset >= 1000 ? `${preset / 1000}k` : preset}
-                </button>
-              ))}
+            <div className="grid grid-cols-4 gap-1 font-mono text-[10px]">
+              {presets.map((preset) => {
+                const isSelected = parseFloat(inputVal) === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleApplyPreset(preset)}
+                    className={`py-1 rounded border font-semibold transition active:scale-95 cursor-pointer text-center ${
+                      isSelected
+                        ? 'bg-brand-500 text-slate-950 border-brand-400 font-bold shadow-xs'
+                        : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    ${preset >= 1000 ? `${preset / 1000}k` : preset}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Reset Options Checkbox */}
-          <div className="pt-2 border-t border-slate-800">
-            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <div className="pt-1.5 border-t border-slate-800">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={resetPnL}
                 onChange={(e) => setResetPnL(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-950 text-brand-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-brand-500"
+                className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-brand-500 focus:ring-0 cursor-pointer accent-brand-500"
               />
-              <span className="text-xs text-slate-300 leading-tight">
+              <span className="text-[10px] text-slate-400 hover:text-slate-300 leading-tight">
                 {isArabic 
-                  ? 'إعادة تعيين الأرباح والخسائر السابقة (تصفير Realized PnL وبدء سجل جديد)' 
+                  ? 'تصفير الأرباح والخسائر السابقة (بدء جلسة جديدة)' 
                   : isEn 
-                  ? 'Reset realized P&L to 0 for a clean new trading session' 
-                  : 'Réinitialiser le P&L réalisé à 0 pour une nouvelle session'}
+                  ? 'Reset realized P&L to 0 for a clean session' 
+                  : 'Réinitialiser le P&L réalisé à 0'}
               </span>
             </label>
           </div>
 
-          {/* Actions */}
-          <div className="pt-3 flex gap-2">
+          {/* Actions - Compact & Responsive */}
+          <div className="pt-2 flex gap-1.5 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-slate-700"
+              className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition border border-slate-700/80 active:scale-95 cursor-pointer"
             >
               {isArabic ? 'إلغاء' : isEn ? 'Cancel' : 'Annuler'}
             </button>
             <button
               type="submit"
-              className="flex-[2] py-2.5 bg-brand-500 hover:bg-brand-400 text-slate-950 rounded-xl text-xs font-black transition shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5"
+              className="flex-1 py-1.5 bg-brand-500 hover:bg-brand-400 text-slate-950 rounded-lg text-xs font-bold transition shadow-sm flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
             >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>{isArabic ? 'حفظ وتطبيق الرصيد' : isEn ? 'Apply Balance' : 'Appliquer le Solde'}</span>
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{isArabic ? 'تطبيق الرصيد' : isEn ? 'Apply' : 'Appliquer'}</span>
             </button>
           </div>
         </form>

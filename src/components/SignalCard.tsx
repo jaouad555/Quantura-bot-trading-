@@ -201,7 +201,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
         <div className="flex flex-wrap items-center gap-2">
           {/* Market Regime Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950 transform-gpu isolate border border-slate-800 text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
             <Layers className="w-3.5 h-3.5 text-brand-400" />
             <span className="text-slate-500">{t.terminal.marketRegime}:</span>
             <span className="font-bold text-white">{t.regimes[marketRegime] || marketRegime}</span>
@@ -298,7 +298,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Quick Mode Toggle: SPOT vs FUTURES */}
           {onUpdateBotConfig && (
-            <div className="flex items-center p-0.5 rounded-xl bg-slate-950 transform-gpu isolate border border-slate-800">
+            <div className="flex items-center p-0.5 rounded-xl bg-slate-950 border border-slate-800">
               <button
                 type="button"
                 onClick={() => onUpdateBotConfig({ marketType: 'SPOT', leverage: 1 })}
@@ -389,7 +389,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       {(decision === 'LONG' || decision === 'SHORT') && entryZone && targets && stopLoss && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2">
           {/* Entry Zone */}
-          <div className="bg-slate-950 transform-gpu isolate border border-blue-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-blue-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-blue-400 uppercase block font-semibold">
               {t.terminal.entryZone}
             </span>
@@ -402,7 +402,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* TP1 */}
-          <div className="bg-slate-950 transform-gpu isolate border border-emerald-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-emerald-400 uppercase block font-semibold">
               {t.terminal.takeProfit1}
             </span>
@@ -415,7 +415,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* TP2 */}
-          <div className="bg-slate-950 transform-gpu isolate border border-emerald-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-emerald-400 uppercase block font-semibold">
               {t.terminal.takeProfit2}
             </span>
@@ -428,7 +428,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* TP3 */}
-          <div className="bg-slate-950 transform-gpu isolate border border-emerald-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-emerald-400 uppercase block font-semibold">
               {t.terminal.takeProfit3}
             </span>
@@ -441,7 +441,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* Stop Loss */}
-          <div className="bg-slate-950 transform-gpu isolate border border-rose-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-rose-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-rose-400 uppercase block font-semibold">
               {t.terminal.stopLoss}
             </span>
@@ -454,7 +454,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* Risk/Reward Ratio */}
-          <div className="bg-slate-950 transform-gpu isolate border border-indigo-500/30 rounded-xl p-3">
+          <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3">
             <span className="text-[10px] font-mono text-indigo-400 uppercase block font-semibold">
               {t.terminal.riskRewardRatio}
             </span>
@@ -469,7 +469,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       )}
 
       {/* Invalidation Level Box */}
-      <div className="bg-slate-950 transform-gpu isolate border border-amber-500/30 rounded-xl p-3.5 flex items-start gap-3 text-xs">
+      <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 flex items-start gap-3 text-xs">
         <AlertOctagon className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <span className="font-bold text-amber-300 block uppercase tracking-wider text-[11px]">
@@ -506,7 +506,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 
       {/* Quantitative Scoring Breakdown */}
       {quantScore && quantScore.breakdown && (
-        <div className="bg-slate-950 transform-gpu isolate border border-slate-800/90 rounded-xl p-3.5 space-y-2.5">
+        <div className="bg-slate-950 border border-slate-800/90 rounded-xl p-3.5 space-y-2.5">
           <span className="text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider block">
             {t.terminal.quantBreakdown}
           </span>
