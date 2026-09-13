@@ -322,6 +322,31 @@ export const startBotEngine = () => {
         const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
         const roePercent = priceDiffPct * lev;
 
+        // Trailing stop logic (Server-Side)
+        if (botConfig.trailingStopEnabled) {
+          const trailGapPercent = (botConfig.trailingStopPercent || 1.2) / 100;
+          const activationProfit = botConfig.trailingActivationProfitPercent || 1.5;
+          const currentGainPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+          
+          let currentPeak = pos.peakPrice || pos.entryPrice;
+          if ((isLong && currentP > currentPeak) || (!isLong && currentP < currentPeak)) {
+            currentPeak = currentP;
+            pos.peakPrice = currentPeak;
+            stateChanged = true;
+          }
+
+          if (currentGainPct >= activationProfit || pos.tp1Hit) {
+            const calculatedTrailingSl = isLong ? currentPeak * (1 - trailGapPercent) : currentPeak * (1 + trailGapPercent);
+            if ((isLong && calculatedTrailingSl > pos.stopLoss) || (!isLong && calculatedTrailingSl < pos.stopLoss)) {
+              pos.stopLoss = calculatedTrailingSl;
+              pos.trailingStopPrice = calculatedTrailingSl;
+              pos.isTrailingActive = true;
+              pos.lastAction = `Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡ (Server)`;
+              stateChanged = true;
+            }
+          }
+        }
+
         // TP1 Hit
         if ((isLong && !pos.tp1Hit && currentP >= pos.tp1) || (!isLong && !pos.tp1Hit && currentP <= pos.tp1)) {
             console.log(`[SERVER ENGINE] TP1 Hit for ${pos.symbol} at ${currentP}`);
@@ -374,7 +399,13 @@ export const startBotEngine = () => {
             console.log(`[SERVER ENGINE] ${isTp3 ? 'TP3' : 'SL'} Hit for ${pos.symbol} at ${currentP}`);
             
             const marginClosed = pos.remainingAmountUsdt;
-            const pnlUsdt = marginClosed * (roePercent / 100);
+            let pnlUsdt = marginClosed * (roePercent / 100);
+            
+            // Liquidation protection: In isolated margin, you cannot lose more than 100% of your allocated margin.
+            if (pnlUsdt < -marginClosed) {
+                pnlUsdt = -marginClosed;
+            }
+            
             const finalPnlUsdt = pos.realizedPnlUsdt + pnlUsdt;
 
             if (isLiveMode && binanceConfig.isConnected) {

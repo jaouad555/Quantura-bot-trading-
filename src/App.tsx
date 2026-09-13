@@ -535,10 +535,8 @@ export const App: React.FC = () => {
     apiStorage.setItem('btc_bot_config', JSON.stringify(botConfig));
   }, [botConfig]);
 
-  useEffect(() => {
-    apiStorage.setItem('btc_active_bot_positions', JSON.stringify(activeBotPositions));
-  }, [activeBotPositions]);
-
+  // (activeBotPositions is now explicitly pushed where they are modified to prevent race conditions and overwrites)
+  
   useEffect(() => {
     apiStorage.setItem('btc_bot_logs', JSON.stringify(botLogs));
   }, [botLogs]);
@@ -621,6 +619,8 @@ export const App: React.FC = () => {
   const updateBotPositionsSync = useCallback((updater: (prev: ActiveBotPosition[]) => ActiveBotPosition[]) => {
     activeBotPositionsRef.current = updater(activeBotPositionsRef.current);
     setActiveBotPositions([...activeBotPositionsRef.current]);
+    // Explicitly update storage to avoid useEffect infinite loops / race conditions
+    apiStorage.setItem('btc_active_bot_positions', JSON.stringify(activeBotPositionsRef.current));
   }, []);
 
   const isOpeningTradeRef = useRef<boolean>(false);
@@ -1815,76 +1815,6 @@ export const App: React.FC = () => {
     }
 
     // 2. Trailing Stop Loss Updates
-    let hasTrailingUpdates = false;
-    const trailingUpdates: Record<string, Partial<typeof currentPositions[0]>> = {};
-
-    for (const pos of currentPositions) {
-      const normPosSym = normalizeSymbol(pos.symbol);
-      // ONLY update trailing stops if this live ticker matches this position's symbol
-      if (normTickerSym !== normPosSym) continue;
-      
-      const isLong = pos.decision === 'LONG';
-
-      // Dynamic Trailing Stop Loss Ratchet
-      if (botConfig.trailingStopEnabled) {
-        const trailGapPercent = (botConfig.trailingStopPercent || 1.2) / 100;
-        const activationProfit = botConfig.trailingActivationProfitPercent || 1.5;
-
-        if (isLong) {
-          const currentGainPct = ((currentP - pos.entryPrice) / pos.entryPrice) * 100;
-          const currentPeak = Math.max(pos.peakPrice || pos.entryPrice, currentP);
-          
-          let updatedPos: Partial<typeof pos> = {};
-          if (currentPeak > (pos.peakPrice || 0)) {
-            updatedPos.peakPrice = currentPeak;
-            hasTrailingUpdates = true;
-          }
-
-          if (currentGainPct >= activationProfit || pos.tp1Hit) {
-            const calculatedTrailingSl = currentPeak * (1 - trailGapPercent);
-            if (calculatedTrailingSl > pos.stopLoss) {
-              updatedPos.stopLoss = calculatedTrailingSl;
-              updatedPos.trailingStopPrice = calculatedTrailingSl;
-              updatedPos.isTrailingActive = true;
-              updatedPos.lastAction = isArabicLang 
-                ? `تتبع الربح Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡` 
-                : `Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡`;
-              hasTrailingUpdates = true;
-            }
-          }
-          if (Object.keys(updatedPos).length > 0) trailingUpdates[pos.id] = updatedPos;
-        } else {
-          const currentGainPct = ((pos.entryPrice - currentP) / pos.entryPrice) * 100;
-          const currentTrough = Math.min(pos.peakPrice || pos.entryPrice, currentP);
-
-          let updatedPos: Partial<typeof pos> = {};
-          if (currentTrough < (pos.peakPrice || Infinity)) {
-            updatedPos.peakPrice = currentTrough;
-            hasTrailingUpdates = true;
-          }
-
-          if (currentGainPct >= activationProfit || pos.tp1Hit) {
-            const calculatedTrailingSl = currentTrough * (1 + trailGapPercent);
-            if (calculatedTrailingSl < pos.stopLoss) {
-              updatedPos.stopLoss = calculatedTrailingSl;
-              updatedPos.trailingStopPrice = calculatedTrailingSl;
-              updatedPos.isTrailingActive = true;
-              updatedPos.lastAction = isArabicLang 
-                ? `تتبع الربح Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡` 
-                : `Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡`;
-              hasTrailingUpdates = true;
-            }
-          }
-          if (Object.keys(updatedPos).length > 0) trailingUpdates[pos.id] = updatedPos;
-        }
-      }
-    }
-
-    if (hasTrailingUpdates) {
-      updateBotPositionsSync(prev => prev.map(p => trailingUpdates[p.id] ? { ...p, ...trailingUpdates[p.id] } : p));
-    }
-
-    // 3. Execution Check for Open Positions
     // 🛑 SERVER-SIDE EXECUTION MIGRATION 🛑
     // The frontend no longer automatically triggers TP/SL/LIQUIDATION/REBUY.
     // This is now handled safely 24/7 by the backend engine (src/server/botEngine.ts)
@@ -2066,6 +1996,16 @@ export const App: React.FC = () => {
                          const wallet = JSON.parse(serverData.btc_paper_wallet);
                          setPaperWallet(wallet);
                          paperWalletRef.current = wallet;
+                     }
+                 }
+                 
+                 // Check if trade history changed on server
+                 if (serverData.btc_trade_history) {
+                     const currentLocal = JSON.stringify(tradeHistoryRef.current);
+                     if (serverData.btc_trade_history !== currentLocal) {
+                         const history = JSON.parse(serverData.btc_trade_history);
+                         setTradeHistory(history);
+                         tradeHistoryRef.current = history;
                      }
                  }
              }
