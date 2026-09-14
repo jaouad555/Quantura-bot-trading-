@@ -11,6 +11,7 @@ import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync } from './src/server/botEngine';
+import { startMarketScanner, scannerState } from './src/server/marketScanner';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
 import {
@@ -867,6 +868,11 @@ async function fetchMultiTimeframeConfluence(symbol = 'BTCUSDT', marketType: 'SP
 }
 
 // -------------------------------------------------------------
+
+app.get('/api/scanner/status', (req, res) => {
+  res.json(scannerState);
+});
+
 // API ROUTE 1: GET /api/binance/market-data
 // -------------------------------------------------------------
 app.get('/api/binance/market-data', async (req, res) => {
@@ -1942,6 +1948,7 @@ async function initFrontendAndServices() {
     initDb();
     startBotEngine();
     startTelegramSync();
+    startMarketScanner();
   } catch (err) {
     console.error('Warning: Background engine initialization error:', err);
   }

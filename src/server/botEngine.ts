@@ -193,7 +193,7 @@ const createBinanceSignature = (queryString: string, apiSecret: string) => {
 };
 
 // Simulate or real execute order
-const serverExecuteOrder = async (symbol: string, side: string, quoteOrderQty: number, quantity: number, currentPrice: number) => {
+export const serverExecuteOrder = async (symbol: string, side: string, quoteOrderQty: number, quantity: number, currentPrice: number) => {
     const config = await getBinanceConfig();
     if (!config.isConnected) {
       return { success: false, error: 'Not connected' };
@@ -277,7 +277,7 @@ export const startBotEngine = () => {
 
   engineInterval = setInterval(async () => {
     try {
-      const botConfigStr = await kv.get('app_auto_bot_config');
+      const botConfigStr = await kv.get('btc_bot_config');
       if (!botConfigStr) return;
       const botConfig = JSON.parse(botConfigStr);
       
@@ -290,12 +290,11 @@ export const startBotEngine = () => {
       if (!Array.isArray(positions) || positions.length === 0) return;
 
       let stateChanged = false;
+      let walletBalanceDelta = 0;
+      let walletPnlDelta = 0;
       const logsToAdd: any[] = [];
       const historyToAdd: any[] = [];
 
-      // Update Wallet
-      const walletStr = await kv.get('btc_paper_wallet');
-      let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
       // Group by symbol to fetch prices efficiently
       const symbols = Array.from(new Set(positions.map((p: any) => p.symbol)));
@@ -356,8 +355,8 @@ export const startBotEngine = () => {
             if (isLiveMode && binanceConfig.isConnected) {
                 await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
             } else {
-                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
-                wallet.realizedPnl += pnlUsdt;
+                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
+                walletPnlDelta += pnlUsdt;
             }
             
             pos.tp1Hit = true;
@@ -378,8 +377,8 @@ export const startBotEngine = () => {
             if (isLiveMode && binanceConfig.isConnected) {
                 await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
             } else {
-                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
-                wallet.realizedPnl += pnlUsdt;
+                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
+                walletPnlDelta += pnlUsdt;
             }
 
             pos.tp2Hit = true;
@@ -411,10 +410,25 @@ export const startBotEngine = () => {
             if (isLiveMode && binanceConfig.isConnected) {
                 await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
             } else {
-                wallet.balance += Math.max(0, marginClosed + pnlUsdt);
-                wallet.realizedPnl += pnlUsdt;
+                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
+                walletPnlDelta += pnlUsdt;
             }
             
+            
+              const logType = isTp3 ? 'TP3_HIT' : 'SL_HIT';
+              logsToAdd.push({
+                id: `log-server-${Date.now()}`,
+                timestamp: Date.now(),
+                type: logType,
+                symbol: pos.symbol,
+                side: pos.decision === 'LONG' ? 'SELL' : 'BUY',
+                price: currentP,
+                amountUsdt: marginClosed,
+                pnlUsdt: finalPnlUsdt,
+                reason: `Server Executed ${logType}`,
+                mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER'
+              });
+
             historyToAdd.push({
                 id: `history-server-${Date.now()}`,
                 timestamp: Date.now(),
@@ -456,8 +470,21 @@ export const startBotEngine = () => {
       if (stateChanged) {
           const remainingPositions = positions.filter((p: any) => !p._delete);
           await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
-          await kv.set('btc_paper_wallet', JSON.stringify(wallet));
+          if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
+              const currentWalletStr = await kv.get('btc_paper_wallet');
+              const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
+              currentWallet.balance += walletBalanceDelta;
+              currentWallet.realizedPnl += walletPnlDelta;
+              await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
+          }
           
+          
+          if (logsToAdd.length > 0) {
+              const logsStr = await kv.get('btc_bot_logs');
+              const logs = logsStr ? JSON.parse(logsStr) : [];
+              await kv.set('btc_bot_logs', JSON.stringify([...logsToAdd, ...logs].slice(0, 500)));
+          }
+
           if (historyToAdd.length > 0) {
               const histStr = await kv.get('btc_trade_history');
               const history = histStr ? JSON.parse(histStr) : [];
