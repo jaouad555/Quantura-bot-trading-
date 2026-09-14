@@ -12,6 +12,7 @@ import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantE
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync } from './src/server/botEngine';
 import { startMarketScanner, scannerState } from './src/server/marketScanner';
+import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
 import {
@@ -133,8 +134,79 @@ app.post('/api/config/clear', async (req, res) => {
   }
 });
 
+// --- STRATEGY ACTIVATION & MANAGEMENT ROUTES ---
+app.get('/api/strategies', (req, res) => {
+  try {
+    const all = strategyManager.getAllStrategies();
+    const active = strategyManager.getActiveStrategies();
+    res.json({
+      success: true,
+      strategies: all,
+      activeCount: active.length,
+      activeStrategies: active.map(s => s.id),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/strategies/toggle', async (req, res) => {
+  const { strategyId, enabled } = req.body;
+  if (!strategyId || typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'strategyId and boolean enabled are required' });
+  }
+  try {
+    const strat = await strategyManager.setStrategyState(strategyId, enabled);
+    const active = strategyManager.getActiveStrategies();
+    res.json({
+      success: true,
+      strategy: strat,
+      activeCount: active.length,
+      activeStrategies: active.map(s => s.id),
+      allStrategies: strategyManager.getAllStrategies(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/strategies/set', async (req, res) => {
+  const { strategies } = req.body;
+  if (!strategies || typeof strategies !== 'object') {
+    return res.status(400).json({ error: 'strategies map object is required' });
+  }
+  try {
+    const all = await strategyManager.setAllStrategiesState(strategies);
+    const active = strategyManager.getActiveStrategies();
+    res.json({
+      success: true,
+      strategies: all,
+      activeCount: active.length,
+      activeStrategies: active.map(s => s.id),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/trading/reset', async (req, res) => {
   try {
+    strategyManager.resetToDefaults();
+    await kv.set('quantura_active_strategies', JSON.stringify({
+      MOMENTUM: false,
+      SCALPER: false,
+      SWING: false,
+      BREAKOUT: false,
+      MEAN_REVERSION: false,
+      INSTITUTIONAL_SMC: false,
+    }));
+    const botConfigStr = await kv.get('btc_bot_config');
+    if (botConfigStr) {
+      const cfg = JSON.parse(botConfigStr);
+      cfg.activePresets = [];
+      cfg.enabled = false;
+      await kv.set('btc_bot_config', JSON.stringify(cfg));
+    }
     await kv.set('btc_active_bot_positions', '[]');
     await kv.set('btc_trade_history', '[]');
     await kv.set('btc_bot_logs', '[]');
@@ -145,7 +217,7 @@ app.post('/api/trading/reset', async (req, res) => {
       history: [],
     }));
     await kv.set('btc_push_alerts', '[]');
-    res.json({ success: true, message: 'Trading state wiped and reset to default $1000' });
+    res.json({ success: true, message: 'Trading state and strategy activations wiped and reset to default INACTIVE' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to reset trading data' });
   }
@@ -1943,9 +2015,10 @@ async function initFrontendAndServices() {
     };
   }
 
-  // Initialize SQLite Database & background engine safely
+  // Initialize SQLite Database, Strategy Manager & background engines safely
   try {
     initDb();
+    await strategyManager.init();
     startBotEngine();
     startTelegramSync();
     startMarketScanner();

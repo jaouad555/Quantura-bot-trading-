@@ -1,15 +1,16 @@
 import WebSocket from 'ws';
-import { kv } from './db';
-import { serverExecuteOrder } from './botEngine';
-import { RiskEngine } from './riskEngine/RiskEngine';
-import { generateQuantitativePlan } from '../utils/quantEngine';
-import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs';
+import { kv } from './db.js';
+import { serverExecuteOrder } from './botEngine.js';
+import { RiskEngine } from './riskEngine/RiskEngine.js';
+import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
+import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
 
 // Interfaces
 interface ScannerState {
   status: 'RUNNING' | 'STOPPED' | 'ERROR';
   lastGlobalScan: number;
   symbolStates: Record<string, SymbolState>;
+  activeStrategiesCount: number;
 }
 
 interface SymbolState {
@@ -25,17 +26,15 @@ export const scannerState: ScannerState = {
   status: 'STOPPED',
   lastGlobalScan: 0,
   symbolStates: {},
+  activeStrategiesCount: 0,
 };
 
 let wsClient: WebSocket | null = null;
-let isReconnecting = false;
 let scanningInterval: NodeJS.Timeout | null = null;
-
-const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "LINKUSDT", "AVAXUSDT"];
 
 export async function startMarketScanner() {
   if (scannerState.status === 'RUNNING') return;
-  console.log('[SCANNER] Starting Multi-Pair Market Scanner...');
+  console.log('[SCANNER] Starting Multi-Pair Market Scanner with Strategy Activation Gate...');
   scannerState.status = 'RUNNING';
   
   // Start polling loop as fallback and primary driver
@@ -62,7 +61,20 @@ async function scanAllPairs() {
     if (!config.enabled) {
       if (scannerState.status === 'RUNNING') {
         scannerState.status = 'STOPPED';
-        scannerState.symbolStates = {}; // Clear symbols
+        scannerState.symbolStates = {};
+      }
+      return;
+    }
+
+    // CRITICAL GATE: Verify Active Strategies
+    // Zero active strategies = ZERO TRADES & No analysis execution!
+    const activeStrategies = strategyManager.getActiveStrategies();
+    scannerState.activeStrategiesCount = activeStrategies.length;
+
+    if (activeStrategies.length === 0) {
+      console.log('[SCANNER] Zero active strategies. Scanner strictly paused (Zero Trades Rule).');
+      if (scannerState.status === 'RUNNING') {
+        scannerState.status = 'STOPPED';
       }
       return;
     }
@@ -71,19 +83,13 @@ async function scanAllPairs() {
        scannerState.status = 'RUNNING';
     }
 
-    
-    
     let rawAllowed = config.allowedSymbols || [];
     // Convert base symbols like "BTC" to "BTCUSDT"
-    let allowedToExecute = rawAllowed.map(s => s.endsWith('USDT') ? s : s + 'USDT');
+    let allowedToExecute = rawAllowed.map((s: string) => s.endsWith('USDT') ? s : s + 'USDT');
     
     // The scanner will ALWAYS monitor all respected pairs from the Header.
     let enabledPairs = RESPECTED_TRADING_PAIRS.map(p => p.symbol);
 
-
-    
-
-    
     // Clean up state for symbols that are no longer enabled
     Object.keys(scannerState.symbolStates).forEach(sym => {
       if (!enabledPairs.includes(sym)) {
@@ -100,7 +106,7 @@ async function scanAllPairs() {
     // Concurrency control: scan sequentially with slight delay to respect Binance API limits
     for (const symbol of enabledPairs) {
       if (scannerState.status !== 'RUNNING') break;
-      await analyzeSymbol(symbol, config, isLive, marketType, allowedToExecute);
+      await analyzeSymbol(symbol, config, isLive, marketType, allowedToExecute, activeStrategies);
       await new Promise(r => setTimeout(r, 2000)); // 2s stagger
     }
 
@@ -109,15 +115,24 @@ async function scanAllPairs() {
   }
 }
 
-async function analyzeSymbol(symbol: string, config: any, isLive: boolean, marketType: string, allowedToExecute: string[]) {
+async function analyzeSymbol(
+  symbol: string,
+  config: any,
+  isLive: boolean,
+  marketType: string,
+  allowedToExecute: string[],
+  activeStrategies: StrategyDefinition[]
+) {
   try {
     const normSymbol = symbol.toUpperCase();
     if (!scannerState.symbolStates[normSymbol]) {
       scannerState.symbolStates[normSymbol] = { symbol: normSymbol, lastAnalyzed: 0 };
     }
 
-    // 1. Fetch Market Data via internal API to reuse logic and synthetic fallbacks
-    // Use localhost since we are on the server
+    // Double check: if no active strategies, immediately stop
+    if (activeStrategies.length === 0) return;
+
+    // 1. Fetch Market Data via internal API
     const timeframe = config.timeframe && config.timeframe !== 'AUTO' ? config.timeframe : '1h';
     const devMode = process.env.NODE_ENV !== 'production';
     const apiUrl = `http://127.0.0.1:3000/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`;
@@ -129,28 +144,40 @@ async function analyzeSymbol(symbol: string, config: any, isLive: boolean, marke
     if (!data || !data.ticker || !data.indicators) throw new Error('Invalid market data payload');
 
     scannerState.symbolStates[normSymbol].lastAnalyzed = Date.now();
-
-    // 2. Generate Signal
-    const signal = generateQuantitativePlan(
-      data.timeframe,
-      data.ticker.price,
-      data.indicators,
-      data.orderBook,
-      data.derivatives,
-      data.mtfConfluence,
-      devMode,
-      normSymbol
-    );
-
-    scannerState.symbolStates[normSymbol].lastSignal = signal.decision;
-    scannerState.symbolStates[normSymbol].confidence = signal.confidence;
-    scannerState.symbolStates[normSymbol].lastError = undefined;
-
-    // 3. Execution Logic
     const isAllowedToTrade = allowedToExecute.includes(normSymbol);
-    if (signal.confidence >= (config.minConfidence || 75) && (signal.decision === 'LONG' || signal.decision === 'SHORT')) {
-      if (isAllowedToTrade) {
-        await processTradingSignal(normSymbol, signal, data.ticker.price, config, isLive);
+
+    // 2. Generate Signals ONLY for Active Strategies
+    // A strategy MUST NEVER participate in market analysis or signal generation unless active!
+    for (const strategy of activeStrategies) {
+      // Re-verify strategy active state in real-time
+      if (!strategyManager.isStrategyActive(strategy.id)) {
+        continue;
+      }
+
+      const stratSignal = strategyManager.evaluateStrategy(
+        strategy.id,
+        normSymbol,
+        data.ticker.price,
+        data.indicators,
+        data.orderBook,
+        data.derivatives,
+        data.mtfConfluence
+      );
+
+      if (!stratSignal || stratSignal.decision === 'WAIT') {
+        continue;
+      }
+
+      scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
+      scannerState.symbolStates[normSymbol].confidence = stratSignal.confidence;
+      scannerState.symbolStates[normSymbol].lastError = undefined;
+
+      // 3. Execution Logic
+      const minConfidence = config.minConfidence || 65;
+      if (stratSignal.confidence >= minConfidence && (stratSignal.decision === 'LONG' || stratSignal.decision === 'SHORT')) {
+        if (isAllowedToTrade) {
+          await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive);
+        }
       }
     }
 
@@ -160,8 +187,26 @@ async function analyzeSymbol(symbol: string, config: any, isLive: boolean, marke
   }
 }
 
-async function processTradingSignal(symbol: string, signal: any, currentPrice: number, config: any, isLive: boolean) {
+async function processTradingSignal(
+  symbol: string,
+  signal: StrategySignal,
+  currentPrice: number,
+  config: any,
+  isLive: boolean
+) {
   try {
+    // CRITICAL GATE 1: Authorization with StrategyManager
+    const auth = await strategyManager.authorizeTrade({
+      strategyId: signal.strategyId,
+      symbol: symbol,
+      side: signal.decision === 'LONG' ? 'LONG' : 'SHORT',
+    });
+
+    if (!auth.authorized) {
+      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} Strategy: ${signal.strategyName} Reason: ${auth.reason}`);
+      return;
+    }
+
     // Check existing positions
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
@@ -171,7 +216,10 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
     
     // Max Trades limit
     const maxTrades = Math.max(1, config.maxOpenTrades || 3);
-    if (currentModePositions.length >= maxTrades) return; // Reject
+    if (currentModePositions.length >= maxTrades) {
+      console.log(`[RISK BLOCKED] ${symbol} max trades reached (${currentModePositions.length}/${maxTrades})`);
+      return;
+    }
     
     // Duplicate position check
     const existing = currentModePositions.find((p: any) => p.symbol.toUpperCase() === symbol.toUpperCase());
@@ -196,10 +244,17 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
     
     if (margin < 10) return; // Minimum 10 USDT
 
+    // CRITICAL GATE 2: Protection against stale signals:
+    // Re-check strategy status immediately before order submission!
+    if (!strategyManager.isStrategyActive(signal.strategyId)) {
+      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} Strategy: ${signal.strategyName} Reason: STRATEGY_INACTIVE (stale signal)`);
+      return;
+    }
+
     // We can proceed to execute
-    console.log(`[EXECUTION] ${symbol} -> APPROVED. ORDER SENT.`);
+    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. ORDER SENT.`);
     
-    const lev = config.leverage || 10;
+    const lev = config.leverage || auth.strategy?.defaultLeverage || 3;
     const notional = margin * lev;
     const quantity = notional / currentPrice;
 
@@ -215,7 +270,7 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
       await kv.set('btc_paper_wallet', JSON.stringify(wallet));
     }
 
-    // Open position
+    // Open position with authoritative strategy metadata
     const newPos = {
       id: `bot-pos-${Date.now()}`,
       symbol: symbol,
@@ -233,15 +288,16 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
       tp2Hit: false,
       realizedPnlUsdt: 0,
       openedAt: Date.now(),
-      strategyName: signal.strategyName || 'Quantitative AI',
+      strategyId: signal.strategyId,
+      strategyName: signal.strategyName,
+      strategyStatus: 'ACTIVE',
       confidence: signal.confidence,
       mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
-      lastAction: 'Position Opened (Server)',
+      lastAction: `Position Opened (${signal.strategyName})`,
       isTrailingActive: false,
-      peakPrice: currentPrice
+      peakPrice: currentPrice,
     };
 
-    
     const newLog = {
       id: `log-pos-${Date.now()}`,
       timestamp: Date.now(),
@@ -251,8 +307,10 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
       price: currentPrice,
       amountUsdt: margin,
       pnlUsdt: 0,
-      reason: `Multi-Pair Scanner detected strong ${signal.decision} setup.`,
-      mode: isLive ? 'BINANCE_LIVE' : 'PAPER'
+      reason: `[${signal.strategyName}] Scanner executed ${signal.decision} (${signal.reason})`,
+      mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
+      strategyId: signal.strategyId,
+      strategyName: signal.strategyName,
     };
     const logsStr = await kv.get('btc_bot_logs');
     const logs = logsStr ? JSON.parse(logsStr) : [];
@@ -262,7 +320,7 @@ async function processTradingSignal(symbol: string, signal: any, currentPrice: n
     positions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(positions));
     
-    console.log(`[POSITION] ${symbol} -> POSITION OPENED.`);
+    console.log(`[POSITION] ${symbol} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
 
   } catch (err) {
     console.error(`[ERROR] Processing trading signal for ${symbol}:`, err);

@@ -480,6 +480,8 @@ export interface ActiveBotPosition {
   openedAt: number;
   lastAction: string;
   strategyName?: string;
+  strategyId?: string;
+  strategyStatus?: 'ACTIVE' | 'INACTIVE';
   realizedPnlUsdt: number;
   pnlHistory: number[];
   mode?: 'PAPER' | 'BINANCE_LIVE';
@@ -502,7 +504,7 @@ export interface ActiveBotPosition {
 export interface AutoTradeLog {
   id: string;
   timestamp: number;
-  type: 'AUTO_BUY' | 'AUTO_SELL_TP1' | 'AUTO_SELL_TP2' | 'AUTO_SELL_TP3' | 'AUTO_REBUY' | 'AUTO_SL' | 'AUTO_TRAILING_SL' | 'AUTO_LIQUIDATION' | 'CIRCUIT_BREAKER' | 'PANIC_CLOSE_ALL';
+  type: 'AUTO_BUY' | 'AUTO_SELL_TP1' | 'AUTO_SELL_TP2' | 'AUTO_SELL_TP3' | 'AUTO_REBUY' | 'AUTO_SL' | 'AUTO_TRAILING_SL' | 'AUTO_LIQUIDATION' | 'CIRCUIT_BREAKER' | 'PANIC_CLOSE_ALL' | 'TRADE_BLOCKED' | 'STRATEGY_AUDIT' | 'ENTRY';
   symbol: string;
   side: 'BUY' | 'SELL';
   price: number;
@@ -513,6 +515,8 @@ export interface AutoTradeLog {
   mode?: 'PAPER' | 'BINANCE_LIVE';
   marketType?: 'SPOT' | 'FUTURES';
   leverage?: number;
+  strategyId?: string;
+  strategyName?: string;
 }
 
 export interface PaperTradePosition {

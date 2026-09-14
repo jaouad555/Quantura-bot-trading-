@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Bot, 
   Play, 
@@ -169,18 +169,45 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     setShowConfigModal(false);
   };
 
+  // Sync strategy activation states on mount with authoritative backend StrategyManager
+  useEffect(() => {
+    fetch('/api/strategies')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.activeStrategies)) {
+          const backendActive = data.activeStrategies;
+          const current = botConfig.activePresets || [];
+          if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
+            onUpdateConfig({
+              activePresets: backendActive,
+              enabled: backendActive.length > 0 && botConfig.enabled,
+            });
+          }
+        }
+      })
+      .catch((err) => console.warn('[AutoTradingBot] Could not fetch backend strategies:', err));
+  }, []);
+
   const handleApplyStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
     const isFutures = botConfig.marketType === 'FUTURES';
     
     let currentPresets = botConfig.activePresets || [];
+    const willBeEnabled = !currentPresets.includes(strategyType);
     
-    // Toggle preset
+    // Toggle preset locally
     if (currentPresets.includes(strategyType)) {
       currentPresets = currentPresets.filter(p => p !== strategyType);
     } else {
       currentPresets = [...currentPresets, strategyType];
     }
     
+    // Immediately inform authoritative backend StrategyManager
+    fetch('/api/strategies/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategyId: strategyType, enabled: willBeEnabled }),
+    }).catch((err) => console.error('[StrategyManager] Failed to toggle strategy state:', err));
+
     let newConfig: Partial<AutoBotConfig> = { 
       enabled: currentPresets.length > 0,
       activePresets: currentPresets 
@@ -758,25 +785,71 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
       </div>
 
-      {/* Bot Strategy Presets */}
+      {/* Bot Strategy Presets & Authorization Matrix */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-sm flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-brand-400" />
-            {isArabic ? 'نماذج استراتيجيات جاهزة للتفعيل' : 'Ready-to-Deploy Strategy Presets'}
-          </h3>
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
-            {botConfig.marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}
-          </span>
+            <h3 className="font-bold text-white text-sm">
+              {isArabic ? 'مصفوفة تفعيل الاستراتيجيات وتفويض التداول' : 'Strategy Activation & Trade Authorization'}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border flex items-center gap-1.5 ${
+              (botConfig.activePresets?.length || 0) > 0 
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse'
+            }`}>
+              {(botConfig.activePresets?.length || 0) > 0 ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>{botConfig.activePresets?.length} / 6 {isArabic ? 'استراتيجيات نشطة' : 'Active Strategies'}</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>0 / 6 {isArabic ? 'جميعها معطلة (التداول متوقف)' : 'Zero Active (Engine Paused)'}</span>
+                </>
+              )}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+              {botConfig.marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}
+            </span>
+          </div>
         </div>
+
+        {/* Zero Active Strategies Warning Banner */}
+        {(!botConfig.activePresets || botConfig.activePresets.length === 0) && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              {isArabic 
+                ? 'قانون الأمان الصارم: جميع الاستراتيجيات معطلة حالياً. محرك التداول متوقف بالكامل ولن يولد إشارات أو يفتح صفقات حتى تفعيل استراتيجية واحدة على الأقل أدناه.' 
+                : 'Zero Active Strategies Rule: Trading Engine is strictly locked. No market analysis, signals, or orders will execute until at least one strategy is activated below.'}
+            </span>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* Preset 1: Momentum */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-brand-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('MOMENTUM')
+              ? 'bg-amber-950/15 border-amber-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-brand-300 mb-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isArabic ? 'زخم الاتجاه ⚡ (Momentum)' : 'Momentum Trend ⚡'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{isArabic ? 'زخم الاتجاه (Momentum)' : 'Momentum Trend'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('MOMENTUM')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('MOMENTUM') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -786,32 +859,47 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('MOMENTUM')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('MOMENTUM') && botConfig.enabled
-                  ? 'bg-brand-500 text-slate-950 border-brand-500 shadow-lg shadow-brand-500/20'
-                  : 'bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-slate-950 border-brand-500/30 hover:border-brand-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('MOMENTUM')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('MOMENTUM') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('MOMENTUM') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>
           </div>
 
           {/* Preset 2: Scalper */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-sky-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('SCALPER')
+              ? 'bg-sky-950/15 border-sky-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-sky-300 mb-1.5">
-                <Zap className="w-3.5 h-3.5 text-sky-400" />
-                <span>{isArabic ? 'سكالبينج سريع (Scalper)' : 'High-Freq Scalper ⚡'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-sky-300">
+                  <Zap className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{isArabic ? 'سكالبينج سريع (Scalper)' : 'High-Freq Scalper'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('SCALPER')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('SCALPER') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -821,32 +909,47 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('SCALPER')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('SCALPER') && botConfig.enabled
-                  ? 'bg-sky-500 text-slate-950 border-sky-500 shadow-lg shadow-sky-500/20'
-                  : 'bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border-sky-500/30 hover:border-sky-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('SCALPER')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('SCALPER') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('SCALPER') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>
           </div>
 
           {/* Preset 3: Breakout Sniper */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-purple-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('BREAKOUT')
+              ? 'bg-purple-950/15 border-purple-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300 mb-1.5">
-                <Target className="w-3.5 h-3.5 text-purple-400" />
-                <span>{isArabic ? 'اختراق المستويات 🚀 (Breakout)' : 'Breakout Sniper 🚀'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300">
+                  <Target className="w-3.5 h-3.5 text-purple-400" />
+                  <span>{isArabic ? 'اختراق المستويات (Breakout)' : 'Breakout Sniper'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('BREAKOUT')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('BREAKOUT') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -856,32 +959,47 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('BREAKOUT')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('BREAKOUT') && botConfig.enabled
-                  ? 'bg-purple-500 text-slate-950 border-purple-500 shadow-lg shadow-purple-500/20'
-                  : 'bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-slate-950 border-purple-500/30 hover:border-purple-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('BREAKOUT')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('BREAKOUT') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('BREAKOUT') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>
           </div>
 
           {/* Preset 4: Mean Reversion */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-teal-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('MEAN_REVERSION')
+              ? 'bg-teal-950/15 border-teal-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-teal-300 mb-1.5">
-                <Activity className="w-3.5 h-3.5 text-teal-400" />
-                <span>{isArabic ? 'ارتداد القمم والقيعان 🎯 (Reversion)' : 'Mean Reversion 🎯'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-teal-300">
+                  <Activity className="w-3.5 h-3.5 text-teal-400" />
+                  <span>{isArabic ? 'ارتداد القمم والقيعان (Reversion)' : 'Mean Reversion'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('MEAN_REVERSION')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('MEAN_REVERSION') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -891,32 +1009,47 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('MEAN_REVERSION')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('MEAN_REVERSION') && botConfig.enabled
-                  ? 'bg-teal-500 text-slate-950 border-teal-500 shadow-lg shadow-teal-500/20'
-                  : 'bg-teal-500/10 hover:bg-teal-500 text-teal-400 hover:text-slate-950 border-teal-500/30 hover:border-teal-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('MEAN_REVERSION')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('MEAN_REVERSION') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('MEAN_REVERSION') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>
           </div>
 
           {/* Preset 5: Smart Money SMC */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-cyan-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
+              ? 'bg-cyan-950/15 border-cyan-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300 mb-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{isArabic ? 'الاتجاه المؤسسي الذكي 🏛️ (SMC)' : 'Smart Money SMC 🏛️'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300">
+                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{isArabic ? 'الاتجاه المؤسسي الذكي (SMC)' : 'Smart Money SMC'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -926,32 +1059,47 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('INSTITUTIONAL_SMC')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('INSTITUTIONAL_SMC') && botConfig.enabled
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-500 shadow-lg shadow-cyan-500/20'
-                  : 'bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>
           </div>
 
           {/* Preset 6: Swing */}
-          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col justify-between group hover:border-emerald-500/50 transition-colors">
+          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
+            botConfig.activePresets?.includes('SWING')
+              ? 'bg-emerald-950/15 border-emerald-500/40'
+              : 'bg-slate-950/50 border-slate-800'
+          }`}>
             <div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-300 mb-1.5">
-                <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isArabic ? 'سوينغ محافظ (Swing)' : 'Conservative Swing 🛡️'}</span>
+              <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-300">
+                  <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{isArabic ? 'سوينغ محافظ (Swing)' : 'Conservative Swing'}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  botConfig.activePresets?.includes('SWING')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {botConfig.activePresets?.includes('SWING') ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
                 {botConfig.marketType === 'FUTURES' 
@@ -961,21 +1109,23 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => handleApplyStrategy('SWING')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
-                botConfig.activePresets?.includes('SWING') && botConfig.enabled
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-lg shadow-emerald-500/20'
-                  : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 border-emerald-500/30 hover:border-emerald-500'
+              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
+                botConfig.activePresets?.includes('SWING')
+                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
+                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
               }`}
             >
-              {botConfig.activePresets?.includes('SWING') && botConfig.enabled ? (
+              {botConfig.activePresets?.includes('SWING') ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isArabic ? 'مفعل ⚡' : 'Active ⚡'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
+                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
+                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
+                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isArabic ? 'تفعيل وبدء البوت' : 'Activate & Start'}</span>
+                  <Play className="w-3 h-3 fill-current text-slate-400" />
+                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
                 </>
               )}
             </button>

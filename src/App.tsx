@@ -338,6 +338,7 @@ export const App: React.FC = () => {
   const [botConfig, setBotConfig] = useState<AutoBotConfig>(() => {
     const defaults: AutoBotConfig = {
       enabled: false,
+      activePresets: [],
       tradeAllocationPercent: 25,
       minConfidence: 75,
       mode: 'SCALE_OUT_REBUY',
