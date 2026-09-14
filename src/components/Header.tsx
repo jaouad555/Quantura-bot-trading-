@@ -415,7 +415,6 @@ export const Header: React.FC<HeaderProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
             </button>
           </div>
-
         </div>
       </div>
 
@@ -457,7 +456,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}
               >
                 <Key className={`w-3 h-3 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : 'text-amber-400'}`} />
-                <span>
+                <span className="hidden xs:inline">
                   {executionMode === 'BINANCE_LIVE' ? '🔴 Live' : binanceConfig?.isConnected ? '🟢 API' : 'Binance'}
                 </span>
               </button>
@@ -616,13 +615,13 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-header-alerts"
               type="button"
               onClick={onOpenNotifications}
-              className="relative h-8 w-8 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'الإشعارات والتنبيهات' : 'Notifications & Alertes'}
+              className="h-8 w-8 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition relative shrink-0 cursor-pointer active:scale-95"
+              title={isArabic ? 'الإشعارات' : 'Notifications'}
             >
               <Bell className="w-3.5 h-3.5" />
               {unreadAlertsCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                  {unreadAlertsCount}
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse">
+                  {unreadAlertsCount > 9 ? '9+' : unreadAlertsCount}
                 </span>
               )}
             </button>
@@ -646,7 +645,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Layers className="w-3.5 h-3.5" />
             </button>
           </div>
-
         </div>
       </div>
     </header>

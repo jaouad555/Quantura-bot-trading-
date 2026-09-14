@@ -508,7 +508,7 @@ export const App: React.FC = () => {
   const isArabic = language === 'ar';
 
   const handleUpdateCustomBalance = (newBalance: number, resetHistory?: boolean) => {
-    setPaperWallet((prev) => ({
+    updatePaperWalletSync((prev) => ({
       ...prev,
       balance: newBalance,
       realizedPnl: resetHistory ? 0 : prev.realizedPnl,
@@ -623,6 +623,14 @@ export const App: React.FC = () => {
     setActiveBotPositions([...activeBotPositionsRef.current]);
     // Explicitly update storage to avoid useEffect infinite loops / race conditions
     apiStorage.setItem('btc_active_bot_positions', JSON.stringify(activeBotPositionsRef.current));
+  }, []);
+
+  const updatePaperWalletSync = useCallback((updater: (prev: PaperWallet) => PaperWallet) => {
+    paperWalletRef.current = updater(paperWalletRef.current);
+    setPaperWallet({ ...paperWalletRef.current });
+    try {
+      apiStorage.setItem('paper_balance', paperWalletRef.current.balance.toString());
+    } catch {}
   }, []);
 
   const isOpeningTradeRef = useRef<boolean>(false);
@@ -899,7 +907,7 @@ export const App: React.FC = () => {
           if (isLiveMode && currentBinance.isConnected) {
             executeBinanceLiveOrder(existingPos.symbol, isPrevLong ? 'SELL' : 'BUY', existingPos.remainingAmountUsdt * prevLev, existingPos.remainingAmountBtc, currentP).catch(() => {});
           } else {
-            setPaperWallet((prev) => ({
+            updatePaperWalletSync((prev) => ({
               ...prev,
               balance: prev.balance + prevCashReturned,
               realizedPnl: prev.realizedPnl + prevPnlUsdt,
@@ -1177,7 +1185,7 @@ export const App: React.FC = () => {
         if (isLiveMode && currentBinance.isConnected) {
           executeBinanceLiveOrder(currentSym, decision === 'LONG' ? 'BUY' : 'SELL', positionSizeUsdt, amountCrypto, entryPrice).catch(() => {});
         } else {
-          setPaperWallet((prev) => ({
+          updatePaperWalletSync((prev) => ({
             ...prev,
             balance: Math.max(0, prev.balance - tradeMargin),
           }));
@@ -1221,7 +1229,7 @@ export const App: React.FC = () => {
         const totalTradePnlUsdt = pos.realizedPnlUsdt - marginLost;
 
         if (!isLiveMode) {
-          setPaperWallet((prev) => ({
+          updatePaperWalletSync((prev) => ({
             ...prev,
             realizedPnl: prev.realizedPnl - marginLost,
           }));
@@ -1287,7 +1295,7 @@ export const App: React.FC = () => {
             }
           });
         } else {
-          setPaperWallet((prev) => ({
+          updatePaperWalletSync((prev) => ({
             ...prev,
             balance: prev.balance + cashReturned,
             realizedPnl: prev.realizedPnl + pnlUsdt,
@@ -1371,7 +1379,7 @@ export const App: React.FC = () => {
               }
             });
           } else {
-            setPaperWallet((prev) => ({
+            updatePaperWalletSync((prev) => ({
               ...prev,
               balance: Math.max(0, prev.balance - rebuyMargin),
             }));
@@ -1412,7 +1420,7 @@ export const App: React.FC = () => {
             }
           });
         } else {
-          setPaperWallet((prev) => ({
+          updatePaperWalletSync((prev) => ({
             ...prev,
             balance: prev.balance + cashReturned,
             realizedPnl: prev.realizedPnl + pnlUsdt,
@@ -1469,7 +1477,7 @@ export const App: React.FC = () => {
             }
           });
         } else {
-          setPaperWallet((prev) => ({
+          updatePaperWalletSync((prev) => ({
             ...prev,
             balance: prev.balance + cashReturned,
             realizedPnl: prev.realizedPnl + finalPnlUsdt,
@@ -1557,7 +1565,7 @@ export const App: React.FC = () => {
           }
         });
       } else {
-        setPaperWallet((prev) => ({
+        updatePaperWalletSync((prev) => ({
           ...prev,
           balance: prev.balance + cashReturned,
           realizedPnl: prev.realizedPnl + finalPnlUsdt,
