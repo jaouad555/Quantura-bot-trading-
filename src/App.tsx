@@ -2476,6 +2476,9 @@ export const App: React.FC = () => {
               username={username || 'JAOUAD'}
               botEnabled={botConfig.enabled}
               onToggleBot={() => setBotConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
+              activeTab={activeTab}
+              onNavigateTab={setActiveTab}
+              openPositionsCount={activeBotPositions.length}
             />
 
             {/* Sticky Navigation Tabs Bar */}

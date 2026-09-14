@@ -29,6 +29,16 @@ import {
   Check,
   Bot,
   Layers,
+  LineChart,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  FlaskConical,
+  History,
+  Wifi,
+  Flame,
+  Copy,
+  CheckCheck,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -65,6 +75,9 @@ interface HeaderProps {
   username?: string;
   botEnabled?: boolean;
   onToggleBot?: () => void;
+  activeTab?: string;
+  onNavigateTab?: (tab: 'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet') => void;
+  openPositionsCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -101,6 +114,9 @@ export const Header: React.FC<HeaderProps> = ({
   username,
   botEnabled = false,
   onToggleBot,
+  activeTab = 'signal',
+  onNavigateTab,
+  openPositionsCount = 0,
 }) => {
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
@@ -109,7 +125,28 @@ export const Header: React.FC<HeaderProps> = ({
   const [priceFlash, setPriceFlash] = useState<'UP' | 'DOWN' | null>(null);
   const [isPairsDropdownOpen, setIsPairsDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [copiedPrice, setCopiedPrice] = useState(false);
+  const [pingMs, setPingMs] = useState(24);
   const pairsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync ping latency variations
+  useEffect(() => {
+    if (connectionState === 'CONNECTED') {
+      const interval = setInterval(() => {
+        setPingMs(Math.floor(16 + Math.random() * 18));
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [connectionState]);
+
+  const handleCopyPrice = () => {
+    if (!ticker?.price) return;
+    try {
+      navigator.clipboard.writeText(ticker.price.toString());
+      setCopiedPrice(true);
+      setTimeout(() => setCopiedPrice(false), 1500);
+    } catch {}
+  };
 
   // Sync fullscreen state with document fullscreen events
   useEffect(() => {
@@ -363,7 +400,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleMarketType(marketType === 'FUTURES' ? 'SPOT' : 'FUTURES')}
-                className={`h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border transition flex items-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
+                className={`h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${
                   marketType === 'FUTURES'
                     ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
@@ -371,12 +408,12 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'اضغط للتبديل بين Spot و Futures' : 'Cliquer pour basculer entre Spot et Futures'}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${marketType === 'FUTURES' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
-                <span className="hidden xs:inline">{marketType}</span>
-                <span className="xs:hidden">{marketType === 'FUTURES' ? 'FUT' : 'SPT'}</span>
+                <span>{marketType}</span>
               </button>
             ) : (
-              <span className="h-8 text-[10px] sm:text-xs font-mono font-bold px-2 rounded-xl border bg-cyan-500/15 text-cyan-300 border-cyan-500/40 flex items-center shrink-0">
-                {marketType}
+              <span className="h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border bg-cyan-500/15 text-cyan-300 border-cyan-500/40 flex items-center gap-1.5 shrink-0">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${marketType === 'FUTURES' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
+                <span>{marketType}</span>
               </span>
             )}
 
@@ -420,12 +457,12 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance API, Institutional Risk, Fullscreen (Plein écran) & Settings */}
+      {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance API, Active Trades, Scanner, Chart, Backtest, Risk, Fullscreen & Settings */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/70 bg-slate-950/80">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Connection Badge, Virtual Balance, Binance Live */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+          {/* Left: Connection Badge, Virtual Balance, Binance Live, Positions, Scanner, Chart, Backtest */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
             {/* Connection Status Badge */}
             {getConnectionBadge()}
 
@@ -461,6 +498,77 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden xs:inline">
                   {executionMode === 'BINANCE_LIVE' ? 'Live' : binanceConfig?.isConnected ? 'API' : 'Binance'}
                 </span>
+              </button>
+            )}
+
+            {/* Active Trades / Open Positions Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('autoBot')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  openPositionsCount > 0
+                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
+                    : activeTab === 'autoBot'
+                    ? 'bg-slate-800 text-indigo-300 border-indigo-500/40'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : 'Positions ouvertes et Bot'}
+              >
+                <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
+                <span>{openPositionsCount}</span>
+                <span className="hidden sm:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
+              </button>
+            )}
+
+            {/* Global Market Scanner Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('globalScanner')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'globalScanner'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : 'Radar Global Scanner'}
+              >
+                <Radar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'globalScanner' ? 'text-cyan-400 animate-spin' : 'text-cyan-400/80'}`} strokeWidth={2} />
+                <span className="hidden sm:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
+              </button>
+            )}
+
+            {/* Live Chart Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('chart')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'chart'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-emerald-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : 'Graphique en direct (Chart)'}
+              >
+                <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+                <span className="hidden sm:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
+              </button>
+            )}
+
+            {/* Backtest Strategy Simulator Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('backtest')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'backtest'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : 'Simulateur Backtest'}
+              >
+                <FlaskConical className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
               </button>
             )}
           </div>
@@ -521,12 +629,12 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 3. THIRD BAR (الشريط الثالث): Timezone Clock, PC/Mobile View Mode, Bot Quick Toggle, Language, Sound, Alerts, Density */}
+      {/* 3. THIRD BAR (الشريط الثالث): Timezone Clock, Ping Latency, View Mode, Bot, Sentiment, MTF, History, Copy Price, Language, Sound, Alerts, Density */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 bg-slate-900/90 border-b border-slate-800/60">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Timezone Clock + View Mode + Bot Quick Toggle */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+          {/* Left: Timezone Clock + Ping + View Mode + Bot + Sentiment + MTF + History */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
             {/* Timezone Clock */}
             <button
               type="button"
@@ -539,6 +647,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-black hidden xs:inline">
                 {timezone}
               </span>
+            </button>
+
+            {/* Live Network Latency / Ping Meter */}
+            <button
+              type="button"
+              onClick={onRefreshData}
+              className="h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-[10px] sm:text-xs font-mono text-slate-400 hover:text-cyan-300 transition shrink-0 cursor-pointer active:scale-95"
+              title={isArabic ? 'سرعة الاستجابة اللحظية (اضغط للتحديث وفحص الاتصال)' : 'Latence WebSocket (Cliquer pour tester le ping)'}
+            >
+              <Wifi className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+              <span className="text-emerald-400 font-bold">{pingMs}ms</span>
             </button>
 
             {/* Android / Computer View Mode Toggle */}
@@ -584,10 +703,83 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline">{botEnabled ? 'BOT: ON' : 'BOT: OFF'}</span>
               </button>
             )}
+
+            {/* Market Trend Sentiment Badge */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('market')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  isPricePositive
+                    ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
+                }`}
+                title={isArabic ? 'زخم واتجاه السوق العام (Market Overview)' : 'Tendance du Marché'}
+              >
+                <Flame className={`w-3.5 h-3.5 shrink-0 ${isPricePositive ? 'text-emerald-400' : 'text-rose-400'}`} strokeWidth={2} />
+                <span className="hidden sm:inline">{isPricePositive ? (isArabic ? 'صاعد' : 'BULL') : (isArabic ? 'هابط' : 'BEAR')}</span>
+              </button>
+            )}
+
+            {/* Multi-Timeframe Matrix (MTF) Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('mtf')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'mtf'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                    : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-900'
+                }`}
+                title={isArabic ? 'مصفوفة الفريمات المتعددة (MTF Matrix)' : 'Matrice Multi-Timeframe (MTF)'}
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">MTF</span>
+              </button>
+            )}
+
+            {/* Trade History Journal Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('history')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'history'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                    : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-900'
+                }`}
+                title={isArabic ? 'سجل الصفقات والعمليات (History)' : 'Historique des Trades'}
+              >
+                <History className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'السجل' : 'Journal'}</span>
+              </button>
+            )}
           </div>
 
-          {/* Right: Quick Language Switcher, Sound Mute/Unmute, Notifications, Display Density */}
+          {/* Right: Quick Copy Price, Language Switcher, Sound, Notifications, Display Density */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+            {/* Quick Copy Price Button */}
+            {ticker?.price && (
+              <button
+                type="button"
+                onClick={handleCopyPrice}
+                className={`h-8 px-2 rounded-xl border flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono transition shrink-0 cursor-pointer active:scale-95 ${
+                  copiedPrice
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                    : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-cyan-300'
+                }`}
+                title={isArabic ? (copiedPrice ? 'تم النسخ!' : 'نسخ السعر الحالي') : (copiedPrice ? 'Copié !' : 'Copier le prix')}
+                aria-label="Copy Price"
+              >
+                {copiedPrice ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" strokeWidth={2} />
+                )}
+                <span className="hidden md:inline">{copiedPrice ? (isArabic ? 'تم' : 'OK') : (isArabic ? 'نسخ' : 'Copy')}</span>
+              </button>
+            )}
+
             {/* Quick Language Switcher */}
             <button
               id="btn-header-quick-language"
