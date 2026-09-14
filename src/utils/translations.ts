@@ -48,6 +48,7 @@ export const translations: Record<Language, any> = {
     tabs: {
       signal: 'Terminal & Signal',
       autoBot: 'Moteur Quantitatif & Bot Auto ⚡',
+      globalScanner: 'Scanner Global du Marché 🌐',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Carnet & Dérivés',
       chart: 'Graphique Live',
@@ -313,6 +314,7 @@ export const translations: Record<Language, any> = {
     tabs: {
       signal: 'المنصة والإشارة',
       autoBot: 'البوت الكمي والآلي ⚡',
+      globalScanner: 'رادار ومسّاح السوق الشامل 🌐',
       mtf: 'تعدد الأطر الزمنية (MTF)',
       market: 'الدفتر والمشتقات',
       chart: 'الرسم البياني المباشر',
@@ -578,6 +580,7 @@ export const translations: Record<Language, any> = {
     tabs: {
       signal: 'Terminal & Signal',
       autoBot: 'AI Quant Engine & Bot ⚡',
+      globalScanner: 'Global Market Scanner 🌐',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Order Book & Derivatives',
       chart: 'Live Chart',

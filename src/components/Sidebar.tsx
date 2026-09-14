@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, 
   Bot, 
+  Radar,
   Layers, 
   BarChart2, 
   LineChart, 
@@ -172,6 +173,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: t.tabs?.autoBot || 'Auto Trading Bot', 
       icon: Bot,
       badge: botEnabled ? 'ACTIVE' : null
+    },
+    { 
+      id: 'globalScanner', 
+      label: t.tabs?.globalScanner || (isArabic ? 'رادار السوق الشامل' : 'Global Market Scanner'), 
+      icon: Radar,
+      badge: 'LIVE'
     },
     { 
       id: 'mtf', 

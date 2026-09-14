@@ -597,12 +597,12 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
           </div>
 
           {/* Safe Leverage & R:R */}
-          <div className="bg-slate-950 p-3 rounded-lg border border-indigo-500/30">
-            <div className="flex items-center justify-between text-indigo-400 text-[10px] uppercase font-bold mb-0.5">
+          <div className="bg-slate-950 p-3 rounded-lg border border-cyan-500/30">
+            <div className="flex items-center justify-between text-cyan-400 text-[10px] uppercase font-bold mb-0.5">
               <span>{t.results.recommendedLeverage}</span>
               <Sparkles className="w-3 h-3" />
             </div>
-            <div className="text-base sm:text-lg font-bold text-indigo-300 flex items-center gap-1.5">
+            <div className="text-base sm:text-lg font-bold text-cyan-300 flex items-center gap-1.5">
               <span>{leverage}x</span>
               <span className="text-[11px] font-normal text-slate-400">(R:R {riskRewardRatio})</span>
             </div>

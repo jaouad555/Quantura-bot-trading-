@@ -30,6 +30,7 @@ import {
   X,
   Coins,
   BarChart2,
+  Power,
 } from 'lucide-react';
 import { 
   AutoBotConfig, 
@@ -317,6 +318,136 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     onUpdateConfig(newConfig);
   };
 
+  const handleToggleAll = (enable: boolean) => {
+    const allPresets: Array<'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC'> = [
+      'MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'
+    ];
+    const newPresets = enable ? allPresets : [];
+    
+    // Sync to authoritative backend StrategyManager
+    allPresets.forEach((strategyId) => {
+      fetch('/api/strategies/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategyId, enabled: enable }),
+      }).catch((err) => console.error('[StrategyManager] Failed to toggle strategy state:', err));
+    });
+
+    const isFutures = botConfig.marketType === 'FUTURES';
+    onUpdateConfig({
+      enabled: enable,
+      activePresets: newPresets,
+      timeframe: enable ? 'AUTO' : botConfig.timeframe,
+      leverage: enable ? (isFutures ? 3 : 1) : botConfig.leverage,
+      tradeAllocationPercent: enable ? 15 : botConfig.tradeAllocationPercent,
+    });
+  };
+
+  const strategiesList = useMemo(() => [
+    {
+      id: 'MOMENTUM' as const,
+      title: isArabic ? 'زخم الاتجاه الخوارزمي' : 'Momentum Trend Pro',
+      badge: isArabic ? 'زخم وترند' : 'MOMENTUM',
+      icon: Flame,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['3x Leverage', '1H Frame', 'ADX / RSI', 'Trailing 1.2%'],
+      tagsSpot: ['1x Spot', '1H Frame', 'High TP', 'Trailing 2.5%'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 1H • تأكيد الزخم ADX/RSI • وقف متحرك 1.2%' : '3x Leverage • 1H Frame • ADX/RSI Confluence • Trailing 1.2%')
+        : (isArabic ? 'تداول فوري • فريم 1H • أهداف ممتازة مع حجز ربح متحرك' : '1x Spot • 1H Frame • High targets with trailing profit taking.'),
+    },
+    {
+      id: 'SCALPER' as const,
+      title: isArabic ? 'سكالبينج عالي التردد' : 'High-Freq Scalper',
+      badge: isArabic ? 'خاطف سريع' : 'SCALPER',
+      icon: Zap,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['5x Leverage', '15m Frame', 'Tight SL', 'Fast TP'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Quick Rebound', 'Incremental'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
+        : (isArabic ? 'صفقات سريعة 15m • استهداف أرباح صغيرة متكررة' : '15m Spot entries • Fast incremental gains'),
+    },
+    {
+      id: 'BREAKOUT' as const,
+      title: isArabic ? 'قناص الاختراقات السعرية' : 'Breakout Sniper',
+      badge: isArabic ? 'انفجار سعري' : 'BREAKOUT',
+      icon: Target,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['4x Leverage', '30m Frame', 'Vol Spike', 'S/R Breakout'],
+      tagsSpot: ['1x Spot', '30m Frame', 'Vol Expansion', 'Accumulation'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m • High-volume support/resistance breakouts')
+        : (isArabic ? 'فوري 30m • اقتناص الانفجارات السعرية بعد تجميع طويل' : '30m Spot • Range expansion breakouts with volume spikes'),
+    },
+    {
+      id: 'MEAN_REVERSION' as const,
+      title: isArabic ? 'ارتداد القمم والقيعان' : 'Mean Reversion Pro',
+      badge: isArabic ? 'ارتداد تشبع' : 'REVERSION',
+      icon: Activity,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['3x Leverage', '15m Frame', 'RSI Extrema', 'Bollinger Bounce'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Buy Dips', 'Quick Bounce'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند' : '3x Leverage • 15m • Counter-trend RSI extremes & Bollinger bounces')
+        : (isArabic ? 'اقتناص القيعان 15m • شراء عند ذروة البيع وبيع عند ذروة الشراء' : '15m Spot • Buy oversold dips and take quick rebounds'),
+    },
+    {
+      id: 'INSTITUTIONAL_SMC' as const,
+      title: isArabic ? 'صانع السوق المؤسسي (SMC)' : 'Smart Money SMC',
+      badge: isArabic ? 'أموال ذكية' : 'SMART MONEY',
+      icon: ShieldCheck,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['2x Leverage', '1H Frame', 'Order Blocks', 'FVG Zones'],
+      tagsSpot: ['1x Spot', '1H Frame', 'Smart Money', 'Liquidity Pools'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 2x • فريم 1H • تتبع صانع السوق وكتل الأوامر Order Blocks وFVG' : '2x Leverage • 1H • Institutional Order Blocks & Fair Value Gaps')
+        : (isArabic ? 'تجميع مؤسسي 1H • أعلى نسبة دقة مع مناطق السيولة الكبرى' : '1H Spot • Smart Money accumulation zones with institutional bias'),
+    },
+    {
+      id: 'SWING' as const,
+      title: isArabic ? 'سوينغ محافظ ومستقر' : 'Conservative Swing',
+      badge: isArabic ? 'سوينغ آمن' : 'SAFE SWING',
+      icon: Shield,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
+        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+      },
+      tagsFutures: ['2x Leverage', '4H Frame', 'Min Drawdown', 'Trailing 1.8%'],
+      tagsSpot: ['1x Spot', '4H Frame', 'Safe Storage', 'Wide Trailing'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 2x • فريم 4H • استهداف قمم وقيعان المدى المتوسط بأمان' : '2x Leverage • Swing trades on 4H with lowest Drawdown')
+        : (isArabic ? 'تخزين آمن 4H • ثقة عالية مع وقف خسارة واسع' : 'Safe accumulation 4H • High filter swing trades'),
+    },
+  ], [isArabic, botConfig.marketType]);
+
   const isLiveMode = executionMode === 'BINANCE_LIVE';
   
   const displayPositions = activePositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
@@ -380,7 +511,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     const isFutures = (activePosition.marketType || 'FUTURES') === 'FUTURES';
 
     return (
-      <div key={activePosition.id} className="bg-slate-900 border border-indigo-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+      <div key={activePosition.id} className="bg-slate-900 border border-cyan-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
         {/* Glow Header Accent */}
         <div className={`absolute top-0 left-0 right-0 h-1 ${
           activePosition.decision === 'LONG' ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-rose-500 to-amber-500'
@@ -399,10 +530,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
             <div>
               <div className="flex items-center flex-wrap gap-2 mb-0.5">
-                <span className="text-xs text-indigo-400 font-bold">
+                <span className="text-xs text-cyan-400 font-bold">
                   {isArabic ? `عقد آجل #${index + 1}` : `Futures Contract #${index + 1}`}
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
                   {activePosition.marginMode || 'ISOLATED'}
                 </span>
                 {activePosition.strategyName && (
@@ -424,7 +555,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 </span>
                 <span className="text-slate-600">|</span>
                 <span>
-                  {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-indigo-300 font-mono">${metrics.positionSizeUsdt.toFixed(2)} ({lev}x)</strong>
+                  {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toFixed(2)} ({lev}x)</strong>
                 </span>
               </div>
             </div>
@@ -456,10 +587,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         <div className="my-5 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-300 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
               <span>{isArabic ? 'مسار الأهداف ومستويات الوقف والتصفية' : 'Futures Targets & Liquidation Guard'}</span>
             </span>
-            <span className="text-[11px] text-indigo-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+            <span className="text-[11px] text-cyan-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
               {activePosition.lastAction || 'Active'}
             </span>
           </div>
@@ -599,7 +730,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     <span className="text-white">
                       Moteur Quantitatif IA
                     </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-black uppercase tracking-wider flex items-center gap-1">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-black uppercase tracking-wider flex items-center gap-1">
                       <span>BOT</span>
                       <span className="text-amber-400">⚡</span>
                     </span>
@@ -614,7 +745,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     ? (isArabic ? 'نشط ويعمل كمياً ⚡' : 'ACTIVE ⚡') 
                     : (isArabic ? 'متوقف ⏸️' : 'PAUSED ⏸️')}
                 </span>
-                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-amber-400" />
                   <span>{botConfig.marketType === 'SPOT' ? 'SPOT 1x' : `FUTURES ${botConfig.leverage || 10}x [${botConfig.marginMode || 'ISOLATED'}]`}</span>
                 </span>
@@ -722,7 +853,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               className="h-9 sm:h-10 px-2 sm:px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg sm:rounded-xl border border-slate-700 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-w-0"
               title={isArabic ? 'إعدادات الرافعة وإدارة المخاطر' : isEn ? 'Bot Settings & Leverage' : 'Paramètres & Levier du Bot'}
             >
-              <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <Sliders className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
               <span className="truncate font-mono">
                 {isArabic ? 'الرافعة ⚙️' : 'Config ⚙️'}
               </span>
@@ -786,33 +917,68 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       </div>
 
       {/* Bot Strategy Presets & Authorization Matrix */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-brand-400" />
-            <h3 className="font-bold text-white text-sm">
-              {isArabic ? 'مصفوفة تفعيل الاستراتيجيات وتفويض التداول' : 'Strategy Activation & Trade Authorization'}
-            </h3>
+      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-brand-400" />
+              <h3 className="font-bold text-white text-base tracking-tight">
+                {isArabic ? 'مصفوفة تفعيل الاستراتيجيات وتفويض التداول' : 'Strategy Activation & Trade Authorization'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              {isArabic 
+                ? 'تحكم في الاستراتيجيات الكمية المسموح للبوت بتنفيذ صفقاتها آلياً على السوق'
+                : 'Authorize which quantitative algorithmic strategies the bot is allowed to execute'}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border flex items-center gap-1.5 ${
+
+          {/* Quick Actions & Badges */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Quick Toggle All Buttons */}
+            <button
+              type="button"
+              onClick={() => handleToggleAll(true)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              title={isArabic ? 'تفعيل جميع الاستراتيجيات الست' : 'Activate All Strategies'}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>{isArabic ? 'تفعيل الكل' : 'Activate All'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleToggleAll(false)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              title={isArabic ? 'إيقاف وتعطيل جميع الاستراتيجيات' : 'Disable All Strategies'}
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>{isArabic ? 'إيقاف الكل' : 'Disable All'}</span>
+            </button>
+
+            {/* Active Count Badge */}
+            <span className={`px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono border flex items-center gap-2 shadow-sm ${
               (botConfig.activePresets?.length || 0) > 0 
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
                 : 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse'
             }`}>
               {(botConfig.activePresets?.length || 0) > 0 ? (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span>{botConfig.activePresets?.length} / 6 {isArabic ? 'استراتيجيات نشطة' : 'Active Strategies'}</span>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>{botConfig.activePresets?.length} / 6 {isArabic ? 'نشطة' : 'Active'}</span>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                  <span>0 / 6 {isArabic ? 'جميعها معطلة (التداول متوقف)' : 'Zero Active (Engine Paused)'}</span>
+                  <span>0 / 6 {isArabic ? 'معطلة (متوقف)' : 'All Paused'}</span>
                 </>
               )}
             </span>
-            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+
+            <span className="px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-brand-500/15 text-brand-300 border border-brand-500/30">
               {botConfig.marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}
             </span>
           </div>
@@ -820,9 +986,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
         {/* Zero Active Strategies Warning Banner */}
         {(!botConfig.activePresets || botConfig.activePresets.length === 0) && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
+          <div className="mb-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>
+            <span className="leading-relaxed">
               {isArabic 
                 ? 'قانون الأمان الصارم: جميع الاستراتيجيات معطلة حالياً. محرك التداول متوقف بالكامل ولن يولد إشارات أو يفتح صفقات حتى تفعيل استراتيجية واحدة على الأقل أدناه.' 
                 : 'Zero Active Strategies Rule: Trading Engine is strictly locked. No market analysis, signals, or orders will execute until at least one strategy is activated below.'}
@@ -830,306 +996,183 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Preset 1: Momentum */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('MOMENTUM')
-              ? 'bg-amber-950/15 border-amber-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300">
-                  <Flame className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{isArabic ? 'زخم الاتجاه (Momentum)' : 'Momentum Trend'}</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('MOMENTUM')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('MOMENTUM') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 3x • فريم 1H • تأكيد الزخم ADX/RSI • وقف متحرك 1.2%' : '3x Leverage • 1H Frame • ADX/RSI Confluence • Trailing 1.2%')
-                  : (isArabic ? 'تداول فوري • فريم 1H • أهداف ممتازة مع حجز ربح متحرك' : '1x Spot • 1H Frame • High targets with trailing profit taking.')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('MOMENTUM')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('MOMENTUM')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('MOMENTUM') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+        {/* Modern Strategy Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {strategiesList.map((strat) => {
+            const isActive = botConfig.activePresets?.includes(strat.id);
+            const StratIcon = strat.icon;
+            const currentTags = botConfig.marketType === 'FUTURES' ? strat.tagsFutures : strat.tagsSpot;
 
-          {/* Preset 2: Scalper */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('SCALPER')
-              ? 'bg-sky-950/15 border-sky-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-sky-300">
-                  <Zap className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{isArabic ? 'سكالبينج سريع (Scalper)' : 'High-Freq Scalper'}</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('SCALPER')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('SCALPER') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
-                  : (isArabic ? 'صفقات سريعة 15m • استهداف أرباح صغيرة متكررة' : '15m Spot entries • Fast incremental gains')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('SCALPER')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('SCALPER')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('SCALPER') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+            return (
+              <div
+                key={strat.id}
+                className={`rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 border relative overflow-hidden group ${
+                  isActive
+                    ? strat.color.activeCard
+                    : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700/90 hover:bg-slate-900/40 shadow-sm'
+                }`}
+              >
+                {/* Subtle Ambient Top Accent Glow */}
+                {isActive && (
+                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-36 h-20 bg-emerald-500/10 blur-2xl pointer-events-none rounded-full" />
+                )}
 
-          {/* Preset 3: Breakout Sniper */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('BREAKOUT')
-              ? 'bg-purple-950/15 border-purple-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300">
-                  <Target className="w-3.5 h-3.5 text-purple-400" />
-                  <span>{isArabic ? 'اختراق المستويات (Breakout)' : 'Breakout Sniper'}</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('BREAKOUT')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('BREAKOUT') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m • High-volume support/resistance breakouts')
-                  : (isArabic ? 'فوري 30m • اقتناص الانفجارات السعرية بعد تجميع طويل' : '30m Spot • Range expansion breakouts with volume spikes')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('BREAKOUT')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('BREAKOUT')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('BREAKOUT') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+                <div>
+                  {/* Card Header: Icon, Titles & Status */}
+                  <div className="flex items-start justify-between gap-3 mb-3 relative z-10">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 border shrink-0 ${
+                          isActive
+                            ? strat.color.activeIconBg
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        <StratIcon className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-bold text-sm text-slate-100 truncate group-hover:text-white transition-colors">
+                            {strat.title}
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-mono tracking-wider font-semibold text-slate-400 block uppercase">
+                          {strat.badge}
+                        </span>
+                      </div>
+                    </div>
 
-          {/* Preset 4: Mean Reversion */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('MEAN_REVERSION')
-              ? 'bg-teal-950/15 border-teal-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-teal-300">
-                  <Activity className="w-3.5 h-3.5 text-teal-400" />
-                  <span>{isArabic ? 'ارتداد القمم والقيعان (Reversion)' : 'Mean Reversion'}</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('MEAN_REVERSION')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('MEAN_REVERSION') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند' : '3x Leverage • 15m • Counter-trend RSI extremes & Bollinger bounces')
-                  : (isArabic ? 'اقتناص القيعان 15m • شراء عند ذروة البيع وبيع عند ذروة الشراء' : '15m Spot • Buy oversold dips and take quick rebounds')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('MEAN_REVERSION')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('MEAN_REVERSION')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('MEAN_REVERSION') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+                    {/* Top Status Pill */}
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border shrink-0 flex items-center gap-1.5 transition-colors ${
+                        isActive
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                          : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
+                      }`}
+                    >
+                      {isActive ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>{isArabic ? 'نشط' : 'ACTIVE'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                          <span>{isArabic ? 'متوقف' : 'PAUSED'}</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
 
-          {/* Preset 5: Smart Money SMC */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
-              ? 'bg-cyan-950/15 border-cyan-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300">
-                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{isArabic ? 'الاتجاه المؤسسي الذكي (SMC)' : 'Smart Money SMC'}</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 2x • فريم 1H • تتبع صانع السوق وكتل الأوامر Order Blocks وFVG' : '2x Leverage • 1H • Institutional Order Blocks & Fair Value Gaps')
-                  : (isArabic ? 'تجميع مؤسسي 1H • أعلى نسبة دقة مع مناطق السيولة الكبرى' : '1H Spot • Smart Money accumulation zones with institutional bias')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('INSTITUTIONAL_SMC')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('INSTITUTIONAL_SMC')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('INSTITUTIONAL_SMC') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+                  {/* Parameter Tags Chips */}
+                  <div className="flex flex-wrap gap-1.5 mb-3 relative z-10">
+                    {currentTags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border transition-colors ${
+                          isActive
+                            ? strat.color.tagBg
+                            : 'bg-slate-900/90 text-slate-400 border-slate-800'
+                        }`}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
 
-          {/* Preset 6: Swing */}
-          <div className={`rounded-xl p-3 flex flex-col justify-between transition-colors border ${
-            botConfig.activePresets?.includes('SWING')
-              ? 'bg-emerald-950/15 border-emerald-500/40'
-              : 'bg-slate-950/50 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-300">
-                  <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{isArabic ? 'سوينغ محافظ (Swing)' : 'Conservative Swing'}</span>
+                  {/* Description */}
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-4 relative z-10 line-clamp-2">
+                    {strat.desc}
+                  </p>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                  botConfig.activePresets?.includes('SWING')
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  {botConfig.activePresets?.includes('SWING') ? '● ACTIVE' : '○ INACTIVE'}
-                </span>
+
+                {/* Modern Interactive Strategy Action Button */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyStrategy(strat.id)}
+                  className={`w-full relative overflow-hidden rounded-xl p-2.5 sm:p-3 font-sans transition-all duration-300 border flex items-center justify-between group/btn cursor-pointer select-none relative z-10 active:scale-[0.98] ${
+                    isActive
+                      ? 'bg-gradient-to-r from-emerald-950/40 via-emerald-900/25 to-slate-900/90 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.12)] hover:border-rose-500/50 hover:bg-rose-950/20 hover:shadow-[0_0_20px_rgba(244,63,94,0.18)]'
+                      : 'bg-slate-900/90 hover:bg-slate-800/90 border-slate-700/80 hover:border-cyan-500/50 text-slate-300 hover:text-white shadow-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]'
+                  }`}
+                >
+                  {/* Left: Tactical Icon & Status Label */}
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border shrink-0 ${
+                        isActive
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 group-hover/btn:bg-rose-500/20 group-hover/btn:text-rose-400 group-hover/btn:border-rose-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 group-hover/btn:bg-cyan-500/20 group-hover/btn:text-cyan-400 group-hover/btn:border-cyan-500/30'
+                      }`}
+                    >
+                      {isActive ? (
+                        <>
+                          <Power className="w-3.5 h-3.5 group-hover/btn:hidden" />
+                          <X className="w-3.5 h-3.5 hidden group-hover/btn:block" />
+                        </>
+                      ) : (
+                        <Power className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
+                      )}
+                    </div>
+
+                    <div className="text-left rtl:text-right">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-xs font-bold tracking-tight transition-colors ${
+                            isActive
+                              ? 'text-emerald-300 group-hover/btn:hidden'
+                              : 'text-slate-200 group-hover/btn:text-white'
+                          }`}
+                        >
+                          {isActive
+                            ? (isArabic ? 'الاستراتيجية مفعلة' : 'STRATEGY ACTIVE')
+                            : (isArabic ? 'تفعيل الاستراتيجية' : 'ACTIVATE STRATEGY')}
+                        </span>
+                        {isActive && (
+                          <span className="text-xs font-bold tracking-tight text-rose-300 hidden group-hover/btn:inline">
+                            {isArabic ? 'إيقاف / تعطيل' : 'CLICK TO DISABLE'}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono block">
+                        {isActive
+                          ? (isArabic ? '● تعمل في الرصد والتداول' : '● Scanning & Executing')
+                          : (isArabic ? '○ متوقفة (انقر للتشغيل)' : '○ Standby Mode')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: Modern iOS / Cyberpunk Switch Pill */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div
+                      className={`w-11 h-6 rounded-full p-0.5 transition-all duration-300 flex items-center border ${
+                        isActive
+                          ? 'bg-emerald-500 border-emerald-400 justify-end group-hover/btn:bg-rose-500/80 group-hover/btn:border-rose-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                          : 'bg-slate-800 border-slate-700 justify-start group-hover/btn:border-cyan-500/50'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full bg-white shadow-md flex items-center justify-center transform transition-transform duration-300 ${
+                          isActive
+                            ? 'scale-100 text-emerald-600 group-hover/btn:text-rose-600'
+                            : 'scale-90 text-slate-400'
+                        }`}
+                      >
+                        {isActive ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 group-hover/btn:hidden" />
+                            <X className="w-3.5 h-3.5 hidden group-hover/btn:block" />
+                          </>
+                        ) : (
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
               </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                {botConfig.marketType === 'FUTURES' 
-                  ? (isArabic ? 'رافعة 2x • فريم 4H • استهداف قمم وقيعان المدى المتوسط بأمان' : '2x Leverage • Swing trades on 4H with lowest Drawdown')
-                  : (isArabic ? 'تخزين آمن 4H • ثقة عالية مع وقف خسارة واسع' : 'Safe accumulation 4H • High filter swing trades')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleApplyStrategy('SWING')}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 group ${
-                botConfig.activePresets?.includes('SWING')
-                  ? 'bg-emerald-500/20 hover:bg-rose-500/20 text-emerald-300 hover:text-rose-300 border-emerald-500/40 hover:border-rose-500/40'
-                  : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border-slate-700 hover:border-emerald-500/40'
-              }`}
-            >
-              {botConfig.activePresets?.includes('SWING') ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:hidden" />
-                  <X className="w-3.5 h-3.5 text-rose-400 hidden group-hover:inline" />
-                  <span className="group-hover:hidden">[ ON ] {isArabic ? 'نشط (مفعل)' : 'ACTIVE'}</span>
-                  <span className="hidden group-hover:inline">{isArabic ? 'إيقاف الاستراتيجية' : 'Turn OFF'}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current text-slate-400" />
-                  <span>[ OFF ] {isArabic ? 'تفعيل الاستراتيجية' : 'Turn ON (Activate)'}</span>
-                </>
-              )}
-            </button>
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1181,7 +1224,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             <span>{isArabic ? 'نسبة النجاح (Win Rate)' : 'Win Rate'}</span>
           </div>
           <div className="text-base sm:text-lg font-bold text-white font-mono">
@@ -1210,7 +1253,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs">
-            <Gauge className="w-4 h-4 text-indigo-400" />
+            <Gauge className="w-4 h-4 text-cyan-400" />
             <span className="font-bold text-slate-300">
               {isArabic ? `تداول فوري يدوي (${selectedSymbol}):` : `Quick Manual Contract (${selectedSymbol}):`}
             </span>
@@ -1383,7 +1426,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
       ) : (
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto">
             <Bot className="w-6 h-6" />
           </div>
           <h3 className="font-bold text-white text-sm">
@@ -1422,7 +1465,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-indigo-400" />
+            <Clock className="w-4 h-4 text-cyan-400" />
             <h3 className="font-bold text-white text-xs uppercase tracking-wider font-mono">
               {isArabic ? 'سجل عمليات العقود الآجلة (Live Futures Auto-Logs)' : 'Journal des Exécutions Futures'}
             </h3>
@@ -1459,7 +1502,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   </div>
                   <div className="truncate">
                     <div className="font-bold text-white flex items-center gap-1.5">
-                      <span className="text-indigo-400 bg-indigo-500/10 px-1.5 rounded">{log.symbol}</span>
+                      <span className="text-cyan-400 bg-cyan-500/10 px-1.5 rounded">{log.symbol}</span>
                       {log.leverage && (
                         <span className="text-amber-400 bg-amber-500/10 px-1 rounded text-[10px]">
                           {log.leverage}x
@@ -1495,13 +1538,13 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-lg w-full shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <Sliders className="w-5 h-5 text-indigo-400" />
+              <Sliders className="w-5 h-5 text-cyan-400" />
               <span>{isArabic ? 'إعدادات العقود الآجلة والرافعة (Futures Settings)' : 'Paramètres Futures & Effet de Levier'}</span>
             </h3>
 
             <div className="space-y-4 text-xs">
               {/* 0. Market Type Selection: Futures vs Spot */}
-              <div className="p-3 bg-slate-950 border border-indigo-500/30 rounded-xl space-y-3">
+              <div className="p-3 bg-slate-950 border border-cyan-500/30 rounded-xl space-y-3">
                 <label className="block text-slate-200 font-bold">
                   {isArabic ? '⚡ نوع السوق المعتمد (Market Type)' : '⚡ Type de Marché'}
                 </label>
@@ -1511,7 +1554,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     onClick={() => setMarketTypeInput('FUTURES')}
                     className={`p-2.5 rounded-xl border text-left font-bold transition ${
                       marketTypeInput === 'FUTURES'
-                        ? 'bg-indigo-600/30 border-indigo-400 text-indigo-200 shadow-lg shadow-indigo-600/20'
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-500/20'
                         : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
@@ -1552,7 +1595,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                           type="button"
                           onClick={() => setMarginModeInput('ISOLATED')}
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            marginModeInput === 'ISOLATED' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                            marginModeInput === 'ISOLATED' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
                           }`}
                         >
                           ISOLATED
@@ -1561,7 +1604,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                           type="button"
                           onClick={() => setMarginModeInput('CROSS')}
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            marginModeInput === 'CROSS' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                            marginModeInput === 'CROSS' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
                           }`}
                         >
                           CROSS
@@ -1731,7 +1774,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     onClick={() => setSizingModeInput('RISK_BASED')}
                     className={`p-2.5 rounded-xl border text-left font-bold transition ${
                       sizingModeInput === 'RISK_BASED'
-                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
@@ -1898,7 +1941,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               {/* 4. Anti-Chop Cooldown Timer */}
               <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <Clock className="w-4 h-4 text-cyan-400" />
                   <span className="font-bold text-white">
                     {isArabic ? '4. فترة التهدئة بعد إغلاق الصفقة (Anti-Chop Cooldown)' : '4. Délai de Refroidissement (Cooldown)'}
                   </span>

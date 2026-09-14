@@ -34,7 +34,7 @@ export const MarketScannerStatus: React.FC = () => {
     <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 mb-4 backdrop-blur-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <Server className="w-5 h-5 text-indigo-400" />
+          <Server className="w-5 h-5 text-cyan-400" />
           <h2 className="text-sm font-semibold text-slate-200">Global Market Scanner</h2>
         </div>
         <div className="flex items-center space-x-3">

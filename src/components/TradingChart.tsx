@@ -273,7 +273,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               onClick={() => setShowIndicators(!showIndicators)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer active:scale-95 ${
                 showIndicators
-                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 shadow-sm'
+                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 shadow-sm'
                   : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-300'
               }`}
             >

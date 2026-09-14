@@ -20,7 +20,7 @@ import {
   MarketType,
 } from './types';
 import { Header } from './components/Header';
-import { MarketScannerStatus } from './components/MarketScannerStatus';
+import { GlobalMarketScanner } from './components/GlobalMarketScanner';
 import { SignalCard } from './components/SignalCard';
 import { AutoTradingBot } from './components/AutoTradingBot';
 import { TradingChart } from './components/TradingChart';
@@ -36,6 +36,7 @@ import { RiskManagementModal } from './components/RiskManagementModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { BinanceConnectionModal } from './components/BinanceConnectionModal';
 import { CustomBalanceModal } from './components/CustomBalanceModal';
+import { Footer } from './components/Footer';
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { translations } from './utils/translations';
@@ -47,6 +48,7 @@ import { sendTelegramMessage } from './utils/telegram';
 import {
   LayoutDashboard,
   Bot,
+  Radar,
   Layers,
   BarChart2,
   LineChart,
@@ -125,7 +127,7 @@ export const App: React.FC = () => {
   }, []);
 
   const [activeTab, setActiveTab] = useState<
-    'signal' | 'autoBot' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet'
+    'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet'
   >('signal');
   const [language, setLanguage] = useState<Language>(() => {
     try {
@@ -2483,8 +2485,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('signal')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'signal'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <LayoutDashboard className="w-3.5 h-3.5" />
@@ -2495,8 +2497,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('autoBot')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'autoBot'
-                      ? 'bg-gradient-to-r from-amber-500 to-teal-400 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                      : 'text-amber-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-amber-500/20'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <Bot className="w-3.5 h-3.5" />
@@ -2507,11 +2509,24 @@ export const App: React.FC = () => {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab('globalScanner')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === 'globalScanner'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                  }`}
+                >
+                  <Radar className="w-3.5 h-3.5" />
+                  <span>{t.tabs.globalScanner || (isArabic ? 'رادار السوق الشامل' : 'Global Scanner')}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                </button>
+
+                <button
                   onClick={() => setActiveTab('mtf')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'mtf'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <Layers className="w-3.5 h-3.5" />
@@ -2522,8 +2537,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('market')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'market'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <BarChart2 className="w-3.5 h-3.5" />
@@ -2534,8 +2549,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('chart')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'chart'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <LineChart className="w-3.5 h-3.5" />
@@ -2546,8 +2561,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('backtest')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'backtest'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <Radio className="w-3.5 h-3.5" />
@@ -2558,8 +2573,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('analysis')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'analysis'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -2570,8 +2585,8 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('riskWallet')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'riskWallet'
-                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                   }`}
                 >
                   <Shield className="w-3.5 h-3.5" />
@@ -2630,9 +2645,7 @@ export const App: React.FC = () => {
 
           {/* Tab: Automated AI Trading Bot (Auto Buy, TP1 Exit 50%, Rebuy, TP2 Exit) */}
           {activeTab === 'autoBot' && (
-            <>
-              <MarketScannerStatus />
-              <AutoTradingBot
+            <AutoTradingBot
               language={language}
               botConfig={botConfig}
               activePositions={activeBotPositions}
@@ -2739,7 +2752,17 @@ export const App: React.FC = () => {
               onTrimExcessPositions={handleTrimExcessPositions}
               onFullReset={handleFullReset}
             />
-            </>
+          )}
+
+          {/* Tab: Dedicated Global Market Scanner */}
+          {activeTab === 'globalScanner' && (
+            <GlobalMarketScanner
+              language={language}
+              onSelectPair={handlePairChange}
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
+              selectedSymbol={selectedSymbol}
+              botEnabled={botConfig.enabled}
+            />
           )}
 
           {/* Tab 2: Multi-Timeframe Matrix */}
@@ -2861,94 +2884,17 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Global Footer (Magic Touch Copyright) */}
-        <footer className="mt-20 mb-10 px-4 flex justify-center w-full relative z-10">
-          <div className="max-w-4xl w-full flex flex-col items-center gap-6">
-            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-4"></div>
-            
-            <div className="flex flex-col md:flex-row items-center justify-between w-full gap-8">
-              
-              {/* Left Side: Brand & Identity */}
-              <div className="flex items-center gap-4">
-                <div className="relative group cursor-pointer shrink-0" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                  <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/40 to-cyan-500/40 rounded-2xl blur-lg opacity-40 group-hover:opacity-90 transition duration-500"></div>
-                  <img
-                    src="/logo.png"
-                    alt="Quantura Logo"
-                    className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-amber-500/50 shadow-2xl transition-all duration-500 group-hover:scale-105 object-cover"
-                  />
-                </div>
-                <div className="flex flex-col text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-lg sm:text-xl uppercase text-sweep-shine">QUANTURA</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono text-[9px] font-bold tracking-wider">v2.5.0</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-cyan-400 text-xs font-mono font-black tracking-[0.25em] uppercase">TRADE SMARTER</span>
-                    <span className="text-slate-600 font-mono text-xs">•</span>
-                    <span className="text-slate-400 text-[10px] font-mono tracking-wider uppercase">AI Quantitative Terminal</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Center: Developer Signature */}
-              <div className="flex flex-col items-center py-2.5 px-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md relative overflow-hidden group shadow-[0_0_25px_rgba(0,0,0,0.5)]">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent group-hover:via-cyan-400 transition-all duration-700"></div>
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Code2 className="w-3 h-3 text-cyan-400/80 group-hover:text-cyan-400 transition-colors duration-300" />
-                  <span className="text-slate-400 text-[8.5px] font-mono tracking-[0.22em] uppercase">Engineered & Designed By</span>
-                </div>
-                
-                {/* Developer Name with rising ethereal smoke on the left and light sweep across letters from J to I */}
-                <div className="relative flex items-center justify-center gap-2.5">
-                  {/* Ethereal rising smoke wisps on the left of the name */}
-                  <div className="relative w-3.5 h-4 flex items-center justify-center shrink-0" title="Quantum Vapor">
-                    <span className="w-1 h-1 rounded-full bg-cyan-400/50 blur-[0.5px]"></span>
-                    <span className="smoke-wisp-1 absolute bottom-0.5 w-2.5 h-2.5 rounded-full bg-slate-300/40 blur-[2px] pointer-events-none"></span>
-                    <span className="smoke-wisp-2 absolute bottom-0.5 w-3 h-3 rounded-full bg-cyan-200/35 blur-[3px] pointer-events-none"></span>
-                    <span className="smoke-wisp-3 absolute bottom-0.5 w-2 h-2 rounded-full bg-slate-200/30 blur-[2px] pointer-events-none"></span>
-                  </div>
-
-                  <h4 className="text-sweep-shine font-['Syncopate',sans-serif] font-bold text-[9.5px] sm:text-[10px] tracking-[0.28em] uppercase transition-all duration-300">
-                    JAOUAD ABDECHCHAFI
-                  </h4>
-                </div>
-              </div>
-
-              {/* Right Side: Status & Settings */}
-              <div className="flex flex-col items-center md:items-end gap-2.5">
-                <div className="flex items-center gap-2">
-                   <div className="bg-slate-900 border border-slate-800 rounded-md px-2.5 py-1 text-slate-400 font-mono text-[9px] tracking-wider shadow-sm flex items-center gap-1.5">
-                    <Terminal className="w-3 h-3 text-cyan-500" />
-                    <span>SYS_READY</span>
-                  </div>
-                  <div className="bg-emerald-500/10 border border-amber-500/20 rounded-md px-2.5 py-1 text-emerald-500 font-mono text-[9px] tracking-wider flex items-center gap-1.5 shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
-                    <span>LIVE PING</span>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => setIsBinanceModalOpen(true)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-medium tracking-wide transition-all duration-300 ${
-                    executionMode === 'BINANCE_LIVE' || binanceConfig?.isConnected
-                      ? 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/30'
-                      : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30'
-                  }`}
-                >
-                  <Key className="w-3 h-3" />
-                  <span className="font-mono uppercase">{t.independentDisclaimer || 'API Settings'}</span>
-                </button>
-              </div>
-
-            </div>
-
-            <div className="w-full flex justify-between items-center text-[10px] text-slate-500 font-mono border-t border-slate-800/50 pt-4 px-2">
-              <span className="tracking-widest">&copy; {new Date().getFullYear()} QUANTURA &bull; TRADE SMARTER &bull; ALL RIGHTS RESERVED.</span>
-              <span className="flex items-center gap-1.5 tracking-widest text-cyan-400/90"><Cpu className="w-3 h-3 text-cyan-400"/> QUANTURA AI CORE</span>
-            </div>
-          </div>
-        </footer>
+        {/* Global Institutional Platform Footer */}
+        <Footer
+          language={language}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          executionMode={executionMode}
+          binanceConfig={binanceConfig}
+          onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
+          onOpenRiskModal={() => setIsRiskModalOpen(true)}
+          onOpenSettingsModal={() => setIsSettingsOpen(true)}
+        />
           </div>
         </div>
       )}

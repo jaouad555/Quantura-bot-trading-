@@ -210,7 +210,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
             {onSendTestAlert && (
               <button
                 onClick={onSendTestAlert}
-                className="text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold flex items-center gap-1 bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-1 rounded border border-indigo-500/30 transition"
+                className="text-cyan-400 hover:text-cyan-300 text-[11px] font-semibold flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-1 rounded border border-cyan-500/30 transition"
                 title={isArabic ? 'تجربة إشعار فوري' : 'Tester une alerte'}
               >
                 <Send className="w-3 h-3" />

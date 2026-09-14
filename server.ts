@@ -11,7 +11,7 @@ import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync } from './src/server/botEngine';
-import { startMarketScanner, scannerState } from './src/server/marketScanner';
+import { startMarketScanner, scannerState, scanAllPairs } from './src/server/marketScanner';
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
@@ -943,6 +943,15 @@ async function fetchMultiTimeframeConfluence(symbol = 'BTCUSDT', marketType: 'SP
 
 app.get('/api/scanner/status', (req, res) => {
   res.json(scannerState);
+});
+
+app.post('/api/scanner/scan-now', async (req, res) => {
+  try {
+    scanAllPairs().catch((err) => console.error('[SCANNER] Manual scan trigger error:', err));
+    res.json({ success: true, message: 'Scan initiated' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // API ROUTE 1: GET /api/binance/market-data

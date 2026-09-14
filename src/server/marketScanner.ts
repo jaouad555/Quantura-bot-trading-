@@ -6,19 +6,29 @@ import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
 
 // Interfaces
-interface ScannerState {
+export interface ScannerState {
   status: 'RUNNING' | 'STOPPED' | 'ERROR';
   lastGlobalScan: number;
   symbolStates: Record<string, SymbolState>;
   activeStrategiesCount: number;
 }
 
-interface SymbolState {
+export interface SymbolState {
   symbol: string;
   lastAnalyzed: number;
   lastSignal?: string;
+  signalDirection?: 'LONG' | 'SHORT' | 'WAIT';
+  strategyName?: string;
   confidence?: number;
   lastError?: string;
+  price?: number;
+  change24h?: number;
+  high24h?: number;
+  low24h?: number;
+  volume24h?: number;
+  indicators?: any;
+  mtfConfluence?: any;
+  marketStructure?: any;
 }
 
 // Global Scanner State
@@ -52,36 +62,15 @@ export function stopMarketScanner() {
   if (wsClient) wsClient.close();
 }
 
-async function scanAllPairs() {
+export async function scanAllPairs() {
   try {
     const configStr = await kv.get('btc_bot_config');
     const config = configStr ? JSON.parse(configStr) : {};
     
-    // Stop scanning if globally disabled
-    if (!config.enabled) {
-      if (scannerState.status === 'RUNNING') {
-        scannerState.status = 'STOPPED';
-        scannerState.symbolStates = {};
-      }
-      return;
-    }
-
-    // CRITICAL GATE: Verify Active Strategies
-    // Zero active strategies = ZERO TRADES & No analysis execution!
+    // Check Active Strategies
     const activeStrategies = strategyManager.getActiveStrategies();
     scannerState.activeStrategiesCount = activeStrategies.length;
-
-    if (activeStrategies.length === 0) {
-      console.log('[SCANNER] Zero active strategies. Scanner strictly paused (Zero Trades Rule).');
-      if (scannerState.status === 'RUNNING') {
-        scannerState.status = 'STOPPED';
-      }
-      return;
-    }
-    
-    if (scannerState.status === 'STOPPED') {
-       scannerState.status = 'RUNNING';
-    }
+    scannerState.status = 'RUNNING';
 
     let rawAllowed = config.allowedSymbols || [];
     // Convert base symbols like "BTC" to "BTCUSDT"
@@ -107,7 +96,7 @@ async function scanAllPairs() {
     for (const symbol of enabledPairs) {
       if (scannerState.status !== 'RUNNING') break;
       await analyzeSymbol(symbol, config, isLive, marketType, allowedToExecute, activeStrategies);
-      await new Promise(r => setTimeout(r, 2000)); // 2s stagger
+      await new Promise(r => setTimeout(r, 1500)); // 1.5s stagger
     }
 
   } catch (error) {
@@ -129,9 +118,6 @@ async function analyzeSymbol(
       scannerState.symbolStates[normSymbol] = { symbol: normSymbol, lastAnalyzed: 0 };
     }
 
-    // Double check: if no active strategies, immediately stop
-    if (activeStrategies.length === 0) return;
-
     // 1. Fetch Market Data via internal API
     const timeframe = config.timeframe && config.timeframe !== 'AUTO' ? config.timeframe : '1h';
     const devMode = process.env.NODE_ENV !== 'production';
@@ -143,40 +129,57 @@ async function analyzeSymbol(
     const data = await res.json();
     if (!data || !data.ticker || !data.indicators) throw new Error('Invalid market data payload');
 
-    scannerState.symbolStates[normSymbol].lastAnalyzed = Date.now();
+    // Save comprehensive indicators and real-time market data
+    scannerState.symbolStates[normSymbol] = {
+      ...scannerState.symbolStates[normSymbol],
+      symbol: normSymbol,
+      lastAnalyzed: Date.now(),
+      price: data.ticker?.price,
+      change24h: data.ticker?.change24h,
+      high24h: data.ticker?.high24h,
+      low24h: data.ticker?.low24h,
+      volume24h: data.ticker?.volume24h,
+      indicators: data.indicators,
+      mtfConfluence: data.mtfConfluence,
+      marketStructure: data.indicators?.marketStructure,
+      lastError: undefined,
+    };
+
     const isAllowedToTrade = allowedToExecute.includes(normSymbol);
+    const isBotTradingEnabled = !!config.enabled;
 
-    // 2. Generate Signals ONLY for Active Strategies
-    // A strategy MUST NEVER participate in market analysis or signal generation unless active!
-    for (const strategy of activeStrategies) {
-      // Re-verify strategy active state in real-time
-      if (!strategyManager.isStrategyActive(strategy.id)) {
-        continue;
-      }
+    // 2. Generate Signals ONLY if Active Strategies exist
+    if (activeStrategies.length > 0) {
+      for (const strategy of activeStrategies) {
+        if (!strategyManager.isStrategyActive(strategy.id)) {
+          continue;
+        }
 
-      const stratSignal = strategyManager.evaluateStrategy(
-        strategy.id,
-        normSymbol,
-        data.ticker.price,
-        data.indicators,
-        data.orderBook,
-        data.derivatives,
-        data.mtfConfluence
-      );
+        const stratSignal = strategyManager.evaluateStrategy(
+          strategy.id,
+          normSymbol,
+          data.ticker.price,
+          data.indicators,
+          data.orderBook,
+          data.derivatives,
+          data.mtfConfluence
+        );
 
-      if (!stratSignal || stratSignal.decision === 'WAIT') {
-        continue;
-      }
+        if (!stratSignal || stratSignal.decision === 'WAIT') {
+          continue;
+        }
 
-      scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
-      scannerState.symbolStates[normSymbol].confidence = stratSignal.confidence;
-      scannerState.symbolStates[normSymbol].lastError = undefined;
+        scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
+        scannerState.symbolStates[normSymbol].signalDirection = stratSignal.decision;
+        scannerState.symbolStates[normSymbol].strategyName = stratSignal.strategyName;
+        scannerState.symbolStates[normSymbol].confidence = stratSignal.confidence;
 
-      // 3. Execution Logic
-      const minConfidence = config.minConfidence || 65;
-      if (stratSignal.confidence >= minConfidence && (stratSignal.decision === 'LONG' || stratSignal.decision === 'SHORT')) {
-        if (isAllowedToTrade) {
-          await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive);
+        // 3. Execution Logic - Gated by bot.enabled
+        const minConfidence = config.minConfidence || 65;
+        if (isBotTradingEnabled && stratSignal.confidence >= minConfidence && (stratSignal.decision === 'LONG' || stratSignal.decision === 'SHORT')) {
+          if (isAllowedToTrade) {
+            await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive);
+          }
         }
       }
     }

@@ -216,11 +216,11 @@ export const SignalCard: React.FC<SignalCardProps> = ({
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono border transition ${
               notified
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
             }`}
             title={t.terminal.recommendationAlertTooltip}
           >
-            {notified ? <BellRing className="w-3.5 h-3.5 text-emerald-400 animate-bounce" /> : <Bell className="w-3.5 h-3.5 text-indigo-400" />}
+            {notified ? <BellRing className="w-3.5 h-3.5 text-emerald-400 animate-bounce" /> : <Bell className="w-3.5 h-3.5 text-cyan-400" />}
             <span className="font-bold">
               {notified
                 ? (isArabic ? 'تم تفعيل التنبيه ✓' : 'Alerte Active ✓')
@@ -334,7 +334,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
             className={`flex-1 md:flex-initial px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm ${
               notified
                 ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300 shadow-emerald-500/10'
-                : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-200'
+                : 'bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/40 text-cyan-200'
             }`}
             title={t.terminal.recommendationAlertTooltip}
           >
@@ -345,7 +345,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
               </>
             ) : (
               <>
-                <BellRing className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                <BellRing className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                 <span>{isArabic ? 'إشعار التوصية' : 'Alerte Signal'}</span>
               </>
             )}
@@ -454,14 +454,14 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </div>
 
           {/* Risk/Reward Ratio */}
-          <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3">
-            <span className="text-[10px] font-mono text-indigo-400 uppercase block font-semibold">
+          <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-3">
+            <span className="text-[10px] font-mono text-cyan-400 uppercase block font-semibold">
               {t.terminal.riskRewardRatio}
             </span>
-            <div className="text-sm sm:text-base font-mono font-bold text-indigo-300 mt-0.5">
+            <div className="text-sm sm:text-base font-mono font-bold text-cyan-300 mt-0.5">
               1:{riskRewardRatio || '2.5'}
             </div>
-            <span className="text-[10px] font-mono text-indigo-400/80 block mt-0.5">
+            <span className="text-[10px] font-mono text-cyan-400/80 block mt-0.5">
               Fenêtre: {signal.timing.expectedDuration}
             </span>
           </div>

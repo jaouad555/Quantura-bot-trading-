@@ -214,7 +214,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shadow-inner ${
               metrics?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' 
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse' 
-                : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+                : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
             }`}>
               {metrics?.emergencyStop ? <AlertOctagon className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
             </div>
@@ -223,7 +223,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <h2 className="text-base sm:text-lg font-black text-white font-sans tracking-tight">
                   {isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Engine'}
                 </h2>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                   v2.0 PRO
                 </span>
               </div>
@@ -248,7 +248,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
             onClick={() => setActiveTab('METRICS')}
             className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'METRICS'
-                ? 'text-indigo-400 border-indigo-500 bg-slate-800/60'
+                ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
             }`}
           >
@@ -260,7 +260,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
             onClick={() => setActiveTab('CONFIG')}
             className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'CONFIG'
-                ? 'text-indigo-400 border-indigo-500 bg-slate-800/60'
+                ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
             }`}
           >
@@ -272,7 +272,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
             onClick={() => setActiveTab('AUDIT')}
             className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'AUDIT'
-                ? 'text-indigo-400 border-indigo-500 bg-slate-800/60'
+                ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
             }`}
           >
@@ -341,7 +341,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between">
                   <span className="text-xs text-slate-400 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                      <Shield className="w-3.5 h-3.5 text-cyan-400" />
                       {isArabic ? 'مؤشر المخاطر التراكمي' : 'Quantitative Risk Score'}
                     </span>
                     <span className="font-mono text-[11px] text-slate-500">0-100</span>
@@ -431,13 +431,13 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     <span className="text-slate-400 font-bold">
                       {isArabic ? 'إجمالي المخاطرة المفتوحة للمحفظة' : 'Aggregate Portfolio Risk'}
                     </span>
-                    <span className="text-indigo-400 font-mono font-bold">
+                    <span className="text-cyan-400 font-mono font-bold">
                       {(metrics?.currentPortfolioRiskPercent ?? 0).toFixed(2)}% / {metrics?.maxPortfolioRiskPercent ?? 3.0}%
                     </span>
                   </div>
                   <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-indigo-500 transition-all duration-500"
+                      className="h-full bg-cyan-500 transition-all duration-500"
                       style={{ width: `${Math.min(100, (((metrics?.currentPortfolioRiskPercent ?? 0) / (metrics?.maxPortfolioRiskPercent ?? 3.0)) * 100))}%` }}
                     />
                   </div>
@@ -476,9 +476,9 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
               </div>
 
               {/* Core Principles Guarantee */}
-              <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-indigo-300/90 leading-relaxed">
+              <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-cyan-300/90 leading-relaxed">
                   <span className="font-bold text-white block mb-0.5">
                     {isArabic ? 'مبدأ كوانتورا الصارم لحماية رأس المال' : 'Institutional Risk Engine Authority'}
                   </span>
@@ -506,7 +506,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
                   <label className="text-xs font-bold text-slate-300 flex justify-between">
                     <span>{isArabic ? 'أقصى مخاطرة للصفقة الواحدة' : 'Risk Per Trade %'}</span>
-                    <span className="text-indigo-400 font-mono font-bold">{riskPerTrade}%</span>
+                    <span className="text-cyan-400 font-mono font-bold">{riskPerTrade}%</span>
                   </label>
                   <input
                     id="input-risk-per-trade"
@@ -514,7 +514,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     min="0.25" max="2.0" step="0.25"
                     value={riskPerTrade}
                     onChange={(e) => setRiskPerTrade(e.target.value)}
-                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-indigo-500 cursor-pointer"
+                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                     <span>0.25% (Conservative)</span>
@@ -575,7 +575,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
                   <label className="text-xs font-bold text-slate-300 flex justify-between">
                     <span>{isArabic ? 'سقف الرافعة المالية الأقصى' : 'Max Allowed Leverage'}</span>
-                    <span className="text-indigo-400 font-mono font-bold">{maxAllowedLeverage}x</span>
+                    <span className="text-cyan-400 font-mono font-bold">{maxAllowedLeverage}x</span>
                   </label>
                   <input
                     id="input-max-leverage"
@@ -583,7 +583,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     min="1" max="10" step="1"
                     value={maxAllowedLeverage}
                     onChange={(e) => setMaxAllowedLeverage(e.target.value)}
-                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-indigo-500 cursor-pointer"
+                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                     <span>1x (Spot / No Lev)</span>
@@ -615,7 +615,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
                   <label className="text-xs font-bold text-slate-300 flex justify-between">
                     <span>{isArabic ? 'أقصى انكشاف للعملة الواحدة' : 'Max Symbol Exposure %'}</span>
-                    <span className="text-indigo-400 font-mono font-bold">{maxSymbolExposure}%</span>
+                    <span className="text-cyan-400 font-mono font-bold">{maxSymbolExposure}%</span>
                   </label>
                   <input
                     id="input-symbol-exposure"
@@ -623,7 +623,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     min="5" max="30" step="1"
                     value={maxSymbolExposure}
                     onChange={(e) => setMaxSymbolExposure(e.target.value)}
-                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-indigo-500 cursor-pointer"
+                    className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <p className="text-[11px] text-slate-400 pt-1">
                     {isArabic ? 'يمنع تكديس صفقات أو عقود تفوق هذه النسبة من إجمالي رأس المال على نفس الرمز.' : 'Prevents single asset concentration and multiple simultaneous positions in the same symbol.'}
@@ -655,7 +655,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 block">{isArabic ? 'معدل القبول' : 'Approval Rate'}</span>
-                    <span className="text-base font-bold font-mono text-indigo-400">{auditStats.approvalRatePercent}%</span>
+                    <span className="text-base font-bold font-mono text-cyan-400">{auditStats.approvalRatePercent}%</span>
                   </div>
                 </div>
               )}
@@ -743,7 +743,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 id="btn-save-risk-bounds"
                 onClick={handleSaveRiskConfig}
                 disabled={isSaving}
-                className="px-3.5 py-1.5 rounded-lg font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-sm transition text-[11px] sm:text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-sm transition text-[11px] sm:text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
                 <span>{isArabic ? 'حفظ الحدود الإلزامية' : 'Save Institutional Bounds'}</span>

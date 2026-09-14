@@ -463,8 +463,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 font-bold text-xs text-sky-300">
-                      <Zap className="w-3.5 h-3.5 text-sky-400" />
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300">
+                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
                       <span>{isArabic ? 'سكالبينج سريع (15m High-Freq)' : 'Futures Scalper (15m)'}</span>
                     </div>
                     {selectedPreset === 'FUTURES_SCALPER' && <CheckCircle2 className="w-3.5 h-3.5 text-brand-400" />}
@@ -540,8 +540,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 font-bold text-xs text-sky-300">
-                      <Zap className="w-3.5 h-3.5 text-sky-400" />
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300">
+                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
                       <span>{isArabic ? 'سبوت سكالبينج سريع (15m)' : 'Spot Scalper (15m)'}</span>
                     </div>
                     {selectedPreset === 'SPOT_SCALPER' && <CheckCircle2 className="w-3.5 h-3.5 text-brand-400" />}
