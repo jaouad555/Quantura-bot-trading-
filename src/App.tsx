@@ -516,11 +516,6 @@ export const App: React.FC = () => {
       realizedPnl: resetHistory ? 0 : prev.realizedPnl,
       history: resetHistory ? [] : prev.history,
     }));
-    try {
-      apiStorage.setItem('paper_balance', newBalance.toString());
-    } catch {
-      // ignore
-    }
   };
 
   // Save bot state, history and wallet changes to localStorage
@@ -619,7 +614,7 @@ export const App: React.FC = () => {
     paperWalletRef.current = updater(paperWalletRef.current);
     setPaperWallet({ ...paperWalletRef.current });
     try {
-      apiStorage.setItem('paper_balance', paperWalletRef.current.balance.toString());
+      apiStorage.setItem('btc_paper_wallet', JSON.stringify(paperWalletRef.current));
     } catch {}
   }, []);
 
@@ -1463,7 +1458,13 @@ export const App: React.FC = () => {
         }
         lastBotActionTimeRef.current = Date.now() + 2000;
         const marginClosed = pos.remainingAmountUsdt;
-        const finalPnlUsdt = marginClosed * (roePercent / 100);
+        let finalPnlUsdt = marginClosed * (roePercent / 100);
+        
+        // Liquidation clamp
+        if (finalPnlUsdt < -marginClosed) {
+          finalPnlUsdt = -marginClosed;
+        }
+        
         const totalTradePnlUsdt = pos.realizedPnlUsdt + finalPnlUsdt;
         const cashReturned = Math.max(0, marginClosed + finalPnlUsdt);
 

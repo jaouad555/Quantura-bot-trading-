@@ -45,6 +45,7 @@ import {
   PaperWallet
 } from '../types';
 import { formatCoinPrice } from '../utils/tradingPairs';
+import { calculatePortfolioMetrics, calculatePositionUnrealizedPnl } from '../utils/portfolioCalc';
 
 interface AutoTradingBotProps {
   language: Language;
@@ -459,17 +460,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;
   const isOverMaxTrades = displayPositions.length > maxTradesLimit;
 
-  const floatingPnl = displayPositions.reduce((acc, pos) => {
-    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 ? currentPrice : pos.currentPrice || pos.entryPrice;
-    const isLong = pos.decision === 'LONG';
-    const lev = pos.leverage || 1;
-    const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-    return acc + (pos.remainingAmountUsdt * (priceDiffPct * lev / 100));
-  }, 0);
+  const metrics = calculatePortfolioMetrics(paperWallet, displayPositions, currentPrice, selectedSymbol);
+  const floatingPnl = metrics.floatingPnl;
 
   const totalEquity = isLiveMode && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
     ? binanceConfig.accountInfo.totalUsdtEquity
-    : walletBalance + displayPositions.reduce((acc, pos) => acc + (pos.marginUsdt || pos.initialAmountUsdt), 0) + floatingPnl;
+    : metrics.totalEquity;
 
   // Live calculation helper for Futures / Spot positions
   const getPositionMetrics = (pos: ActiveBotPosition) => {
@@ -478,8 +474,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     const lev = pos.leverage || 1;
     const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
     const roePercent = priceDiffPct * lev;
-    const margin = pos.remainingAmountUsdt;
-    const usdt = margin * (roePercent / 100);
+    const margin = pos.remainingAmountUsdt || pos.marginUsdt || pos.initialAmountUsdt || 0;
+    const usdt = calculatePositionUnrealizedPnl(pos, p);
 
     // Distance to liquidation %
     let distanceToLiqPct: number | null = null;
@@ -563,11 +559,11 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                 <span>
-                  {isArabic ? `الهامش المودع:` : `Margin:`} <strong className="text-white font-mono">${metrics.margin.toFixed(2)} USDT</strong>
+                  {isArabic ? `الهامش المودع:` : `Margin:`} <strong className="text-white font-mono">${metrics.margin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong>
                 </span>
                 <span className="text-slate-600">|</span>
                 <span>
-                  {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toFixed(2)} ({lev}x)</strong>
+                  {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lev}x)</strong>
                 </span>
               </div>
             </div>
@@ -581,7 +577,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               }`}>
                 {liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}% ROE
                 <span className="text-xs opacity-90 font-mono">
-                  ({livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toFixed(2)})
+                  ({livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                 </span>
               </div>
             </div>
@@ -1211,11 +1207,18 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
           <div className="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800/80 flex items-center justify-between font-mono">
             <span title={isArabic ? 'السيولة المتاحة لفتح صفقات جديدة' : 'Free Cash Available'}>
-              {isArabic ? 'المتاح:' : 'Free:'} <span className="text-emerald-400 font-bold">${walletBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+              {isArabic ? 'المتاح:' : 'Free:'} <span className="text-emerald-400 font-bold">${metrics.freeCash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </span>
             {displayPositions.length > 0 && (
               <span title={isArabic ? 'الهامش المحجوز في الصفقات النشطة' : 'Margin locked in trades'}>
-                {isArabic ? 'محجوز:' : 'Margin:'} <span className="text-amber-400 font-bold">${displayPositions.reduce((acc, p) => acc + (p.marginUsdt || p.initialAmountUsdt), 0).toFixed(0)}</span>
+                {isArabic ? 'محجوز:' : 'Margin:'} <span className="text-amber-400 font-bold">${metrics.inTradeMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </span>
+            )}
+            {floatingPnl !== 0 && (
+              <span title={isArabic ? 'الأرباح/الخسائر العائمة' : 'Floating PnL'}>
+                {isArabic ? 'عائم:' : 'PnL:'} <span className={`font-bold ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </span>
             )}
           </div>
@@ -1227,7 +1230,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <span>{isArabic ? 'الأرباح المحققة (Logs)' : 'Total Realized P&L'}</span>
           </div>
           <div className={`text-base sm:text-lg font-bold font-mono ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toFixed(2)}
+            {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">
             {winningTrades} {isArabic ? 'ربح' : 'Wins'} | {losingTrades} {isArabic ? 'خسارة' : 'Losses'}
@@ -1526,7 +1529,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 truncate">
-                      {isArabic ? `الحجم: $${(log.amountUsdt ?? 0).toFixed(2)} | ${log.reason}` : `Size: $${(log.amountUsdt ?? 0).toFixed(2)} | ${log.reason}`}
+                      {isArabic ? `الحجم: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | ${log.reason}` : `Size: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | ${log.reason}`}
                     </div>
                   </div>
                 </div>
@@ -1535,7 +1538,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   <div className="font-bold text-white">${formatCoinPrice(log.price ?? 0, log.symbol || selectedSymbol)}</div>
                   {log.pnlUsdt !== undefined && log.pnlUsdt !== null && (
                     <div className={`text-[11px] font-bold ${log.pnlUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {log.pnlUsdt >= 0 ? '+' : ''}${(log.pnlUsdt ?? 0).toFixed(2)} ({log.pnlPercent ? log.pnlPercent.toFixed(2) : '0.00'}% ROE)
+                      {log.pnlUsdt >= 0 ? '+' : ''}${(log.pnlUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({log.pnlPercent ? log.pnlPercent.toFixed(2) : '0.00'}% ROE)
                     </div>
                   )}
                 </div>
