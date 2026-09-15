@@ -273,23 +273,56 @@ async function processTradingSignal(
       await kv.set('btc_paper_wallet', JSON.stringify(wallet));
     }
 
-    // Open position with authoritative strategy metadata
+    // Open position with authoritative strategy metadata and risk controls
+    const isLong = signal.decision === 'LONG';
+    let safeSl = signal.stopLoss;
+    let safeTp1 = signal.tp1;
+    let safeTp2 = signal.tp2;
+    let safeTp3 = signal.tp3;
+
+    if (isLong) {
+      if (!safeSl || safeSl >= currentPrice) safeSl = currentPrice * 0.985;
+      const risk = currentPrice - safeSl;
+      if (!safeTp1 || safeTp1 <= currentPrice) safeTp1 = currentPrice + risk * 1.5;
+      if (!safeTp2 || safeTp2 <= safeTp1) safeTp2 = safeTp1 + risk * 1.0;
+      if (!safeTp3 || safeTp3 <= safeTp2) safeTp3 = safeTp2 + risk * 1.5;
+    } else {
+      if (!safeSl || safeSl <= currentPrice) safeSl = currentPrice * 1.015;
+      const risk = safeSl - currentPrice;
+      if (!safeTp1 || safeTp1 >= currentPrice) safeTp1 = currentPrice - risk * 1.5;
+      if (!safeTp2 || safeTp2 >= safeTp1) safeTp2 = safeTp1 - risk * 1.0;
+      if (!safeTp3 || safeTp3 >= safeTp2) safeTp3 = Math.max(currentPrice * 0.05, safeTp2 - risk * 1.5);
+    }
+
+    const liqPrice = isLong
+      ? currentPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
+      : currentPrice * (1 + (1 / lev) - 0.005);
+
     const newPos = {
       id: `bot-pos-${Date.now()}`,
       symbol: symbol,
       decision: signal.decision,
       entryPrice: currentPrice,
+      currentPrice: currentPrice,
       initialAmountUsdt: margin,
       remainingAmountUsdt: margin,
       remainingAmountBtc: quantity,
+      marginUsdt: margin,
+      positionSizeUsdt: notional,
       leverage: lev,
-      tp1: signal.tp1,
-      tp2: signal.tp2,
-      tp3: signal.tp3,
-      stopLoss: signal.stopLoss,
+      tp1: safeTp1,
+      tp2: safeTp2,
+      tp3: safeTp3,
+      stopLoss: safeSl,
+      liquidationPrice: liqPrice,
+      marketType: (config.marketType || 'FUTURES') as 'FUTURES' | 'SPOT',
+      marginMode: (config.marginMode || 'ISOLATED') as 'ISOLATED' | 'CROSS',
       tp1Hit: false,
       tp2Hit: false,
       realizedPnlUsdt: 0,
+      unrealizedPnlUsdt: 0,
+      roePercent: 0,
+      pnlHistory: [0],
       openedAt: Date.now(),
       strategyId: signal.strategyId,
       strategyName: signal.strategyName,

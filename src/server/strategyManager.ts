@@ -397,18 +397,22 @@ class StrategyManager {
           decision = 'LONG';
           confidence = Math.min(92, Math.round(65 + (adx - 20) * 1.2 + (rsi - 50) * 0.5));
           reason = `Momentum Trend: EMA alignment (20>50) with strong ADX (${adx.toFixed(1)}) and healthy RSI (${rsi.toFixed(1)}).`;
-          stopLoss = Math.min(ema50, currentPrice - atr * 1.5);
-          tp1 = currentPrice + (currentPrice - stopLoss) * 1.5;
-          tp2 = currentPrice + (currentPrice - stopLoss) * 2.5;
-          tp3 = currentPrice + (currentPrice - stopLoss) * 4.0;
+          const rawSl = Math.min(ema50, currentPrice - atr * 1.5);
+          stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.5, currentPrice * 0.01);
+          const risk = currentPrice - stopLoss;
+          tp1 = currentPrice + risk * 1.5;
+          tp2 = currentPrice + risk * 2.5;
+          tp3 = currentPrice + risk * 4.0;
         } else if (isBearishTrend && rsi <= 52 && rsi >= 28) {
           decision = 'SHORT';
           confidence = Math.min(92, Math.round(65 + (adx - 20) * 1.2 + (50 - rsi) * 0.5));
           reason = `Momentum Trend: Bearish EMA alignment (20<50) with high ADX (${adx.toFixed(1)}) and falling RSI (${rsi.toFixed(1)}).`;
-          stopLoss = Math.max(ema50, currentPrice + atr * 1.5);
-          tp1 = currentPrice - (stopLoss - currentPrice) * 1.5;
-          tp2 = currentPrice - (stopLoss - currentPrice) * 2.5;
-          tp3 = currentPrice - (stopLoss - currentPrice) * 4.0;
+          const rawSl = Math.max(ema50, currentPrice + atr * 1.5);
+          stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.5, currentPrice * 0.01);
+          const risk = stopLoss - currentPrice;
+          tp1 = currentPrice - risk * 1.5;
+          tp2 = currentPrice - risk * 2.5;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 4.0);
         }
         break;
       }
@@ -419,18 +423,20 @@ class StrategyManager {
           decision = 'LONG';
           confidence = Math.min(90, Math.round(68 + (30 - stoch.k) * 0.6));
           reason = `HFT Scalper: Oversold oscillator bounce (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}) near support.`;
-          stopLoss = currentPrice - atr * 0.8;
-          tp1 = currentPrice + atr * 1.0;
-          tp2 = currentPrice + atr * 1.8;
-          tp3 = currentPrice + atr * 2.8;
+          const risk = Math.max(atr * 0.8, currentPrice * 0.006);
+          stopLoss = currentPrice - risk;
+          tp1 = currentPrice + risk * 1.2;
+          tp2 = currentPrice + risk * 2.0;
+          tp3 = currentPrice + risk * 3.2;
         } else if ((stoch.k > 75 && stoch.k < stoch.d && rsi >= 55) || (rsi >= 65 && currentPrice >= bb.upper * 0.995)) {
           decision = 'SHORT';
           confidence = Math.min(90, Math.round(68 + (stoch.k - 70) * 0.6));
           reason = `HFT Scalper: Overbought oscillator rejection (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}) near resistance.`;
-          stopLoss = currentPrice + atr * 0.8;
-          tp1 = currentPrice - atr * 1.0;
-          tp2 = currentPrice - atr * 1.8;
-          tp3 = currentPrice - atr * 2.8;
+          const risk = Math.max(atr * 0.8, currentPrice * 0.006);
+          stopLoss = currentPrice + risk;
+          tp1 = currentPrice - risk * 1.2;
+          tp2 = currentPrice - risk * 2.0;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 3.2);
         }
         break;
       }
@@ -442,18 +448,22 @@ class StrategyManager {
           decision = 'LONG';
           confidence = Math.min(94, Math.round(70 + bb.bandwidthPercent * 2));
           reason = `Volatility Breakout: Bollinger bandwidth expansion (${bb.bandwidthPercent.toFixed(1)}%) piercing upper envelope with RSI ${rsi.toFixed(1)}.`;
-          stopLoss = Math.max(bb.middle, currentPrice - atr * 1.2);
-          tp1 = currentPrice + (currentPrice - stopLoss) * 1.8;
-          tp2 = currentPrice + (currentPrice - stopLoss) * 3.0;
-          tp3 = currentPrice + (currentPrice - stopLoss) * 5.0;
+          const rawSl = Math.min(bb.middle, currentPrice - atr * 1.2);
+          stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.2, currentPrice * 0.008);
+          const risk = currentPrice - stopLoss;
+          tp1 = currentPrice + risk * 1.5;
+          tp2 = currentPrice + risk * 2.8;
+          tp3 = currentPrice + risk * 4.5;
         } else if (isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 42) {
           decision = 'SHORT';
           confidence = Math.min(94, Math.round(70 + bb.bandwidthPercent * 2));
           reason = `Volatility Breakout: Downward volatility expansion (${bb.bandwidthPercent.toFixed(1)}%) piercing lower envelope with RSI ${rsi.toFixed(1)}.`;
-          stopLoss = Math.min(bb.middle, currentPrice + atr * 1.2);
-          tp1 = currentPrice - (stopLoss - currentPrice) * 1.8;
-          tp2 = currentPrice - (stopLoss - currentPrice) * 3.0;
-          tp3 = currentPrice - (stopLoss - currentPrice) * 5.0;
+          const rawSl = Math.max(bb.middle, currentPrice + atr * 1.2);
+          stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.2, currentPrice * 0.008);
+          const risk = stopLoss - currentPrice;
+          tp1 = currentPrice - risk * 1.5;
+          tp2 = currentPrice - risk * 2.8;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 4.5);
         }
         break;
       }
@@ -464,18 +474,20 @@ class StrategyManager {
           decision = 'LONG';
           confidence = Math.min(88, Math.round(66 + (30 - rsi) * 1.0));
           reason = `Mean Reversion: Extreme deviation below Lower Bollinger Band / RSI ${rsi.toFixed(1)}. Targeting mean reversion to EMA20.`;
-          stopLoss = currentPrice - atr * 1.2;
-          tp1 = ema20;
-          tp2 = bb.middle + atr * 0.5;
-          tp3 = bb.upper;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = currentPrice - risk;
+          tp1 = Math.max(currentPrice + risk * 1.2, ema20 > currentPrice ? ema20 : currentPrice + risk * 1.2);
+          tp2 = Math.max(tp1 + risk * 0.8, bb.middle > tp1 ? bb.middle : tp1 + risk * 0.8);
+          tp3 = Math.max(tp2 + risk * 1.0, bb.upper > tp2 ? bb.upper : tp2 + risk * 1.0);
         } else if (currentPrice > bb.upper || (rsi > 70 && currentPrice > ema20)) {
           decision = 'SHORT';
           confidence = Math.min(88, Math.round(66 + (rsi - 70) * 1.0));
           reason = `Mean Reversion: Extreme deviation above Upper Bollinger Band / RSI ${rsi.toFixed(1)}. Targeting mean reversion to EMA20.`;
-          stopLoss = currentPrice + atr * 1.2;
-          tp1 = ema20;
-          tp2 = bb.middle - atr * 0.5;
-          tp3 = bb.lower;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = currentPrice + risk;
+          tp1 = Math.min(currentPrice - risk * 1.2, ema20 < currentPrice ? ema20 : currentPrice - risk * 1.2);
+          tp2 = Math.min(tp1 - risk * 0.8, bb.middle < tp1 ? bb.middle : tp1 - risk * 0.8);
+          tp3 = Math.max(currentPrice * 0.05, Math.min(tp2 - risk * 1.0, bb.lower < tp2 ? bb.lower : tp2 - risk * 1.0));
         }
         break;
       }
@@ -489,18 +501,20 @@ class StrategyManager {
           decision = 'LONG';
           confidence = 82;
           reason = `Institutional SMC: Bullish market structure break (BOS) with discount liquidity sweep mitigation.`;
-          stopLoss = currentPrice - atr * 1.4;
-          tp1 = currentPrice + (currentPrice - stopLoss) * 2.0;
-          tp2 = currentPrice + (currentPrice - stopLoss) * 3.5;
-          tp3 = currentPrice + (currentPrice - stopLoss) * 6.0;
+          const risk = Math.max(atr * 1.4, currentPrice * 0.01);
+          stopLoss = currentPrice - risk;
+          tp1 = currentPrice + risk * 1.8;
+          tp2 = currentPrice + risk * 3.0;
+          tp3 = currentPrice + risk * 5.0;
         } else if (isSmcBearish && currentPrice < ema50 && rsi <= 54) {
           decision = 'SHORT';
           confidence = 82;
           reason = `Institutional SMC: Bearish market structure break (BOS) with premium liquidity pool mitigation.`;
-          stopLoss = currentPrice + atr * 1.4;
-          tp1 = currentPrice - (stopLoss - currentPrice) * 2.0;
-          tp2 = currentPrice - (stopLoss - currentPrice) * 3.5;
-          tp3 = currentPrice - (stopLoss - currentPrice) * 6.0;
+          const risk = Math.max(atr * 1.4, currentPrice * 0.01);
+          stopLoss = currentPrice + risk;
+          tp1 = currentPrice - risk * 1.8;
+          tp2 = currentPrice - risk * 3.0;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
         }
         break;
       }
@@ -514,18 +528,22 @@ class StrategyManager {
           decision = 'LONG';
           confidence = 85;
           reason = `Conservative Swing: Multi-period HTF trend alignment (Price > EMA50 > EMA200, ADX ${adx.toFixed(1)}). Low drawdown swing.`;
-          stopLoss = Math.min(ema200, currentPrice - atr * 2.5);
-          tp1 = currentPrice + (currentPrice - stopLoss) * 1.8;
-          tp2 = currentPrice + (currentPrice - stopLoss) * 3.0;
-          tp3 = currentPrice + (currentPrice - stopLoss) * 5.0;
+          const rawSl = Math.min(ema200, currentPrice - atr * 2.5);
+          stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 2.0, currentPrice * 0.015);
+          const risk = currentPrice - stopLoss;
+          tp1 = currentPrice + risk * 1.8;
+          tp2 = currentPrice + risk * 3.0;
+          tp3 = currentPrice + risk * 5.0;
         } else if (isSwingBearish && rsi <= 55 && rsi >= 32) {
           decision = 'SHORT';
           confidence = 85;
           reason = `Conservative Swing: Multi-period HTF downtrend alignment (Price < EMA50 < EMA200, ADX ${adx.toFixed(1)}). Low drawdown swing.`;
-          stopLoss = Math.max(ema200, currentPrice + atr * 2.5);
-          tp1 = currentPrice - (stopLoss - currentPrice) * 1.8;
-          tp2 = currentPrice - (stopLoss - currentPrice) * 3.0;
-          tp3 = currentPrice - (stopLoss - currentPrice) * 5.0;
+          const rawSl = Math.max(ema200, currentPrice + atr * 2.5);
+          stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 2.0, currentPrice * 0.015);
+          const risk = stopLoss - currentPrice;
+          tp1 = currentPrice - risk * 1.8;
+          tp2 = currentPrice - risk * 3.0;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
         }
         break;
       }
@@ -533,6 +551,25 @@ class StrategyManager {
 
     if (decision === 'WAIT') {
       return null;
+    }
+
+    // Safety Invariants Enforcement: Never allow inverted TP or SL
+    if (decision === 'LONG') {
+      if (!stopLoss || stopLoss >= currentPrice) {
+        stopLoss = currentPrice * 0.985;
+      }
+      const risk = currentPrice - stopLoss;
+      if (!tp1 || tp1 <= currentPrice) tp1 = currentPrice + risk * 1.5;
+      if (!tp2 || tp2 <= tp1) tp2 = tp1 + risk * 1.0;
+      if (!tp3 || tp3 <= tp2) tp3 = tp2 + risk * 1.5;
+    } else if (decision === 'SHORT') {
+      if (!stopLoss || stopLoss <= currentPrice) {
+        stopLoss = currentPrice * 1.015;
+      }
+      const risk = stopLoss - currentPrice;
+      if (!tp1 || tp1 >= currentPrice) tp1 = currentPrice - risk * 1.5;
+      if (!tp2 || tp2 >= tp1) tp2 = tp1 - risk * 1.0;
+      if (!tp3 || tp3 >= tp2) tp3 = Math.max(currentPrice * 0.05, tp2 - risk * 1.5);
     }
 
     const slDistance = Math.abs(currentPrice - stopLoss);

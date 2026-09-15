@@ -1219,9 +1219,17 @@ export const App: React.FC = () => {
       // 2. OTHER ACTIONS (TP1, REBUY, TP2, TP3, SL, LIQUIDATION) require targetPosId
       const pos = currentPositions.find(p => p.id === targetPosId);
       if (!pos) return;
+
+      // STRICT SYMBOL PRICE RESOLUTION:
+      // Guarantee that the execution price matches the exact contract symbol, preventing cross-coin calculation contamination!
+      const isSymbolMatch = pos.symbol.toLowerCase() === selectedSymbolRef.current.toLowerCase();
+      const actualP = (isSymbolMatch && currentP > 0)
+        ? currentP
+        : (pos.currentPrice && pos.currentPrice > 0 ? pos.currentPrice : pos.entryPrice);
+
       const isLong = pos.decision === 'LONG';
-      const lev = pos.leverage || 1;
-      const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+      const lev = Math.max(1, pos.leverage || 1);
+      const priceDiffPct = ((actualP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
       const roePercent = priceDiffPct * lev;
 
       // 2a. LIQUIDATION HANDLER
@@ -1247,7 +1255,7 @@ export const App: React.FC = () => {
           decision: pos.decision,
           timeframe: timeframe,
           entryPrice: pos.entryPrice,
-          exitPrice: currentP,
+          exitPrice: actualP,
           tp1: pos.tp1,
           tp2: pos.tp2,
           tp3: pos.tp3,
@@ -1267,7 +1275,7 @@ export const App: React.FC = () => {
           type: 'AUTO_LIQUIDATION',
           symbol: pos.symbol,
           side: isLong ? 'SELL' : 'BUY',
-          price: currentP,
+          price: actualP,
           amountUsdt: pos.positionSizeUsdt || (pos.initialAmountUsdt * lev),
           pnlUsdt: -marginLost,
           pnlPercent: -100,
@@ -1291,9 +1299,9 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, actualP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: actualP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1323,7 +1331,7 @@ export const App: React.FC = () => {
           decision: pos.decision,
           timeframe: timeframe,
           entryPrice: pos.entryPrice,
-          exitPrice: currentP,
+          exitPrice: actualP,
           tp1: pos.tp1,
           tp2: pos.tp2,
           tp3: pos.tp3,
@@ -1343,7 +1351,7 @@ export const App: React.FC = () => {
           type: 'AUTO_SELL_TP1',
           symbol: pos.symbol,
           side: isLong ? 'SELL' : 'BUY',
-          price: currentP,
+          price: actualP,
           amountUsdt: marginClosed * lev,
           pnlUsdt,
           pnlPercent: roePercent,
@@ -1366,7 +1374,7 @@ export const App: React.FC = () => {
           : currentWallet.balance;
         const rebuyMargin = availableBalance * (currentConfig.tradeAllocationPercent * 0.5 / 100);
         if (rebuyMargin >= 5) {
-          const addedContracts = (rebuyMargin * lev) / currentP;
+          const addedContracts = (rebuyMargin * lev) / actualP;
           const updatedPos: ActiveBotPosition = {
             ...pos,
             rebuysCount: pos.rebuysCount + 1,
@@ -1375,9 +1383,9 @@ export const App: React.FC = () => {
             lastAction: isArabicLang ? `تعزيز العقد الآجل على الارتداد ✓` : `Smart Futures Rebuy on pullback ✓`,
           };
           if (isLiveMode && currentBinance.isConnected) {
-            executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, currentP).then((orderRes) => {
+            executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, actualP).then((orderRes) => {
               if (!orderRes || orderRes.error) {
-                setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: currentP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
+                setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: pos.decision === 'LONG' ? 'BUY' : 'SELL', price: actualP, amountUsdt: rebuyMargin * lev, reason: 'REBUY FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
               }
             });
           } else {
@@ -1394,7 +1402,7 @@ export const App: React.FC = () => {
             type: 'AUTO_REBUY',
             symbol: pos.symbol,
             side: isLong ? 'BUY' : 'SELL',
-            price: currentP,
+            price: actualP,
             amountUsdt: rebuyMargin * lev,
             reason: isArabicLang ? `تعزيز العقد الآجل على الارتداد (${lev}x) ✓` : `Futures Rebuy on pullback (${lev}x) ✓`,
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
@@ -1416,9 +1424,9 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + pnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP).then((orderRes) => {
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, actualP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: actualP, amountUsdt: marginClosed * lev, reason: 'TP FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1446,7 +1454,7 @@ export const App: React.FC = () => {
           type: 'AUTO_SELL_TP2',
           symbol: pos.symbol,
           side: isLong ? 'SELL' : 'BUY',
-          price: currentP,
+          price: actualP,
           amountUsdt: marginClosed * lev,
           pnlUsdt,
           reason: isArabicLang ? `جني أرباح الهدف الثاني (TP2) بنسبة 50% من المتبقي [${lev}x] ✓` : `TP2 hit, 50% of remaining taken [${lev}x] ✓`,
@@ -1463,8 +1471,7 @@ export const App: React.FC = () => {
       // 2e. TP3 or SL HANDLER (Close full position)
       if (actionType === 'TP3' || actionType === 'SL' || actionType === 'TP1' || actionType === 'TP2') {
         if (actionType === 'TP1' && !pos.tp1Hit) {
-          // It was already handled by the specific TP1 scale out logic above if it was a partial close.
-          // If we reach here, it's a TTP forced close or normal TP execution wasn't caught.
+          // Handled above
         }
         lastBotActionTimeRef.current = Date.now() + 2000;
         const marginClosed = pos.remainingAmountUsdt;
@@ -1473,9 +1480,9 @@ export const App: React.FC = () => {
         const cashReturned = Math.max(0, marginClosed + finalPnlUsdt);
 
         if (isLiveMode && currentBinance.isConnected) {
-          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP).then((orderRes) => {
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, actualP).then((orderRes) => {
             if (!orderRes || orderRes.error) {
-              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: actualP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
         } else {
@@ -1496,7 +1503,7 @@ export const App: React.FC = () => {
           decision: pos.decision,
           timeframe: timeframe,
           entryPrice: pos.entryPrice,
-          exitPrice: currentP,
+          exitPrice: actualP,
           tp1: pos.tp1,
           tp2: pos.tp2,
           tp3: pos.tp3,
@@ -1516,7 +1523,7 @@ export const App: React.FC = () => {
           type: actionType === 'SL' ? (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'AUTO_SL') : 'AUTO_SELL_TP3',
           symbol: pos.symbol,
           side: isLong ? 'SELL' : 'BUY',
-          price: currentP,
+          price: actualP,
           amountUsdt: marginClosed * lev,
           pnlUsdt: finalPnlUsdt,
           pnlPercent: roePercent,
@@ -2470,6 +2477,7 @@ export const App: React.FC = () => {
               onOpenNotifications={() => setIsNotificationsOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenRiskModal={() => setIsRiskModalOpen(true)}
+              onPanicCloseAll={handlePanicCloseAll}
               onToggleSound={() => setSoundEnabled(!soundEnabled)}
               onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'FUTURES')}
               onLogout={handleLogout}
@@ -2880,7 +2888,12 @@ export const App: React.FC = () => {
               currentPrice={ticker?.price}
               onClearHistory={handleClearTradeHistory}
               onDeleteTrade={handleDeleteTrade}
-              onCloseActivePosition={(id) => executeAutoTradeAction('SL', ticker?.price || 0, isArabic ? 'إغلاق يدوي من سجل الصفقات' : 'Manual close from Trade Journal', id)}
+              onCloseActivePosition={(id) => {
+                const target = activeBotPositions.find(p => p.id === id);
+                const isSelected = target?.symbol.toLowerCase() === selectedSymbol.toLowerCase();
+                const targetPrice = (isSelected && ticker?.price) ? ticker.price : (target?.currentPrice || target?.entryPrice || 0);
+                executeAutoTradeAction('SL', targetPrice, isArabic ? 'إغلاق يدوي من سجل الصفقات' : 'Manual close from Trade Journal', id);
+              }}
               onSeedSampleData={handleSeedSampleHistory}
               onFullReset={handleFullReset}
             />

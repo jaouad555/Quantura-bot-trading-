@@ -314,18 +314,104 @@ export const startBotEngine = () => {
         const pos = positions[i];
         const currentP = prices[pos.symbol];
         
-        if (!currentP) continue;
+        if (!currentP || currentP <= 0) continue;
 
         const isLong = pos.decision === 'LONG';
-        const lev = pos.leverage || 1;
+        const lev = Math.max(1, pos.leverage || 1);
+        
+        // Exact ROE% and Price Difference Math
+        // LONG: (current - entry) / entry * 100
+        // SHORT: (entry - current) / entry * 100
         const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
         const roePercent = priceDiffPct * lev;
+        const unrealizedPnlUsdt = pos.remainingAmountUsdt * (roePercent / 100);
 
-        // Trailing stop logic (Server-Side)
+        // Update live position state on every tick
+        pos.currentPrice = currentP;
+        pos.unrealizedPnlUsdt = Math.round(unrealizedPnlUsdt * 100) / 100;
+        pos.roePercent = Math.round(roePercent * 100) / 100;
+        if (!pos.marginUsdt) pos.marginUsdt = pos.remainingAmountUsdt;
+        if (!pos.positionSizeUsdt) pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
+        if (!pos.pnlHistory) pos.pnlHistory = [];
+        pos.pnlHistory = [...pos.pnlHistory, Math.round(roePercent * 10) / 10].slice(-50);
+
+        // Calculate liquidation price if missing
+        if (!pos.liquidationPrice) {
+          pos.liquidationPrice = isLong
+            ? pos.entryPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
+            : pos.entryPrice * (1 + (1 / lev) - 0.005);
+        }
+        pos.distanceToLiqPct = Math.abs((currentP - pos.liquidationPrice) / currentP) * 100;
+
+        // 1. LIQUIDATION GUARD CHECK
+        const isLiquidated = (isLong && currentP <= pos.liquidationPrice) ||
+                             (!isLong && currentP >= pos.liquidationPrice) ||
+                             roePercent <= -99.0;
+
+        if (isLiquidated) {
+          console.warn(`[SERVER ENGINE] 🚨 LIQUIDATION TRIGGERED for ${pos.symbol} at ${currentP} (Entry: ${pos.entryPrice}, Liq: ${pos.liquidationPrice})`);
+          const marginLost = pos.remainingAmountUsdt;
+          const tranchePnl = -marginLost;
+          const totalTradePnl = pos.realizedPnlUsdt + tranchePnl;
+
+          if (isLiveMode && binanceConfig.isConnected) {
+            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP);
+          } else {
+            // Margin lost entirely; zero returned
+            walletPnlDelta += tranchePnl;
+          }
+
+          logsToAdd.push({
+            id: `log-liq-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            type: 'LIQUIDATION',
+            symbol: pos.symbol,
+            side: isLong ? 'SELL' : 'BUY',
+            price: currentP,
+            amountUsdt: marginLost * lev,
+            pnlUsdt: tranchePnl,
+            pnlPercent: -100,
+            reason: `Liquidation threshold reached (-100% Margin Depleted)`,
+            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+          });
+
+          historyToAdd.push({
+            id: `history-liq-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            symbol: pos.symbol,
+            decision: pos.decision,
+            timeframe: '1h',
+            entryPrice: pos.entryPrice,
+            exitPrice: currentP,
+            tp1: pos.tp1,
+            tp2: pos.tp2,
+            tp3: pos.tp3,
+            stopLoss: pos.stopLoss,
+            status: 'LIQUIDATED',
+            profitPercent: (totalTradePnl / pos.initialAmountUsdt) * 100,
+            profitUsdt: totalTradePnl,
+            confidence: pos.confidence || 75,
+            strategyName: pos.strategyName,
+          });
+
+          try {
+            const riskEngine = RiskEngine.getInstance();
+            riskEngine.recordTradeClosed(totalTradePnl, 0, {
+              symbol: pos.symbol,
+              strategyName: pos.strategyName,
+              durationMs: Date.now() - (pos.openedAt || Date.now()),
+            });
+          } catch (err) {}
+
+          pos._delete = true;
+          stateChanged = true;
+          continue;
+        }
+
+        // 2. TRAILING STOP LOSS (Server-Side)
         if (botConfig.trailingStopEnabled) {
           const trailGapPercent = (botConfig.trailingStopPercent || 1.2) / 100;
           const activationProfit = botConfig.trailingActivationProfitPercent || 1.5;
-          const currentGainPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
           
           let currentPeak = pos.peakPrice || pos.entryPrice;
           if ((isLong && currentP > currentPeak) || (!isLong && currentP < currentPeak)) {
@@ -334,9 +420,13 @@ export const startBotEngine = () => {
             stateChanged = true;
           }
 
-          if (currentGainPct >= activationProfit || pos.tp1Hit) {
+          if (roePercent >= activationProfit || pos.tp1Hit) {
             const calculatedTrailingSl = isLong ? currentPeak * (1 - trailGapPercent) : currentPeak * (1 + trailGapPercent);
-            if ((isLong && calculatedTrailingSl > pos.stopLoss) || (!isLong && calculatedTrailingSl < pos.stopLoss)) {
+            const isTslTighter = isLong
+              ? (!pos.stopLoss || calculatedTrailingSl > pos.stopLoss)
+              : (!pos.stopLoss || calculatedTrailingSl < pos.stopLoss);
+
+            if (isTslTighter) {
               pos.stopLoss = calculatedTrailingSl;
               pos.trailingStopPrice = calculatedTrailingSl;
               pos.isTrailingActive = true;
@@ -346,150 +436,187 @@ export const startBotEngine = () => {
           }
         }
 
-        // TP1 Hit
-        if ((isLong && !pos.tp1Hit && currentP >= pos.tp1) || (!isLong && !pos.tp1Hit && currentP <= pos.tp1)) {
-            console.log(`[SERVER ENGINE] TP1 Hit for ${pos.symbol} at ${currentP}`);
-            const marginClosed = pos.remainingAmountUsdt * 0.5;
-            const pnlUsdt = marginClosed * (roePercent / 100);
-            
-            if (isLiveMode && binanceConfig.isConnected) {
-                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
-            } else {
-                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
-                walletPnlDelta += pnlUsdt;
-            }
-            
-            pos.tp1Hit = true;
-            pos.remainingAmountUsdt *= 0.5;
-            pos.remainingAmountBtc *= 0.5;
-            pos.realizedPnlUsdt += pnlUsdt;
-            pos.stopLoss = pos.entryPrice; // Breakeven
-            pos.lastAction = 'TP1 hit: 50% closed, SL moved to breakeven ✓ (Server Executed)';
-            stateChanged = true;
+        // 3. TP1 HIT (Take 50% profit, move SL to breakeven)
+        const isTp1Valid = isLong ? pos.tp1 > pos.entryPrice : pos.tp1 < pos.entryPrice;
+        const isTp1Triggered = isTp1Valid && !pos.tp1Hit && (isLong ? currentP >= pos.tp1 : currentP <= pos.tp1);
+
+        if (isTp1Triggered) {
+          console.log(`[SERVER ENGINE] TP1 Hit for ${pos.symbol} at ${currentP}`);
+          const marginClosed = pos.remainingAmountUsdt * 0.5;
+          const tranchePnl = marginClosed * (roePercent / 100);
+          const cashReturned = Math.max(0, marginClosed + tranchePnl);
+
+          if (isLiveMode && binanceConfig.isConnected) {
+            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          } else {
+            walletBalanceDelta += cashReturned;
+            walletPnlDelta += tranchePnl;
+          }
+
+          pos.tp1Hit = true;
+          pos.remainingAmountUsdt -= marginClosed;
+          pos.remainingAmountBtc *= 0.5;
+          pos.realizedPnlUsdt += tranchePnl;
+          // Protect capital: move stop loss to entry price
+          pos.stopLoss = pos.entryPrice;
+          pos.lastAction = 'TP1 hit: 50% closed, SL moved to breakeven ✓ (Server)';
+          stateChanged = true;
+
+          logsToAdd.push({
+            id: `log-tp1-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            type: 'AUTO_SELL_TP1',
+            symbol: pos.symbol,
+            side: isLong ? 'SELL' : 'BUY',
+            price: currentP,
+            amountUsdt: marginClosed * lev,
+            pnlUsdt: tranchePnl,
+            pnlPercent: roePercent,
+            reason: `TP1 achieved (50% closed at ${currentP}, SL moved to breakeven)`,
+            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+          });
         }
         
-        // TP2 Hit
-        else if ((isLong && pos.tp1Hit && !pos.tp2Hit && currentP >= pos.tp2) || (!isLong && pos.tp1Hit && !pos.tp2Hit && currentP <= pos.tp2)) {
-            console.log(`[SERVER ENGINE] TP2 Hit for ${pos.symbol} at ${currentP}`);
-            const marginClosed = pos.remainingAmountUsdt * 0.5;
-            const pnlUsdt = marginClosed * (roePercent / 100);
-            
-            if (isLiveMode && binanceConfig.isConnected) {
-                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
-            } else {
-                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
-                walletPnlDelta += pnlUsdt;
-            }
+        // 4. TP2 HIT (Take 50% of remaining, lock more profit)
+        const isTp2Valid = isLong ? pos.tp2 > pos.entryPrice : pos.tp2 < pos.entryPrice;
+        const isTp2Triggered = isTp2Valid && pos.tp1Hit && !pos.tp2Hit && (isLong ? currentP >= pos.tp2 : currentP <= pos.tp2);
 
-            pos.tp2Hit = true;
-            pos.remainingAmountUsdt *= 0.5;
-            pos.remainingAmountBtc *= 0.5;
-            pos.realizedPnlUsdt += pnlUsdt;
-            pos.lastAction = 'TP2 hit: 50% of remaining closed ✓ (Server Executed)';
-            stateChanged = true;
+        if (isTp2Triggered) {
+          console.log(`[SERVER ENGINE] TP2 Hit for ${pos.symbol} at ${currentP}`);
+          const marginClosed = pos.remainingAmountUsdt * 0.5;
+          const tranchePnl = marginClosed * (roePercent / 100);
+          const cashReturned = Math.max(0, marginClosed + tranchePnl);
+
+          if (isLiveMode && binanceConfig.isConnected) {
+            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          } else {
+            walletBalanceDelta += cashReturned;
+            walletPnlDelta += tranchePnl;
+          }
+
+          pos.tp2Hit = true;
+          pos.remainingAmountUsdt -= marginClosed;
+          pos.remainingAmountBtc *= 0.5;
+          pos.realizedPnlUsdt += tranchePnl;
+          pos.lastAction = 'TP2 hit: 50% of remaining closed ✓ (Server)';
+          stateChanged = true;
+
+          logsToAdd.push({
+            id: `log-tp2-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            type: 'AUTO_SELL_TP2',
+            symbol: pos.symbol,
+            side: isLong ? 'SELL' : 'BUY',
+            price: currentP,
+            amountUsdt: marginClosed * lev,
+            pnlUsdt: tranchePnl,
+            pnlPercent: roePercent,
+            reason: `TP2 achieved (50% remaining closed at ${currentP})`,
+            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+          });
         }
         
-        // TP3 / SL Hit
-        else if (
-            (isLong && currentP >= pos.tp3) || (!isLong && currentP <= pos.tp3) || // TP3
-            (isLong && currentP <= pos.stopLoss) || (!isLong && currentP >= pos.stopLoss) // SL
-        ) {
-            const isTp3 = (isLong && currentP >= pos.tp3) || (!isLong && currentP <= pos.tp3);
-            console.log(`[SERVER ENGINE] ${isTp3 ? 'TP3' : 'SL'} Hit for ${pos.symbol} at ${currentP}`);
-            
-            const marginClosed = pos.remainingAmountUsdt;
-            let pnlUsdt = marginClosed * (roePercent / 100);
-            
-            // Liquidation protection: In isolated margin, you cannot lose more than 100% of your allocated margin.
-            if (pnlUsdt < -marginClosed) {
-                pnlUsdt = -marginClosed;
-            }
-            
-            const finalPnlUsdt = pos.realizedPnlUsdt + pnlUsdt;
+        // 5. TP3 OR STOP LOSS HIT (Full position closure)
+        const isTp3Valid = isLong ? pos.tp3 > pos.entryPrice : pos.tp3 < pos.entryPrice;
+        const isTp3Hit = isTp3Valid && (isLong ? currentP >= pos.tp3 : currentP <= pos.tp3);
+        const isSlHit = pos.stopLoss && pos.stopLoss > 0 && (isLong ? currentP <= pos.stopLoss : currentP >= pos.stopLoss);
 
-            if (isLiveMode && binanceConfig.isConnected) {
-                await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
-            } else {
-                walletBalanceDelta += Math.max(0, marginClosed + pnlUsdt);
-                walletPnlDelta += pnlUsdt;
-            }
-            
-            
-              const logType = isTp3 ? 'TP3_HIT' : 'SL_HIT';
-              logsToAdd.push({
-                id: `log-server-${Date.now()}`,
-                timestamp: Date.now(),
-                type: logType,
-                symbol: pos.symbol,
-                side: pos.decision === 'LONG' ? 'SELL' : 'BUY',
-                price: currentP,
-                amountUsdt: marginClosed,
-                pnlUsdt: finalPnlUsdt,
-                reason: `Server Executed ${logType}`,
-                mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER'
-              });
+        if (isTp3Hit || isSlHit) {
+          const isTp3 = isTp3Hit;
+          console.log(`[SERVER ENGINE] ${isTp3 ? 'TP3' : 'SL'} Hit for ${pos.symbol} at ${currentP}`);
+          
+          const marginClosed = pos.remainingAmountUsdt;
+          let tranchePnl = marginClosed * (roePercent / 100);
+          
+          // Liquidation clamp
+          if (tranchePnl < -marginClosed) {
+            tranchePnl = -marginClosed;
+          }
+          
+          const cashReturned = Math.max(0, marginClosed + tranchePnl);
+          const totalTradePnl = pos.realizedPnlUsdt + tranchePnl;
 
-            historyToAdd.push({
-                id: `history-server-${Date.now()}`,
-                timestamp: Date.now(),
-                symbol: pos.symbol,
-                decision: pos.decision,
-                timeframe: '1h',
-                entryPrice: pos.entryPrice,
-                exitPrice: currentP,
-                tp1: pos.tp1,
-                tp2: pos.tp2,
-                tp3: pos.tp3,
-                stopLoss: pos.stopLoss,
-                status: isTp3 ? 'TP3_HIT' : 'SL_HIT',
-                profitPercent: (finalPnlUsdt / pos.initialAmountUsdt) * 100,
-                profitUsdt: finalPnlUsdt,
-                confidence: 75,
-                strategyName: pos.strategyName,
+          if (isLiveMode && binanceConfig.isConnected) {
+            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+          } else {
+            walletBalanceDelta += cashReturned;
+            walletPnlDelta += tranchePnl;
+          }
+          
+          const logType = isTp3 ? 'TP3_HIT' : (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'SL_HIT');
+          logsToAdd.push({
+            id: `log-server-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            type: logType,
+            symbol: pos.symbol,
+            side: isLong ? 'SELL' : 'BUY',
+            price: currentP,
+            amountUsdt: marginClosed * lev,
+            pnlUsdt: tranchePnl,
+            pnlPercent: roePercent,
+            reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
+            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER'
+          });
+
+          historyToAdd.push({
+            id: `history-server-${Date.now()}-${i}`,
+            timestamp: Date.now(),
+            symbol: pos.symbol,
+            decision: pos.decision,
+            timeframe: '1h',
+            entryPrice: pos.entryPrice,
+            exitPrice: currentP,
+            tp1: pos.tp1,
+            tp2: pos.tp2,
+            tp3: pos.tp3,
+            stopLoss: pos.stopLoss,
+            status: isTp3 ? 'TP3_HIT' : (pos.isTrailingActive ? 'TP1_HIT' : 'SL_HIT'),
+            profitPercent: (totalTradePnl / pos.initialAmountUsdt) * 100,
+            profitUsdt: totalTradePnl,
+            confidence: pos.confidence || 75,
+            strategyName: pos.strategyName,
+            pnlHistory: pos.pnlHistory,
+          });
+
+          try {
+            const riskEngine = RiskEngine.getInstance();
+            riskEngine.recordTradeClosed(totalTradePnl, 0, {
+              symbol: pos.symbol,
+              strategyName: pos.strategyName,
+              durationMs: Date.now() - (pos.openedAt || Date.now()),
             });
+          } catch (err) {
+            console.error('[SERVER ENGINE] Risk Engine record error:', err);
+          }
 
-            // Record outcome in Risk Management Engine Drawdown & Streak Tracker
-            try {
-              const riskEngine = RiskEngine.getInstance();
-              riskEngine.recordTradeClosed(finalPnlUsdt, 0, {
-                symbol: pos.symbol,
-                strategyName: pos.strategyName,
-                durationMs: Date.now() - (pos.openedAt || Date.now()),
-              });
-            } catch (err) {
-              console.error('[SERVER ENGINE] Risk Engine outcome record error:', err);
-            }
-
-            // Mark for deletion
-            pos._delete = true;
-            stateChanged = true;
+          pos._delete = true;
+          stateChanged = true;
         }
       }
 
-      // Apply state changes
-      if (stateChanged) {
-          const remainingPositions = positions.filter((p: any) => !p._delete);
-          await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
-          if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
-              const currentWalletStr = await kv.get('btc_paper_wallet');
-              const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
-              currentWallet.balance += walletBalanceDelta;
-              currentWallet.realizedPnl += walletPnlDelta;
-              await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
-          }
-          
-          
-          if (logsToAdd.length > 0) {
-              const logsStr = await kv.get('btc_bot_logs');
-              const logs = logsStr ? JSON.parse(logsStr) : [];
-              await kv.set('btc_bot_logs', JSON.stringify([...logsToAdd, ...logs].slice(0, 500)));
-          }
+      // 6. ALWAYS PERSIST UPDATED LIVE POSITIONS TO KV
+      // This guarantees that open trades NEVER stay stuck at 0.00% ROE in the UI!
+      const remainingPositions = positions.filter((p: any) => !p._delete);
+      await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
 
-          if (historyToAdd.length > 0) {
-              const histStr = await kv.get('btc_trade_history');
-              const history = histStr ? JSON.parse(histStr) : [];
-              await kv.set('btc_trade_history', JSON.stringify([...historyToAdd, ...history].slice(0, 500)));
-          }
+      if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
+        const currentWalletStr = await kv.get('btc_paper_wallet');
+        const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
+        currentWallet.balance = Math.max(0, currentWallet.balance + walletBalanceDelta);
+        currentWallet.realizedPnl += walletPnlDelta;
+        await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
+      }
+
+      if (logsToAdd.length > 0) {
+        const logsStr = await kv.get('btc_bot_logs');
+        const logs = logsStr ? JSON.parse(logsStr) : [];
+        await kv.set('btc_bot_logs', JSON.stringify([...logsToAdd, ...logs].slice(0, 500)));
+      }
+
+      if (historyToAdd.length > 0) {
+        const histStr = await kv.get('btc_trade_history');
+        const history = histStr ? JSON.parse(histStr) : [];
+        await kv.set('btc_trade_history', JSON.stringify([...historyToAdd, ...history].slice(0, 500)));
       }
 
     } catch (err) {

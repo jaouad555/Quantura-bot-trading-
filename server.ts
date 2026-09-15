@@ -10,7 +10,7 @@ import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
-import { startBotEngine, startTelegramSync } from './src/server/botEngine';
+import { startBotEngine, startTelegramSync, fetchSymbolPrice } from './src/server/botEngine';
 import { startMarketScanner, scannerState, scanAllPairs } from './src/server/marketScanner';
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
@@ -131,6 +131,46 @@ app.post('/api/config/clear', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to clear config' });
+  }
+});
+
+// Live symbol prices endpoint for all open contracts and watchlists
+app.get('/api/bot/prices', async (req, res) => {
+  try {
+    const rawSymbols = (req.query.symbols as string) || '';
+    const symbols = rawSymbols ? rawSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [];
+    
+    // Also include symbols from active positions
+    const posStr = await kv.get('btc_active_bot_positions');
+    if (posStr) {
+      try {
+        const positions = JSON.parse(posStr);
+        if (Array.isArray(positions)) {
+          positions.forEach((p: any) => {
+            if (p.symbol && !symbols.includes(p.symbol.toUpperCase())) {
+              symbols.push(p.symbol.toUpperCase());
+            }
+          });
+        }
+      } catch {}
+    }
+
+    if (symbols.length === 0) {
+      return res.json({ prices: {} });
+    }
+
+    const results = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s)));
+    const prices: Record<string, number> = {};
+    symbols.forEach((sym, idx) => {
+      const r = results[idx];
+      if (r.status === 'fulfilled' && (r.value as number) > 0) {
+        prices[sym] = r.value as number;
+      }
+    });
+
+    res.json({ prices });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -39,6 +39,11 @@ import {
   Flame,
   Copy,
   CheckCheck,
+  Sparkles,
+  ShieldCheck,
+  AlertOctagon,
+  Zap,
+  Sliders,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -69,6 +74,7 @@ interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
   onOpenRiskModal?: () => void;
+  onPanicCloseAll?: () => void;
   onToggleSound: () => void;
   onRefreshData: () => void;
   onLogout?: () => void;
@@ -108,6 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenSettings,
   onOpenRiskModal,
+  onPanicCloseAll,
   onToggleSound,
   onRefreshData,
   onLogout,
@@ -127,7 +134,23 @@ export const Header: React.FC<HeaderProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copiedPrice, setCopiedPrice] = useState(false);
   const [pingMs, setPingMs] = useState(24);
+  const [panicConfirmState, setPanicConfirmState] = useState(false);
+  const panicTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pairsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const handlePanicClick = () => {
+    if (!panicConfirmState) {
+      setPanicConfirmState(true);
+      if (panicTimerRef.current) clearTimeout(panicTimerRef.current);
+      panicTimerRef.current = setTimeout(() => {
+        setPanicConfirmState(false);
+      }, 4000);
+    } else {
+      if (panicTimerRef.current) clearTimeout(panicTimerRef.current);
+      setPanicConfirmState(false);
+      if (onPanicCloseAll) onPanicCloseAll();
+    }
+  };
 
   // Sync ping latency variations
   useEffect(() => {
@@ -294,7 +317,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/80 bg-slate-900">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Menu Trigger + Pair Selector Button */}
+          {/* Left: Menu Trigger + Pair Selector Button + Futures / Spot Switcher (no gap, full FUTURES name) */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
             {/* 1. Menu Button */}
             {onOpenMenu && (
@@ -391,16 +414,13 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Right: Market Type Switcher, Price & 24h Change, Refresh Wheel */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
-            {/* Spot / Futures Switcher */}
+            {/* 3. Spot / Futures Switcher - Directly adjacent with zero gap, writing FUTURES in full */}
             {onToggleMarketType ? (
               <button
                 type="button"
                 onClick={() => onToggleMarketType(marketType === 'FUTURES' ? 'SPOT' : 'FUTURES')}
-                className={`h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${
+                className={`h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0 shadow-xs ${
                   marketType === 'FUTURES'
                     ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
@@ -408,15 +428,18 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'اضغط للتبديل بين Spot و Futures' : 'Cliquer pour basculer entre Spot et Futures'}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${marketType === 'FUTURES' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
-                <span>{marketType}</span>
+                <span className="tracking-wider">{marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}</span>
               </button>
             ) : (
-              <span className="h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border bg-cyan-500/15 text-cyan-300 border-cyan-500/40 flex items-center gap-1.5 shrink-0">
+              <span className="h-8 text-[10px] sm:text-xs font-mono font-bold px-2 sm:px-2.5 rounded-xl border bg-cyan-500/15 text-cyan-300 border-cyan-500/40 flex items-center gap-1.5 shrink-0 shadow-xs">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${marketType === 'FUTURES' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
-                <span>{marketType}</span>
+                <span className="tracking-wider">{marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}</span>
               </span>
             )}
+          </div>
 
+          {/* Right: Realtime Price & 24h Change, Refresh Wheel */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
             {/* Realtime Price & 24h Change */}
             {ticker && (
               <div className="h-8 flex items-center gap-1 sm:gap-1.5 bg-slate-950/90 border border-slate-800 rounded-xl px-1.5 sm:px-2.5 shrink-0 shadow-inner">
@@ -457,11 +480,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance API, Active Trades, Scanner, Chart, Backtest, Risk, Fullscreen & Settings */}
+      {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance, Positions, Scanner, Chart, AI, Backtest, Heatmap, Portfolio, Panic, Risk, Fullscreen & Settings */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/70 bg-slate-950/80">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Connection Badge, Virtual Balance, Binance Live, Positions, Scanner, Chart, Backtest */}
+          {/* Left: Complete Analytical & Execution Suite */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
             {/* Connection Status Badge */}
             {getConnectionBadge()}
@@ -555,6 +578,23 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* AI Quant Analysis Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('analysis')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'analysis'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : 'Analyse IA Quantitative'}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
+                <span className="hidden sm:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
+              </button>
+            )}
+
             {/* Backtest Strategy Simulator Shortcut */}
             {onNavigateTab && (
               <button
@@ -562,19 +602,71 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigateTab('backtest')}
                 className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
                   activeTab === 'backtest'
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
+                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-800'
                 }`}
                 title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : 'Simulateur Backtest'}
               >
-                <FlaskConical className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
+                <FlaskConical className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
+              </button>
+            )}
+
+            {/* Market Heatmap Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('market')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'market'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : 'Heatmap du Marché'}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'السوق' : 'Market'}</span>
+              </button>
+            )}
+
+            {/* Capital & Portfolio Risk Manager Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('riskWallet')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'riskWallet'
+                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-sm'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-teal-300 hover:bg-slate-800'
+                }`}
+                title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : 'Gestion du Portefeuille'}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
               </button>
             )}
           </div>
 
-          {/* Right: Institutional Risk Engine, Fullscreen (Plein écran), Settings */}
+          {/* Right: Panic Emergency Button, Institutional Risk Engine, Fullscreen, Settings */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+            {/* Emergency Panic Close Button */}
+            {onPanicCloseAll && openPositionsCount > 0 && (
+              <button
+                id="btn-header-panic-close"
+                type="button"
+                onClick={handlePanicClick}
+                className={`h-8 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  panicConfirmState
+                    ? 'bg-rose-600 text-white border-rose-400 animate-pulse shadow-md shadow-rose-900/50'
+                    : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/40 text-rose-300'
+                }`}
+                title={isArabic ? 'إغلاق طوارئ فوري لكافة الصفقات لحماية الرصيد' : 'Fermeture d\'urgence de toutes les positions'}
+              >
+                <AlertOctagon className="w-3.5 h-3.5 text-rose-300 shrink-0" strokeWidth={2} />
+                <span>{panicConfirmState ? (isArabic ? 'تأكيد؟' : 'Confirmer?') : (isArabic ? 'طوارئ' : 'Panic')}</span>
+              </button>
+            )}
+
             {/* Risk Engine Button */}
             {onOpenRiskModal && (
               <button
@@ -629,11 +721,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 3. THIRD BAR (الشريط الثالث): Timezone Clock, Ping Latency, View Mode, Bot, Sentiment, MTF, History, Copy Price, Language, Sound, Alerts, Density */}
+      {/* 3. THIRD BAR (الشريط الثالث): Timezone Clock, Ping Latency, View Mode, Bot, Sentiment, Signal, MTF, Strategies, History, Copy, Language, Sound, Alerts, Density */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 bg-slate-900/90 border-b border-slate-800/60">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Timezone Clock + Ping + View Mode + Bot + Sentiment + MTF + History */}
+          {/* Left: Timezone Clock + Ping + View Mode + Bot + Sentiment + Signal + MTF + Strategies + History */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
             {/* Timezone Clock */}
             <button
@@ -721,6 +813,23 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Signal Engine Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('signal')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'signal'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                    : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-900'
+                }`}
+                title={isArabic ? 'لوحة الإشارات وتحليل التداول الفوري' : 'Panneau des Signaux en direct'}
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'الإشارة' : 'Signal'}</span>
+              </button>
+            )}
+
             {/* Multi-Timeframe Matrix (MTF) Shortcut */}
             {onNavigateTab && (
               <button
@@ -735,6 +844,23 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <BarChart3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">MTF</span>
+              </button>
+            )}
+
+            {/* Bot Strategies & Presets Shortcut */}
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('autoBot')}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                  activeTab === 'autoBot'
+                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50'
+                    : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-900'
+                }`}
+                title={isArabic ? 'استراتيجيات وإعدادات البوت الآلي' : 'Stratégies et Presets du Bot'}
+              >
+                <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
+                <span className="hidden md:inline">{isArabic ? 'الاستراتيجية' : 'Presets'}</span>
               </button>
             )}
 
