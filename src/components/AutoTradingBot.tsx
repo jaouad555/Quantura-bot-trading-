@@ -454,7 +454,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
   const isLiveMode = executionMode === 'BINANCE_LIVE';
   
-  const displayPositions = activePositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+  const filteredPositions = activePositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+  const displayPositions = filteredPositions.length > 0 ? filteredPositions : activePositions;
   const displayLogs = logs.filter(l => isLiveMode ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'));
   const maxTradesLimit = Math.max(1, botConfig.maxOpenTrades || 3);
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;

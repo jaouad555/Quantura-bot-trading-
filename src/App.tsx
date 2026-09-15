@@ -38,6 +38,8 @@ import { BinanceConnectionModal } from './components/BinanceConnectionModal';
 import { CustomBalanceModal } from './components/CustomBalanceModal';
 import { Footer } from './components/Footer';
 import { AuthScreen } from './components/AuthScreen';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Sidebar } from './components/Sidebar';
 import { translations } from './utils/translations';
 import { binanceWsManager } from './utils/binanceWs';
@@ -91,30 +93,57 @@ export const App: React.FC = () => {
   // Navigation & UI States
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      return apiStorage.getItem('app_is_authenticated') === 'true';
+      return apiStorage.getItem('app_is_authenticated') === 'true' || sessionStorage.getItem('app_is_authenticated') === 'true';
     } catch {
       return false;
     }
   });
+  const [authChecking, setAuthChecking] = useState<boolean>(false);
+  const isAuthenticatedRef = useRef<boolean>(isAuthenticated);
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        const name = user.email ? user.email.split('@')[0] : 'user';
+        setUsername(name);
+        try {
+          apiStorage.setItem('app_is_authenticated', 'true');
+          apiStorage.setItem('app_username', name);
+          sessionStorage.setItem('app_is_authenticated', 'true');
+          sessionStorage.setItem('app_username', name);
+        } catch {}
+      }
+      setAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
   const [username, setUsername] = useState<string>(() => {
     try {
-      return apiStorage.getItem('app_username') || '';
+      return apiStorage.getItem('app_username') || sessionStorage.getItem('app_username') || '';
     } catch {
       return '';
     }
   });
 
   const handleLogin = (name: string) => {
+    const finalUser = name || 'trader';
     setIsAuthenticated(true);
-    setUsername(name);
+    setUsername(finalUser);
     try {
       apiStorage.setItem('app_is_authenticated', 'true');
-      apiStorage.setItem('app_username', name);
+      apiStorage.setItem('app_username', finalUser);
+      sessionStorage.setItem('app_is_authenticated', 'true');
+      sessionStorage.setItem('app_username', finalUser);
     } catch {}
   };
 
   const handleLogout = useCallback(() => {
     try {
+      signOut(auth).catch(() => {});
       apiStorage.removeItem('app_is_authenticated');
       apiStorage.removeItem('app_username');
       sessionStorage.removeItem('app_is_authenticated');
@@ -193,6 +222,7 @@ export const App: React.FC = () => {
   const [activeToastAlert, setActiveToastAlert] = useState<PushAlert | null>(null);
 
   const triggerToastAlert = useCallback((alert: PushAlert) => {
+    if (!isAuthenticatedRef.current) return;
     setActiveToastAlert(alert);
     setTimeout(() => {
       setActiveToastAlert((curr) => (curr?.id === alert.id ? null : curr));
@@ -572,7 +602,7 @@ export const App: React.FC = () => {
 
   // Audio Play helper
   const playAudioChime = useCallback(() => {
-    if (!soundEnabled) return;
+    if (!soundEnabled || !isAuthenticatedRef.current) return;
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = audioCtx.createOscillator();
@@ -660,7 +690,7 @@ export const App: React.FC = () => {
   // Emit Push Alert helper
   const pushNewAlert = useCallback(
     (plan: AIAnalysisResult, isUserInitiated: boolean = false, overrideSymbol?: string) => {
-      if (!plan) return;
+      if (!plan || !isAuthenticatedRef.current) return;
 
       const tf = plan.recommendedTimeframe || '1h';
       const isArabic = language === 'ar';
@@ -1538,63 +1568,78 @@ export const App: React.FC = () => {
   // Emergency Panic Close All handler
   const handlePanicCloseAll = useCallback(async () => {
     const isArabicLang = language === 'ar';
-    const isLiveMode = executionModeRef.current === 'BINANCE_LIVE';
-    const currentPositions = activeBotPositionsRef.current;
-    const targetPositions = currentPositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+    const currentPositions = [...(activeBotPositionsRef.current || [])];
     const currentBinance = binanceConfigRef.current;
     const currentP = ticker?.price || 0;
 
-    if (targetPositions.length === 0) return;
+    if (currentPositions.length > 0) {
+      for (const pos of currentPositions) {
+        const isLivePos = pos.mode === 'BINANCE_LIVE';
+        const isSymbolMatch = pos.symbol.toLowerCase() === selectedSymbolRef.current.toLowerCase();
+        const p = (isSymbolMatch && currentP > 0) ? currentP : (pos.currentPrice && pos.currentPrice > 0 ? pos.currentPrice : pos.entryPrice);
+        const isLong = pos.decision === 'LONG';
+        const lev = Math.max(1, pos.leverage || 1);
+        const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+        const roePercent = priceDiffPct * lev;
+        const finalPnlUsdt = (pos.remainingAmountUsdt || 0) * (roePercent / 100);
+        const totalTradePnlUsdt = (pos.realizedPnlUsdt || 0) + finalPnlUsdt;
+        const cashReturned = Math.max(0, (pos.remainingAmountUsdt || 0) + finalPnlUsdt);
 
-    for (const pos of targetPositions) {
-      const p = pos.symbol.toLowerCase() === selectedSymbolRef.current.toLowerCase() && currentP > 0 ? currentP : pos.currentPrice || pos.entryPrice;
-      const isLong = pos.decision === 'LONG';
-      const lev = pos.leverage || 1;
-      const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-      const roePercent = priceDiffPct * lev;
-      const finalPnlUsdt = pos.remainingAmountUsdt * (roePercent / 100);
-      const totalTradePnlUsdt = pos.realizedPnlUsdt + finalPnlUsdt;
-      const cashReturned = Math.max(0, pos.remainingAmountUsdt + finalPnlUsdt);
+        if (isLivePos && currentBinance?.isConnected) {
+          executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', (pos.remainingAmountUsdt || 0) * lev, pos.remainingAmountBtc, p).then((orderRes) => {
+            if (!orderRes || orderRes.error) {
+              setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: (pos.remainingAmountUsdt || 0) * lev, reason: 'PANIC CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...(prev || []).slice(0, 49)]);
+            }
+          }).catch(() => {});
+        } else {
+          updatePaperWalletSync((prev) => ({
+            ...prev,
+            balance: Math.round(((prev.balance || 0) + cashReturned) * 100) / 100,
+            realizedPnl: Math.round(((prev.realizedPnl || 0) + finalPnlUsdt) * 100) / 100,
+          }));
+        }
 
-      if (isLiveMode && currentBinance.isConnected) {
-        executeBinanceLiveOrder(pos.symbol, isLong ? 'SELL' : 'BUY', pos.remainingAmountUsdt * lev, pos.remainingAmountBtc, p).then((orderRes) => {
-          if (!orderRes || orderRes.error) {
-            setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: currentP, amountUsdt: pos.remainingAmountUsdt * lev, reason: 'SL/CLOSE FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType || 'SPOT', leverage: lev }, ...(prev || []).slice(0, 49)]);
-          }
-        });
-      } else {
-        updatePaperWalletSync((prev) => ({
-          ...prev,
-          balance: prev.balance + cashReturned,
-          realizedPnl: prev.realizedPnl + finalPnlUsdt,
-        }));
-      }
+        lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
 
-      lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
-
-      const closedHistoryItem: TradeHistoryItem = {
-        id: `history-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        timestamp: Date.now(),
-        symbol: pos.symbol,
-        decision: pos.decision,
-        timeframe: timeframeRef.current,
-        entryPrice: pos.entryPrice,
-        exitPrice: p,
-        tp1: pos.tp1,
-        tp2: pos.tp2,
-        tp3: pos.tp3,
-        stopLoss: pos.stopLoss,
-        status: 'MANUAL_EXIT',
-        profitPercent: roePercent,
-        profitUsdt: totalTradePnlUsdt,
-        confidence: 75,
+        const closedHistoryItem: TradeHistoryItem = {
+          id: `history-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          timestamp: Date.now(),
+          symbol: pos.symbol,
+          decision: pos.decision,
+          timeframe: timeframeRef.current,
+          entryPrice: pos.entryPrice,
+          exitPrice: p,
+          tp1: pos.tp1,
+          tp2: pos.tp2,
+          tp3: pos.tp3,
+          stopLoss: pos.stopLoss,
+          status: 'MANUAL_EXIT',
+          profitPercent: roePercent,
+          profitUsdt: totalTradePnlUsdt,
+          confidence: 75,
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
-      };
-      setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
+        };
+        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
+      }
     }
 
-    updateBotPositionsSync((prev) => prev.filter(p => isLiveMode ? p.mode !== 'BINANCE_LIVE' : (p.mode === 'BINANCE_LIVE')));
+    // Unconditionally wipe ALL active positions locally and remotely
+    updateBotPositionsSync(() => []);
+    setActiveBotPositions([]);
+    activeBotPositionsRef.current = [];
+    apiStorage.setItem('btc_active_bot_positions', '[]');
+    try {
+      sessionStorage.setItem('btc_active_bot_positions', '[]');
+      localStorage.setItem('btc_active_bot_positions', '[]');
+    } catch {}
+
+    // Tell backend KV directly to clear positions so background engine sync won't restore them
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'btc_active_bot_positions', value: '[]' }),
+    }).catch(() => {});
 
     const newLog: AutoTradeLog = {
       id: `log-${Date.now()}`,
@@ -1605,11 +1650,11 @@ export const App: React.FC = () => {
       price: currentP,
       amountUsdt: 0,
       reason: isArabicLang ? '🚨 تصفية طارئة فورية وإغلاق كافة الصفقات النشطة (Panic Close All)' : '🚨 Emergency Panic Close All executed for all open positions',
-      mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+      mode: executionModeRef.current,
     };
     addBotLog(newLog);
     playAudioChime();
-  }, [language, ticker?.price, playAudioChime]);
+  }, [language, ticker?.price, playAudioChime, updateBotPositionsSync, updatePaperWalletSync, addBotLog]);
 
   // Reset Circuit Breaker
   const handleResetCircuitBreaker = useCallback(() => {
@@ -2405,7 +2450,11 @@ export const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen w-full bg-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-slate-950 relative ${isArabic ? 'rtl text-right' : 'ltr'} mode-${effectiveDisplayMode}`}>
-      {!isAuthenticated ? (
+      {authChecking ? (
+        <div className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4">
+          <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : !isAuthenticated ? (
         <div className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4">
           <AuthScreen onLogin={handleLogin} language={language} />
         </div>
@@ -2691,11 +2740,14 @@ export const App: React.FC = () => {
               }}
               onManualClosePosition={(posId) => {
                 if (posId) {
-                  const pos = activeBotPositions.find(p => p.id === posId);
+                  const currentPositions = activeBotPositionsRef.current;
+                  const pos = currentPositions.find(p => p.id === posId);
                   if (pos) {
                     const isSelected = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase();
                     const priceToUse = (isSelected && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice);
                     executeAutoTradeAction('SL', priceToUse, 'Manual exit triggered', posId);
+                  } else {
+                    updateBotPositionsSync((prev) => prev.filter(p => p.id !== posId));
                   }
                 }
               }}
@@ -3017,7 +3069,7 @@ export const App: React.FC = () => {
         />
 
         {/* Floating Recommendation Notification Toast Alert */}
-        {activeToastAlert && (
+        {isAuthenticated && activeToastAlert && (
           <div className="fixed bottom-5 right-5 z-50 max-w-sm w-full animate-in slide-in-from-bottom-5 fade-in duration-300">
             <div
               className={`p-4 rounded-2xl border shadow-2xl  ${

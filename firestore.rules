@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /server_data/{secretKey}/{document=**} {
+      allow read, write: if secretKey == 'quantura_bot_secret_2026';
+    }
+    match /app_users/{email} {
+      allow read, write: if true;
+    }
+  }
+}
