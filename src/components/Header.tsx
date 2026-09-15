@@ -331,7 +331,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 1. TOP BAR (الشريط الأول): MENU, Pairs Selector, Spot/Futures, Live Price, Refresh - Permanently Sticky */}
       <div className="sticky top-0 z-50 w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/90 bg-slate-900/98 backdrop-blur-md shadow-md">
-        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full overflow-x-auto no-scrollbar">
           
           {/* Left: Menu Trigger + Pair Selector Button + Futures / Spot Switcher (no gap, full FUTURES name) */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
@@ -498,10 +498,10 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance, Positions, Scanner, Chart, AI, Backtest, Heatmap, Portfolio, Panic, Risk, Fullscreen & Settings */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/70 bg-slate-950/80">
-        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full overflow-x-auto no-scrollbar">
           
           {/* Left: Complete Analytical & Execution Suite */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
             {/* Connection Status Badge */}
             {getConnectionBadge()}
 
@@ -756,10 +756,10 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 3. THIRD BAR (الشريط الثالث): Timezone Clock, Ping Latency, View Mode, Bot, Sentiment, Signal, MTF, Strategies, History, Copy, Language, Sound, Alerts, Density */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 bg-slate-900/90 border-b border-slate-800/60">
-        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full overflow-x-auto no-scrollbar">
           
           {/* Left: Timezone Clock + Ping + View Mode + Bot + Sentiment + Signal + MTF + Strategies + History */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
             {/* Timezone Clock */}
             <button
               type="button"
