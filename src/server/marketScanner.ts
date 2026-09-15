@@ -241,11 +241,17 @@ async function processTradingSignal(
     // Allocate Wallet
     const walletStr = await kv.get('btc_paper_wallet');
     let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+    wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
+    wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
     
-    const allocationPct = (config.tradeAllocationPercent || 10) / 100;
-    const margin = wallet.balance * allocationPct;
+    const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 10) / 100));
+    let margin = Math.round(wallet.balance * allocationPct * 100) / 100;
     
-    if (margin < 10) return; // Minimum 10 USDT
+    if (margin > wallet.balance) margin = wallet.balance;
+    if (margin < 10) {
+      console.log(`[TRADE BLOCKED] Insufficient free margin: $${wallet.balance.toFixed(2)} available, min required: $10.00`);
+      return;
+    }
 
     // CRITICAL GATE 2: Protection against stale signals:
     // Re-check strategy status immediately before order submission!
@@ -269,7 +275,7 @@ async function processTradingSignal(
         return;
       }
     } else {
-      wallet.balance -= margin;
+      wallet.balance = Math.max(0, Math.round((wallet.balance - margin) * 100) / 100);
       await kv.set('btc_paper_wallet', JSON.stringify(wallet));
     }
 

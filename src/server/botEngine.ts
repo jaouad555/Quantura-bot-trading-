@@ -534,7 +534,7 @@ export const startBotEngine = () => {
           }
           
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
-          const totalTradePnl = pos.realizedPnlUsdt + tranchePnl;
+          const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
           if (isLiveMode && binanceConfig.isConnected) {
             await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
@@ -543,7 +543,7 @@ export const startBotEngine = () => {
             walletPnlDelta += tranchePnl;
           }
           
-          const logType = isTp3 ? 'TP3_HIT' : (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'SL_HIT');
+          const logType = isTp3 ? 'AUTO_SELL_TP3' : (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'AUTO_SL');
           logsToAdd.push({
             id: `log-server-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -552,12 +552,13 @@ export const startBotEngine = () => {
             side: isLong ? 'SELL' : 'BUY',
             price: currentP,
             amountUsdt: marginClosed * lev,
-            pnlUsdt: tranchePnl,
-            pnlPercent: roePercent,
+            pnlUsdt: Math.round(tranchePnl * 100) / 100,
+            pnlPercent: Math.round(roePercent * 100) / 100,
             reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER'
           });
 
+          const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || pos.remainingAmountUsdt || 10;
           historyToAdd.push({
             id: `history-server-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -571,8 +572,8 @@ export const startBotEngine = () => {
             tp3: pos.tp3,
             stopLoss: pos.stopLoss,
             status: isTp3 ? 'TP3_HIT' : (pos.isTrailingActive ? 'TP1_HIT' : 'SL_HIT'),
-            profitPercent: (totalTradePnl / pos.initialAmountUsdt) * 100,
-            profitUsdt: totalTradePnl,
+            profitPercent: Math.round(((totalTradePnl / initialMargin) * 100) * 100) / 100,
+            profitUsdt: Math.round(totalTradePnl * 100) / 100,
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
             pnlHistory: pos.pnlHistory,
@@ -602,8 +603,8 @@ export const startBotEngine = () => {
       if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
         const currentWalletStr = await kv.get('btc_paper_wallet');
         const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
-        currentWallet.balance = Math.max(0, currentWallet.balance + walletBalanceDelta);
-        currentWallet.realizedPnl += walletPnlDelta;
+        currentWallet.balance = Math.max(0, Math.round(((Number(currentWallet.balance) || 1000) + walletBalanceDelta) * 100) / 100);
+        currentWallet.realizedPnl = Math.round(((Number(currentWallet.realizedPnl) || 0) + walletPnlDelta) * 100) / 100;
         await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
       }
 

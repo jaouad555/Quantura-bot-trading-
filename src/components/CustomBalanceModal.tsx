@@ -7,7 +7,8 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
-import { Language, PaperWallet } from '../types';
+import { Language, PaperWallet, ActiveBotPosition } from '../types';
+import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 
 interface CustomBalanceModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface CustomBalanceModalProps {
   language: Language;
   paperWallet: PaperWallet;
   onUpdateBalance: (newBalance: number, resetHistory?: boolean) => void;
+  activeBotPositions?: ActiveBotPosition[];
 }
 
 export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
@@ -23,6 +25,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   language,
   paperWallet,
   onUpdateBalance,
+  activeBotPositions,
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
@@ -87,6 +90,11 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   if (!isOpen) return null;
 
   const currentNum = parseFloat(inputVal) || 0;
+  const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions);
+  const inTradeMargin = metrics.inTradeMargin;
+  const floatingPnl = metrics.floatingPnl;
+  const totalEquity = metrics.totalEquity;
+
   const diff = currentNum - paperWallet.balance;
   const diffPercent = paperWallet.balance > 0 ? (diff / paperWallet.balance) * 100 : 0;
 
@@ -113,7 +121,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5">
-                <span>{isArabic ? 'تخصيص الرصيد' : isEn ? 'Custom Balance' : 'Solde Personnalisé'}</span>
+                <span>{isArabic ? 'تخصيص الرصيد وإدارة المحفظة' : isEn ? 'Custom Balance & Portfolio' : 'Solde & Portefeuille'}</span>
                 <span className="text-[9px] px-1.5 py-0.2 rounded font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   PAPER
                 </span>
@@ -133,11 +141,46 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit} className="p-3.5 space-y-3 overflow-y-auto no-scrollbar flex-1">
+          {/* Portfolio Equity Overview Card */}
+          <div className="bg-slate-950/80 p-2.5 rounded-lg border border-cyan-500/30 font-mono space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-cyan-300 font-sans font-medium">
+                {isArabic ? 'إجمالي قيمة المحفظة (Total Equity):' : isEn ? 'Total Portfolio Equity:' : 'Valeur Totale du Portefeuille :'}
+              </span>
+              <span className="text-sm font-bold text-cyan-300">
+                ${totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 text-[10px] pt-1.5 border-t border-slate-800/80">
+              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                <span className="text-slate-400 block">{isArabic ? 'السيولة المتاحة (Free):' : 'Free Cash:'}</span>
+                <span className="text-emerald-300 font-bold">${paperWallet.balance.toFixed(2)}</span>
+              </div>
+              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                <span className="text-slate-400 block">{isArabic ? 'في صفقات البوت:' : 'In Trades:'}</span>
+                <span className="text-amber-300 font-bold">${inTradeMargin.toFixed(2)}</span>
+              </div>
+              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                <span className="text-slate-400 block">{isArabic ? 'أرباح مفتوحة:' : 'Unrealized PnL:'}</span>
+                <span className={`font-bold ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toFixed(2)}
+                </span>
+              </div>
+              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                <span className="text-slate-400 block">{isArabic ? 'الأرباح المحققة:' : 'Realized PnL:'}</span>
+                <span className={`font-bold ${(paperWallet.realizedPnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {(paperWallet.realizedPnl || 0) >= 0 ? '+' : ''}${(paperWallet.realizedPnl || 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Current & Target Dynamic Preview */}
           <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 flex items-center justify-between text-xs font-mono">
             <div>
               <span className="text-[10px] text-slate-400 block">
-                {isArabic ? 'الرصيد الحالي:' : isEn ? 'Current:' : 'Solde Actuel :'}
+                {isArabic ? 'السيولة المتاحة الحالية:' : isEn ? 'Current Free Cash:' : 'Solde Libre Actuel :'}
               </span>
               <span className="text-slate-200 font-bold text-xs">
                 ${paperWallet.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -539,19 +539,7 @@ export const App: React.FC = () => {
     apiStorage.setItem('btc_bot_config', JSON.stringify(botConfig));
   }, [botConfig]);
 
-  // (activeBotPositions is now explicitly pushed where they are modified to prevent race conditions and overwrites)
-  
-  useEffect(() => {
-    apiStorage.setItem('btc_bot_logs', JSON.stringify(botLogs));
-  }, [botLogs]);
-
-  useEffect(() => {
-    apiStorage.setItem('btc_trade_history', JSON.stringify(tradeHistory));
-  }, [tradeHistory]);
-
-  useEffect(() => {
-    apiStorage.setItem('btc_paper_wallet', JSON.stringify(paperWallet));
-  }, [paperWallet]);
+  // (activeBotPositions, paperWallet, tradeHistory, and botLogs are explicitly pushed where modified to prevent race conditions and overwrites between client and server)
 
   useEffect(() => {
     apiStorage.setItem('btc_push_alerts', JSON.stringify(alerts));
@@ -2435,6 +2423,7 @@ export const App: React.FC = () => {
             botEnabled={botConfig.enabled}
             executionMode={executionMode}
             paperWallet={paperWallet}
+            activeBotPositions={activeBotPositions}
             isDesktopOpen={isDesktopSidebarOpen}
             isAndroidView={isAndroidView}
           />
@@ -2466,6 +2455,7 @@ export const App: React.FC = () => {
               binanceConfig={binanceConfig}
               executionMode={executionMode}
               paperWallet={paperWallet}
+              activeBotPositions={activeBotPositions}
               marketType={botConfig.marketType || 'FUTURES'}
               onToggleMarketType={handleToggleMarketType}
               onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
@@ -2665,6 +2655,7 @@ export const App: React.FC = () => {
               selectedSymbol={selectedSymbol}
               logs={botLogs}
               walletBalance={paperWallet.balance}
+              paperWallet={paperWallet}
               currentPrice={ticker?.price || 0}
               activeSignal={activeSignal}
               effectiveBotTimeframe={botConfig.timeframe === 'AUTO' || !botConfig.timeframe ? autoBotTimeframeInfo.effectiveTimeframe : (botConfig.timeframe as Timeframe)}
@@ -2859,6 +2850,7 @@ export const App: React.FC = () => {
               executionMode={executionMode as any}
               binanceConfig={binanceConfig}
               selectedSymbol={selectedSymbol}
+              activeBotPositions={activeBotPositions}
             />
           )}
 
@@ -2973,6 +2965,7 @@ export const App: React.FC = () => {
           language={language}
           paperWallet={paperWallet}
           onUpdateBalance={handleUpdateCustomBalance}
+          activeBotPositions={activeBotPositions}
         />
 
         {/* Binance Real API Trading Connection Modal */}

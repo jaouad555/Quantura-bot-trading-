@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { BinanceTicker, ConnectionState, Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, MarketType, DisplayMode } from '../types';
+import { BinanceTicker, ConnectionState, Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, MarketType, DisplayMode, ActiveBotPosition } from '../types';
+import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { formatTime, getTimezoneLabel } from '../utils/timezone';
 import { TradingPair, RESPECTED_TRADING_PAIRS, formatCoinPrice } from '../utils/tradingPairs';
@@ -84,6 +85,7 @@ interface HeaderProps {
   activeTab?: string;
   onNavigateTab?: (tab: 'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet') => void;
   openPositionsCount?: number;
+  activeBotPositions?: ActiveBotPosition[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -103,6 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
   binanceConfig,
   executionMode = 'PAPER',
   paperWallet,
+  activeBotPositions,
   marketType = 'FUTURES',
   onToggleMarketType,
   onOpenBinanceModal,
@@ -137,6 +140,16 @@ export const Header: React.FC<HeaderProps> = ({
   const [panicConfirmState, setPanicConfirmState] = useState(false);
   const panicTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pairsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const portfolioMetrics = React.useMemo(() => {
+    const res = calculatePortfolioMetrics(paperWallet, activeBotPositions, ticker?.price, selectedSymbol);
+    return {
+      totalPortfolioEquity: res.totalEquity,
+      freeCash: res.freeCash,
+      inTradeMargin: res.inTradeMargin,
+      floatingPnl: res.floatingPnl,
+    };
+  }, [paperWallet?.balance, activeBotPositions, ticker?.price, selectedSymbol]);
 
   const handlePanicClick = () => {
     if (!panicConfirmState) {
@@ -489,16 +502,33 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Connection Status Badge */}
             {getConnectionBadge()}
 
-            {/* Paper Wallet Virtual Balance */}
+            {/* Paper Wallet Virtual Balance / Total Portfolio Equity */}
             {onOpenCustomBalanceModal && (
               <button
                 type="button"
                 onClick={onOpenCustomBalanceModal}
-                className="h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95"
-                title={isArabic ? 'تخصيص الرصيد الوهمي' : 'Définir le solde virtuel'}
+                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  portfolioMetrics.floatingPnl > 0
+                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                    : portfolioMetrics.floatingPnl < 0
+                    ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 hover:border-amber-500/60'
+                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50'
+                }`}
+                title={
+                  isArabic
+                    ? `إجمالي قيمة المحفظة: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | أرباح مفتوحة: ${portfolioMetrics.floatingPnl >= 0 ? '+' : ''}$${portfolioMetrics.floatingPnl.toFixed(2)})`
+                    : `Total Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | PnL: ${portfolioMetrics.floatingPnl >= 0 ? '+' : ''}$${portfolioMetrics.floatingPnl.toFixed(2)})`
+                }
               >
                 <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-                <span>${(paperWallet?.balance ?? 1000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                {portfolioMetrics.inTradeMargin > 0 && (
+                  <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
+                    portfolioMetrics.floatingPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
+                  }`}>
+                    {portfolioMetrics.floatingPnl >= 0 ? '+' : ''}${portfolioMetrics.floatingPnl.toFixed(1)}
+                  </span>
+                )}
                 <span className="text-[9px] text-emerald-400/80 font-normal hidden sm:inline">USDT</span>
               </button>
             )}

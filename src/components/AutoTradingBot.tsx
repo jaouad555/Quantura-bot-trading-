@@ -41,7 +41,8 @@ import {
   TradingExecutionMode,
   BinanceApiConfig,
   Timeframe,
-  BotTimeframe
+  BotTimeframe,
+  PaperWallet
 } from '../types';
 import { formatCoinPrice } from '../utils/tradingPairs';
 
@@ -51,6 +52,7 @@ interface AutoTradingBotProps {
   activePositions: ActiveBotPosition[];
   logs: AutoTradeLog[];
   walletBalance: number;
+  paperWallet?: PaperWallet;
   currentPrice: number;
   selectedSymbol: string;
   activeSignal: AIAnalysisResult | null;
@@ -80,6 +82,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   activePositions,
   logs,
   walletBalance,
+  paperWallet,
   currentPrice,
   selectedSymbol,
   activeSignal,
@@ -495,9 +498,18 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     };
   };
 
-  // Performance Stats Calculation based on recent logs
-  const totalRealizedPnl = displayLogs.reduce((acc, log) => acc + (log.pnlUsdt || 0), 0);
-  const tradeCloseLogs = displayLogs.filter(log => log.type.includes('SELL') || log.type.includes('SL') || log.type.includes('LIQUIDATION'));
+  // Performance Stats Calculation based on wallet and trade logs
+  const totalRealizedPnl = (paperWallet?.realizedPnl !== undefined && typeof paperWallet.realizedPnl === 'number')
+    ? paperWallet.realizedPnl
+    : displayLogs.reduce((acc, log) => acc + (log.pnlUsdt || 0), 0);
+
+  const tradeCloseLogs = displayLogs.filter(log => 
+    log.type.includes('SELL') || 
+    log.type.includes('SL') || 
+    log.type.includes('TP') || 
+    log.type.includes('LIQUIDATION') ||
+    (log.pnlUsdt !== undefined && log.pnlUsdt !== 0)
+  );
   const winningTrades = tradeCloseLogs.filter(log => (log.pnlUsdt || 0) > 0).length;
   const losingTrades = tradeCloseLogs.filter(log => (log.pnlUsdt || 0) <= 0).length;
   const totalTradesCount = winningTrades + losingTrades;

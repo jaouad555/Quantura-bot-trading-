@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AIAnalysisResult, Language, PaperWallet, BinanceApiConfig } from '../types';
+import { AIAnalysisResult, Language, PaperWallet, BinanceApiConfig, ActiveBotPosition } from '../types';
+import { calculatePositionUnrealizedPnl } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import {
@@ -36,6 +37,7 @@ interface RiskCalculatorViewProps {
   executionMode?: 'PAPER' | 'BINANCE_LIVE';
   binanceConfig?: BinanceApiConfig;
   selectedSymbol?: string;
+  activeBotPositions?: ActiveBotPosition[];
 }
 
 export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
@@ -49,6 +51,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
   executionMode = 'PAPER',
   binanceConfig,
   selectedSymbol = 'BTCUSDT',
+  activeBotPositions,
 }) => {
   const t = translations[language]?.riskCalculator || translations.fr.riskCalculator;
   const isArabic = language === 'ar';
@@ -134,10 +137,22 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
     }
   }
 
+  // Combine manual calculator open position and active bot positions
+  const botInTradeMargin = (activeBotPositions || []).reduce(
+    (acc, p) => acc + (p.remainingAmountUsdt || p.marginUsdt || p.initialAmountUsdt || 0),
+    0
+  );
+  const botUnrealizedPnl = (activeBotPositions || []).reduce(
+    (acc, p) => acc + calculatePositionUnrealizedPnl(p, p.symbol.toLowerCase() === selectedSymbol.toLowerCase() ? currentPrice : undefined),
+    0
+  );
+  const totalCombinedMargin = inTradeMarginUsdt + botInTradeMargin;
+  const totalCombinedUnrealizedPnl = unrealizedPnlUsdt + botUnrealizedPnl;
+
   // Determine display values based on mode
   const displayTotalEquity = isLive && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
     ? binanceConfig.accountInfo.totalUsdtEquity
-    : paperWallet.balance + (openPos ? inTradeMarginUsdt + unrealizedPnlUsdt : 0);
+    : paperWallet.balance + totalCombinedMargin + totalCombinedUnrealizedPnl;
 
   const displayAvailableBalance = isLive && binanceConfig?.accountInfo?.freeUsdt !== undefined
     ? binanceConfig.accountInfo.freeUsdt
@@ -149,18 +164,18 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
     
   const displayTotalRoiPercent = isLive 
     ? 0
-    : (paperWallet.balance > 0 
-      ? ((paperWallet.realizedPnl + unrealizedPnlUsdt) / (paperWallet.balance + inTradeMarginUsdt)) * 100
+    : (paperWallet.balance + totalCombinedMargin > 0 
+      ? (((paperWallet.realizedPnl || 0) + totalCombinedUnrealizedPnl) / (paperWallet.balance + totalCombinedMargin)) * 100
       : 0);
 
   const displayInTradeMarginUsdt = isLive 
     ? (binanceConfig?.accountInfo?.totalUsdtEquity !== undefined && binanceConfig?.accountInfo?.freeUsdt !== undefined
         ? binanceConfig.accountInfo.totalUsdtEquity - binanceConfig.accountInfo.freeUsdt 
         : 0)
-    : inTradeMarginUsdt;
+    : totalCombinedMargin;
 
-  const displayUnrealizedPnlUsdt = isLive ? 0 : unrealizedPnlUsdt;
-  const displayUnrealizedPnlPercent = isLive ? 0 : unrealizedPnlPercent;
+  const displayUnrealizedPnlUsdt = isLive ? 0 : totalCombinedUnrealizedPnl;
+  const displayUnrealizedPnlPercent = isLive ? 0 : (totalCombinedMargin > 0 ? (totalCombinedUnrealizedPnl / totalCombinedMargin) * 100 : 0);
 
 
   // Actions

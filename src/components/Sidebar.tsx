@@ -24,7 +24,8 @@ import {
   RefreshCcwDot,
   Copy
 } from 'lucide-react';
-import { Language, PaperWallet } from '../types';
+import { Language, PaperWallet, ActiveBotPosition } from '../types';
+import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { 
   getOrCreate2FASecret, 
@@ -51,6 +52,7 @@ interface SidebarProps {
   botEnabled?: boolean;
   executionMode?: 'PAPER' | 'BINANCE_LIVE';
   paperWallet?: PaperWallet;
+  activeBotPositions?: ActiveBotPosition[];
   isDesktopOpen?: boolean;
   isAndroidView?: boolean;
 }
@@ -67,6 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   botEnabled = false,
   executionMode = 'PAPER',
   paperWallet,
+  activeBotPositions,
   isDesktopOpen = true,
   isAndroidView = false,
 }) => {
@@ -430,15 +433,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Portfolio Balance */}
-          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
-            <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-              {isArabic ? 'الرصيد' : 'Solde'}
-            </span>
-            <div className="text-[11px] font-mono font-bold text-emerald-300 truncate">
-              ${(paperWallet?.balance ?? 1000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT
-            </div>
-          </div>
+          {/* Portfolio Balance / Total Equity */}
+          {(() => {
+            const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions);
+            return (
+              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
+                    {isArabic ? 'إجمالي المحفظة' : 'Equity'}
+                  </span>
+                  {metrics.floatingPnl !== 0 && (
+                    <span className={`text-[8px] font-mono font-bold px-1 rounded ${
+                      metrics.floatingPnl >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                    }`}>
+                      {metrics.floatingPnl >= 0 ? '+' : ''}${metrics.floatingPnl.toFixed(0)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-mono font-bold text-emerald-300 truncate">
+                  ${metrics.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT
+                </div>
+                {metrics.inTradeMargin > 0 && (
+                  <div className="text-[8px] text-slate-400 font-mono mt-1 flex items-center justify-between border-t border-slate-900 pt-0.5">
+                    <span>{isArabic ? 'متاح:' : 'Free:'} ${metrics.freeCash.toFixed(0)}</span>
+                    <span>{isArabic ? 'في الصفقات:' : 'Trades:'} ${metrics.inTradeMargin.toFixed(0)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Security & Action Buttons */}
