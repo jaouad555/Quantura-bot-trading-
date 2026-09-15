@@ -540,12 +540,26 @@ export const App: React.FC = () => {
   const isArabic = language === 'ar';
 
   const handleUpdateCustomBalance = (newBalance: number, resetHistory?: boolean) => {
-    updatePaperWalletSync((prev) => ({
-      ...prev,
-      balance: newBalance,
-      realizedPnl: resetHistory ? 0 : prev.realizedPnl,
-      history: resetHistory ? [] : prev.history,
-    }));
+    if (resetHistory) {
+      updateBotPositionsSync((prev) => prev.filter((p) => p.mode === 'BINANCE_LIVE'));
+      updatePaperWalletSync(() => ({
+        balance: newBalance,
+        realizedPnl: 0,
+        openPosition: null,
+        history: [],
+      }));
+    } else {
+      const activePaperPositions = (activeBotPositionsRef.current || []).filter((p) => !p.mode || p.mode === 'PAPER');
+      const inTradeMargin = activePaperPositions.reduce(
+        (sum, p) => sum + (typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0 ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0)),
+        0
+      );
+      const freeBalance = Math.max(0, newBalance - inTradeMargin);
+      updatePaperWalletSync((prev) => ({
+        ...prev,
+        balance: freeBalance,
+      }));
+    }
   };
 
   // Save bot state, history and wallet changes to localStorage
@@ -1050,7 +1064,7 @@ export const App: React.FC = () => {
 
         const totalEquity = isLiveMode && currentBinance.accountInfo?.totalUsdtEquity
           ? currentBinance.accountInfo.totalUsdtEquity
-          : currentWallet.balance + currentModePositions.reduce((sum, pos) => sum + (pos.marginUsdt || pos.initialAmountUsdt), 0);
+          : currentWallet.balance + currentModePositions.reduce((sum, pos) => sum + (typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0 ? pos.remainingAmountUsdt : (pos.marginUsdt || pos.initialAmountUsdt || 0)), 0);
 
         const availableBalance = isLiveMode && currentBinance.accountInfo?.freeUsdt
           ? currentBinance.accountInfo.freeUsdt
@@ -1126,19 +1140,26 @@ export const App: React.FC = () => {
           currentPrice: entryPrice,
           initialAmountUsdt: tradeMargin, // Margin invested
           remainingAmountUsdt: tradeMargin,
+          marginUsdt: tradeMargin,
+          positionSizeUsdt: positionSizeUsdt,
           initialAmountBtc: amountCrypto, // Total contract size in crypto units
           remainingAmountBtc: amountCrypto,
+          leverage: effectiveLeverage,
           tp1,
           tp2,
           tp3,
           stopLoss,
           initialStopLoss: stopLoss,
+          liquidationPrice,
+          marketType: isFutures ? 'FUTURES' : 'SPOT',
+          marginMode: currentConfig.marginMode || 'ISOLATED',
           tp1Hit: false,
           tp2Hit: false,
           tp3Hit: false,
           rebuysCount: 0,
           openedAt: Date.now(),
           strategyName,
+          mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           lastAction: isArabicLang
             ? (isFutures
                 ? `⚡ فتح عقد آجل ${decision} برافعة ${effectiveLeverage}x عند $${entryPrice.toLocaleString()}`
@@ -1148,13 +1169,6 @@ export const App: React.FC = () => {
                 : `Spot Buy at $${entryPrice.toLocaleString()}`),
           realizedPnlUsdt: 0,
           pnlHistory: [0],
-          mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
-          marketType: isFutures ? 'FUTURES' : 'SPOT',
-          leverage: effectiveLeverage,
-          marginMode,
-          marginUsdt: tradeMargin,
-          positionSizeUsdt,
-          liquidationPrice,
           peakPrice: entryPrice,
           isTrailingActive: false,
           trailingStopPrice: stopLoss,
@@ -1329,6 +1343,8 @@ export const App: React.FC = () => {
           ...pos,
           tp1Hit: true,
           remainingAmountUsdt: pos.remainingAmountUsdt * 0.5,
+          marginUsdt: pos.remainingAmountUsdt * 0.5,
+          positionSizeUsdt: (pos.remainingAmountUsdt * 0.5) * lev,
           remainingAmountBtc: pos.remainingAmountBtc * 0.5,
           realizedPnlUsdt: pos.realizedPnlUsdt + pnlUsdt,
           stopLoss: pos.entryPrice, // Breakeven
@@ -1392,6 +1408,8 @@ export const App: React.FC = () => {
             ...pos,
             rebuysCount: pos.rebuysCount + 1,
             remainingAmountUsdt: pos.remainingAmountUsdt + rebuyMargin,
+            marginUsdt: pos.remainingAmountUsdt + rebuyMargin,
+            positionSizeUsdt: (pos.remainingAmountUsdt + rebuyMargin) * lev,
             remainingAmountBtc: pos.remainingAmountBtc + addedContracts,
             lastAction: isArabicLang ? `تعزيز العقد الآجل على الارتداد ✓` : `Smart Futures Rebuy on pullback ✓`,
           };
@@ -1454,6 +1472,8 @@ export const App: React.FC = () => {
           ...pos,
           tp2Hit: true,
           remainingAmountUsdt: pos.remainingAmountUsdt * 0.5,
+          marginUsdt: pos.remainingAmountUsdt * 0.5,
+          positionSizeUsdt: (pos.remainingAmountUsdt * 0.5) * lev,
           remainingAmountBtc: pos.remainingAmountBtc * 0.5,
           realizedPnlUsdt: pos.realizedPnlUsdt + pnlUsdt,
           lastAction: isArabicLang ? `تم تحقيق TP2 وجني نصف المتبقي ✓` : `TP2 hit: 50% of remaining closed ✓`,

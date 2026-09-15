@@ -470,12 +470,14 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
   // Live calculation helper for Futures / Spot positions
   const getPositionMetrics = (pos: ActiveBotPosition) => {
-    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 ? currentPrice : pos.currentPrice || pos.entryPrice;
+    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 ? currentPrice : (pos.currentPrice || pos.entryPrice);
     const isLong = pos.decision === 'LONG';
-    const lev = pos.leverage || 1;
+    const lev = Math.max(1, pos.leverage || 1);
     const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
     const roePercent = priceDiffPct * lev;
-    const margin = pos.remainingAmountUsdt || pos.marginUsdt || pos.initialAmountUsdt || 0;
+    const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
+      ? pos.remainingAmountUsdt
+      : (pos.marginUsdt || pos.initialAmountUsdt || 0);
     const usdt = calculatePositionUnrealizedPnl(pos, p);
 
     // Distance to liquidation %
@@ -490,7 +492,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       usdt, 
       currentP: p,
       margin,
-      positionSizeUsdt: pos.positionSizeUsdt || (margin * lev),
+      positionSizeUsdt: margin * lev,
       distanceToLiqPct
     };
   };

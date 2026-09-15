@@ -455,6 +455,8 @@ export const startBotEngine = () => {
 
           pos.tp1Hit = true;
           pos.remainingAmountUsdt -= marginClosed;
+          pos.marginUsdt = pos.remainingAmountUsdt;
+          pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
           // Protect capital: move stop loss to entry price
@@ -496,6 +498,8 @@ export const startBotEngine = () => {
 
           pos.tp2Hit = true;
           pos.remainingAmountUsdt -= marginClosed;
+          pos.marginUsdt = pos.remainingAmountUsdt;
+          pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
           pos.lastAction = 'TP2 hit: 50% of remaining closed ✓ (Server)';

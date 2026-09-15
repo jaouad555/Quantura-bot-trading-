@@ -8,13 +8,25 @@ export function calculatePositionUnrealizedPnl(
   livePrice?: number
 ): number {
   const p = (livePrice && livePrice > 0) ? livePrice : (pos.currentPrice || pos.entryPrice);
-  if (!pos.entryPrice || !p) return 0;
+  if (!pos.entryPrice || !p || isNaN(p) || isNaN(pos.entryPrice)) return 0;
   
   const isLong = pos.decision === 'LONG';
-  const lev = pos.leverage || 1;
-  const margin = pos.remainingAmountUsdt || pos.marginUsdt || pos.initialAmountUsdt || 0;
+  const lev = Math.max(1, pos.leverage || 1);
+  const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
+    ? pos.remainingAmountUsdt
+    : (pos.marginUsdt || pos.initialAmountUsdt || 0);
+    
+  if (margin <= 0) return 0;
+  
   const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1);
-  return margin * priceDiffPct * lev;
+  const pnl = margin * priceDiffPct * lev;
+  
+  // Guard against loss exceeding 100% of isolated margin
+  if (pnl < -margin) {
+    return -margin;
+  }
+  
+  return pnl;
 }
 
 /**
@@ -27,17 +39,19 @@ export function calculatePortfolioMetrics(
   liveTickerPrice?: number,
   selectedSymbol?: string
 ) {
-  const freeCash = paperWallet?.balance ?? 1000;
+  const freeCash = Math.max(0, paperWallet?.balance ?? 1000);
   const positions = activeBotPositions || [];
 
-  const inTradeMargin = positions.reduce(
-    (acc, p) => acc + (p.remainingAmountUsdt || p.marginUsdt || p.initialAmountUsdt || 0),
-    0
-  );
+  const inTradeMargin = positions.reduce((acc, p) => {
+    const margin = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
+      ? p.remainingAmountUsdt
+      : (p.marginUsdt || p.initialAmountUsdt || 0);
+    return acc + Math.max(0, margin);
+  }, 0);
 
   const floatingPnl = positions.reduce((acc, p) => {
     const isSelected = selectedSymbol && p.symbol.toLowerCase() === selectedSymbol.toLowerCase();
-    const priceToUse = (isSelected && liveTickerPrice && liveTickerPrice > 0) ? liveTickerPrice : p.currentPrice;
+    const priceToUse = (isSelected && liveTickerPrice && liveTickerPrice > 0) ? liveTickerPrice : (p.currentPrice || p.entryPrice);
     return acc + calculatePositionUnrealizedPnl(p, priceToUse);
   }, 0);
 
@@ -52,3 +66,4 @@ export function calculatePortfolioMetrics(
     realizedPnl: Math.round(realizedPnl * 100) / 100,
   };
 }
+
