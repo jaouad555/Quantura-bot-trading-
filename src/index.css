@@ -233,9 +233,9 @@ html, body {
 /* Display Modes & Mobile Adjustments */
 @media (max-width: 768px) {
   body {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
-  .mode-fullscreen .min-h-\[400px\] { 
+  .mode-fullscreen .min-h-[400px] { 
     min-height: 300px; 
   }
   
@@ -249,14 +249,14 @@ html, body {
 
 /* Additional Responsive Adjustments */
 @media (max-width: 1024px) {
-  .mode-standard .p-4, .mode-standard .md\:p-6 {
+  .mode-standard .p-4, .mode-standard .md:p-6 {
     padding: 1rem;
   }
 }
 
-/* Ensure no horizontal scrolling on root */
+/* Ensure no horizontal scrolling on root without breaking sticky position */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
 }
 

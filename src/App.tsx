@@ -2489,9 +2489,11 @@ export const App: React.FC = () => {
               openPositionsCount={activeBotPositions.length}
             />
 
-            {/* Sticky Navigation Tabs Bar */}
-            <nav className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-30 px-2.5 sm:px-4 py-2">
-              <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {/* Scrollable workspace content container */}
+            <div className={`flex-1 flex flex-col min-w-0 ${isAndroidView ? 'overflow-y-auto' : ''}`}>
+              {/* Navigation Tabs Bar */}
+              <nav className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-2.5 sm:px-4 py-2 relative z-20">
+                <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                 <button
                   onClick={() => setActiveTab('signal')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
@@ -2911,6 +2913,7 @@ export const App: React.FC = () => {
           onOpenRiskModal={() => setIsRiskModalOpen(true)}
           onOpenSettingsModal={() => setIsSettingsOpen(true)}
         />
+            </div>
           </div>
         </div>
       )}

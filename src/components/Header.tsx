@@ -304,7 +304,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-md select-none w-full max-w-full overflow-hidden">
+    <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-md select-none w-full max-w-full">
       {/* Dev Mode Banner if active */}
       {isDeveloperMode && (
         <div className="bg-amber-500/20 border-b border-amber-500/40 px-3 py-0.5 text-center text-[11px] text-amber-300 flex items-center justify-center gap-1.5 font-mono">
@@ -313,8 +313,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {/* 1. TOP BAR (الشريط الأول): MENU, Pairs Selector, Spot/Futures, Live Price, Refresh */}
-      <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/80 bg-slate-900">
+      {/* 1. TOP BAR (الشريط الأول): MENU, Pairs Selector, Spot/Futures, Live Price, Refresh - Permanently Sticky */}
+      <div className="sticky top-0 z-50 w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/90 bg-slate-900/98 backdrop-blur-md shadow-md">
         <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
           {/* Left: Menu Trigger + Pair Selector Button + Futures / Spot Switcher (no gap, full FUTURES name) */}
