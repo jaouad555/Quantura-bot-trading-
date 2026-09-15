@@ -249,7 +249,7 @@ html, body {
 
 /* Additional Responsive Adjustments */
 @media (max-width: 1024px) {
-  .mode-standard .p-4, .mode-standard .md:p-6 {
+  .mode-standard .p-4, .mode-standard .\md\:p-6 {
     padding: 1rem;
   }
 }

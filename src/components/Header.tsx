@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { BinanceTicker, ConnectionState, Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, MarketType, DisplayMode, ActiveBotPosition } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
@@ -45,6 +46,8 @@ import {
   AlertOctagon,
   Zap,
   Sliders,
+  Search,
+  X,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -252,19 +255,80 @@ export const Header: React.FC<HeaderProps> = ({
     RESPECTED_TRADING_PAIRS.find((p) => p.symbol === selectedSymbol) ||
     RESPECTED_TRADING_PAIRS[0];
 
+  const [pairSearchQuery, setPairSearchQuery] = useState('');
+  const [pairCategoryFilter, setPairCategoryFilter] = useState<string>('ALL');
+
+  const pairCategories = [
+    { id: 'ALL', label: 'All', arabicLabel: 'الكل' },
+    { id: 'MAJOR', label: 'Majors', arabicLabel: 'الرئيسية' },
+    { id: 'LAYER1', label: 'Layer 1', arabicLabel: 'شبكات L1' },
+    { id: 'MEME', label: 'Meme', arabicLabel: 'الميم' },
+    { id: 'DEFI', label: 'DeFi & Infra', arabicLabel: 'ديفاي' },
+  ];
+
+  const filteredPairs = useMemo(() => {
+    return RESPECTED_TRADING_PAIRS.filter((pair) => {
+      const matchCategory =
+        pairCategoryFilter === 'ALL' ||
+        (pairCategoryFilter === 'DEFI' 
+          ? (pair.category === 'DEFI' || pair.category === 'ORACLE_INFRA') 
+          : pair.category === pairCategoryFilter);
+      const q = pairSearchQuery.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        pair.symbol.toLowerCase().includes(q) ||
+        pair.displayName.toLowerCase().includes(q) ||
+        pair.arabicName.toLowerCase().includes(q) ||
+        pair.baseAsset.toLowerCase().includes(q);
+      return matchCategory && matchSearch;
+    });
+  }, [pairSearchQuery, pairCategoryFilter]);
+
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const togglePairsDropdown = () => {
+    if (!isPairsDropdownOpen && pairsDropdownRef.current) {
+      const rect = pairsDropdownRef.current.getBoundingClientRect();
+      const isRtl = language === 'ar';
+      // Calculate best position
+      let left = rect.left;
+      if (isRtl) {
+        left = Math.max(8, rect.right - 280);
+      } else {
+        left = Math.min(rect.left, window.innerWidth - 288);
+      }
+      left = Math.max(8, left);
+      setDropdownCoords({
+        top: rect.bottom + 6,
+        left,
+      });
+      setIsPairsDropdownOpen(true);
+    } else {
+      setIsPairsDropdownOpen(false);
+    }
+  };
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (pairsDropdownRef.current && !pairsDropdownRef.current.contains(event.target as Node)) {
-        setIsPairsDropdownOpen(false);
+    if (!isPairsDropdownOpen) return;
+    const handleScrollOrResize = () => {
+      if (pairsDropdownRef.current) {
+        const rect = pairsDropdownRef.current.getBoundingClientRect();
+        const isRtl = language === 'ar';
+        let left = isRtl ? Math.max(8, rect.right - 280) : Math.min(rect.left, window.innerWidth - 288);
+        left = Math.max(8, left);
+        setDropdownCoords({
+          top: rect.bottom + 6,
+          left,
+        });
       }
     };
-    if (isPairsDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
     };
-  }, [isPairsDropdownOpen]);
+  }, [isPairsDropdownOpen, language]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -353,7 +417,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative shrink-0" ref={pairsDropdownRef}>
               <button
                 type="button"
-                onClick={() => setIsPairsDropdownOpen((prev) => !prev)}
+                onClick={togglePairsDropdown}
                 className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border transition-all duration-150 shrink-0 cursor-pointer select-none active:scale-95 ${
                   isPairsDropdownOpen
                     ? 'bg-slate-900 border-cyan-500/70 shadow-sm text-white'
@@ -377,57 +441,119 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               </button>
 
-              {/* Slim Compact Popout Dropdown Menu */}
-              {isPairsDropdownOpen && (
-                <div
-                  className={`absolute top-full mt-1.5 ${isArabic ? 'right-0' : 'left-0'} z-50 w-48 sm:w-52 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl shadow-[0_15px_40px_rgba(0,0,0,0.85)] p-1 animate-in fade-in zoom-in-95 duration-100`}
-                >
-                  <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-slate-800/80 text-[10px] font-mono text-slate-400">
-                    <span>{isArabic ? 'أزواج التداول' : 'Paires Crypto'}</span>
-                    <span className="text-cyan-400 font-bold">{RESPECTED_TRADING_PAIRS.length}</span>
-                  </div>
+              {/* Sleek Compact Dropdown Popout Directly Under the Button */}
+              {isPairsDropdownOpen && dropdownCoords && typeof document !== 'undefined' && createPortal(
+                <>
+                  {/* Invisible Backdrop to catch outside clicks */}
+                  <div
+                    className="fixed inset-0 z-[99998] bg-black/20 backdrop-blur-[1px]"
+                    onClick={() => setIsPairsDropdownOpen(false)}
+                  />
 
-                  <div className="max-h-64 overflow-y-auto space-y-0.5 custom-scrollbar pr-0.5">
-                    {RESPECTED_TRADING_PAIRS.map((pair) => {
-                      const isSelected = pair.symbol.toUpperCase() === selectedSymbol.toUpperCase();
-                      return (
-                        <button
-                          key={pair.symbol}
-                          type="button"
-                          onClick={() => {
-                            onSelectPair(pair);
-                            setIsPairsDropdownOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left transition-colors cursor-pointer border ${
-                            isSelected
-                              ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-bold'
-                              : 'bg-transparent hover:bg-slate-800/70 border-transparent text-slate-300 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <div
-                              className={`w-4 h-4 rounded bg-gradient-to-br ${pair.iconBg} flex items-center justify-center text-slate-950 font-black text-[9px] shadow-xs shrink-0`}
+                  {/* Floating Compact Dropdown Box */}
+                  <div
+                    style={{
+                      position: 'fixed',
+                      top: `${dropdownCoords.top}px`,
+                      left: `${dropdownCoords.left}px`,
+                    }}
+                    className="z-[99999] w-[275px] sm:w-[290px] bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.85)] p-2 animate-in fade-in zoom-in-95 duration-100 flex flex-col max-h-[380px] overflow-hidden"
+                    dir={isArabic ? 'rtl' : 'ltr'}
+                  >
+                    {/* Mini Search & Category Bar */}
+                    <div className="pb-2 border-b border-slate-800/80 space-y-1.5">
+                      <div className="relative">
+                        <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isArabic ? 'right-2.5' : 'left-2.5'} top-1/2 -translate-y-1/2`} />
+                        <input
+                          type="text"
+                          value={pairSearchQuery}
+                          onChange={(e) => setPairSearchQuery(e.target.value)}
+                          placeholder={isArabic ? 'بحث عن زوج (BTC, SOL)...' : 'Search pair (BTC, SOL)...'}
+                          className={`w-full bg-slate-900 border border-slate-800 focus:border-cyan-500/50 rounded-xl ${isArabic ? 'pr-7 pl-6' : 'pl-7 pr-6'} py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none font-mono`}
+                          autoFocus
+                        />
+                        {pairSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setPairSearchQuery('')}
+                            className={`absolute ${isArabic ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 text-slate-400 hover:text-white`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Mini Category Chips */}
+                      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
+                        {pairCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setPairCategoryFilter(cat.id)}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition shrink-0 cursor-pointer ${
+                              pairCategoryFilter === cat.id
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800/60'
+                            }`}
+                          >
+                            {isArabic ? cat.arabicLabel : cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Scrollable Compact Pair Items */}
+                    <div className="mt-1 overflow-y-auto max-h-[260px] space-y-1 custom-scrollbar pr-0.5">
+                      {filteredPairs.length === 0 ? (
+                        <div className="text-center py-4 text-slate-500 text-[11px] font-mono">
+                          {isArabic ? 'لا توجد أزواج' : 'No pairs found'}
+                        </div>
+                      ) : (
+                        filteredPairs.map((pair) => {
+                          const isSelected = pair.symbol.toUpperCase() === selectedSymbol.toUpperCase();
+                          return (
+                            <button
+                              key={pair.symbol}
+                              type="button"
+                              onClick={() => {
+                                onSelectPair(pair);
+                                setIsPairsDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-1.5 rounded-xl transition cursor-pointer border ${
+                                isSelected
+                                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-bold shadow-xs'
+                                  : 'bg-transparent hover:bg-slate-900 border-transparent text-slate-300 hover:text-white'
+                              }`}
                             >
-                              {pair.iconText}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-mono text-xs leading-tight truncate">
-                                {pair.displayName}
-                              </span>
-                              <span className="text-[9px] text-slate-500 font-mono leading-tight truncate">
-                                {isArabic ? pair.arabicName.split(' ')[0] : pair.category}
-                              </span>
-                            </div>
-                          </div>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${pair.iconBg} flex items-center justify-center text-slate-950 font-black text-[10px] shadow-xs shrink-0`}>
+                                  {pair.iconText}
+                                </div>
+                                <div className="flex flex-col min-w-0 text-left" dir="ltr">
+                                  <span className="font-mono text-xs font-bold leading-tight truncate text-white">
+                                    {pair.displayName}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 leading-none truncate">
+                                    {isArabic ? pair.arabicName.split(' ')[0] : pair.category}
+                                  </span>
+                                </div>
+                              </div>
 
-                          {isSelected && (
-                            <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-1" strokeWidth={2} />
-                          )}
-                        </button>
-                      );
-                    })}
+                              {isSelected ? (
+                                <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-1" strokeWidth={2.5} />
+                              ) : (
+                                <span className="text-[10px] font-mono text-slate-500">
+                                  {pair.category === 'MEME' ? '🔥' : '⚡'}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>,
+                document.body
               )}
             </div>
 
