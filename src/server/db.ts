@@ -1,7 +1,10 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc, setLogLevel } from 'firebase/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Suppress internal Firestore gRPC and quota warnings to keep logs clean
+setLogLevel('silent');
 
 let firebaseConfig: any;
 try {
@@ -49,8 +52,57 @@ const persistLocalCache = () => {
 
 let firestoreQuotaExceeded = false;
 
+// Sync queue for batching writes to Firestore
+const pendingSyncs = new Map<string, string>();
+const pendingDeletes = new Set<string>();
+let syncInterval: NodeJS.Timeout | null = null;
+
+const startSyncInterval = () => {
+  if (syncInterval) return;
+  // Sync to Firestore every 60 seconds to save quota (max ~1440 writes/day per key)
+  syncInterval = setInterval(async () => {
+    if (!db || firestoreQuotaExceeded) return;
+    
+    if (pendingSyncs.size === 0 && pendingDeletes.size === 0) return;
+
+    const syncs = new Map(pendingSyncs);
+    const deletes = new Set(pendingDeletes);
+    pendingSyncs.clear();
+    pendingDeletes.clear();
+
+    try {
+      // Sync sets
+      for (const [key, value] of syncs) {
+        if (!firestoreQuotaExceeded) {
+           await setDoc(doc(db, KV_COLLECTION, key), { value }).catch((e: any) => {
+             if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
+                firestoreQuotaExceeded = true;
+                console.warn('[DB] Firestore quota reached during periodic sync.');
+             }
+           });
+        }
+      }
+      
+      // Sync deletes
+      for (const key of deletes) {
+        if (!firestoreQuotaExceeded) {
+           await deleteDoc(doc(db, KV_COLLECTION, key)).catch((e: any) => {
+             if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
+                firestoreQuotaExceeded = true;
+             }
+           });
+        }
+      }
+    } catch (err) {
+      console.error('Batch sync error:', err);
+    }
+  }, 60000);
+};
+
+startSyncInterval();
+
 export const initDb = () => {
-  console.log('Database initialized with local resilient cache and Firestore backup.');
+  console.log('Database initialized with local resilient cache and Firestore backup (60s periodic sync).');
 };
 
 export const kv = {
@@ -71,7 +123,7 @@ export const kv = {
           return val;
         }
       } catch (e: any) {
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
           firestoreQuotaExceeded = true;
           console.warn('[DB] Firestore quota reached. Seamlessly using local memory & disk storage.');
         } else {
@@ -81,6 +133,7 @@ export const kv = {
     }
     return null;
   },
+  
   getAll: async (): Promise<Record<string, string>> => {
     if (db && !firestoreQuotaExceeded) {
       try {
@@ -90,7 +143,7 @@ export const kv = {
         });
         persistLocalCache();
       } catch (e: any) {
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
           firestoreQuotaExceeded = true;
         } else {
           console.error('KV GetAll Error:', e?.message || e);
@@ -99,43 +152,40 @@ export const kv = {
     }
     return { ...localMemoryCache };
   },
+  
   set: async (key: string, value: string): Promise<void> => {
     // Always store immediately in local memory & disk
     localMemoryCache[key] = value;
     persistLocalCache();
-
-    // Async sync to Firestore without blocking if quota allows
+    
+    // Queue for Firestore sync
     if (db && !firestoreQuotaExceeded) {
-      setDoc(doc(db, KV_COLLECTION, key), { value }).catch((e: any) => {
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
-          firestoreQuotaExceeded = true;
-        }
-      });
+      pendingDeletes.delete(key);
+      pendingSyncs.set(key, value);
     }
   },
+  
   delete: async (key: string): Promise<void> => {
     delete localMemoryCache[key];
     persistLocalCache();
-
+    
     if (db && !firestoreQuotaExceeded) {
-      deleteDoc(doc(db, KV_COLLECTION, key)).catch((e: any) => {
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
-          firestoreQuotaExceeded = true;
-        }
-      });
+      pendingSyncs.delete(key);
+      pendingDeletes.add(key);
     }
   },
+  
   clear: async (): Promise<void> => {
     localMemoryCache = {};
     persistLocalCache();
-
+    
     if (db && !firestoreQuotaExceeded) {
+      pendingSyncs.clear();
       try {
         const snap = await getDocs(collection(db, KV_COLLECTION));
-        const promises = snap.docs.map(d => deleteDoc(doc(db, KV_COLLECTION, d.id)));
-        await Promise.all(promises);
+        snap.docs.forEach(d => pendingDeletes.add(d.id));
       } catch (e: any) {
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
           firestoreQuotaExceeded = true;
         }
       }

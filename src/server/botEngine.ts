@@ -598,8 +598,20 @@ export const startBotEngine = () => {
 
       // 6. ALWAYS PERSIST UPDATED LIVE POSITIONS TO KV
       // This guarantees that open trades NEVER stay stuck at 0.00% ROE in the UI!
-      const remainingPositions = positions.filter((p: any) => !p._delete);
-      await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
+      const freshPositionsStr = await kv.get('btc_active_bot_positions');
+      const freshPositions = freshPositionsStr ? JSON.parse(freshPositionsStr) : [];
+      
+      const updatedPositions = freshPositions.map((freshPos: any) => {
+         const loopPos = positions.find((p: any) => p.id === freshPos.id);
+         if (loopPos) {
+             if (loopPos._delete) return null;
+             const { _delete, ...safeLoopPos } = loopPos;
+             return { ...freshPos, ...safeLoopPos };
+         }
+         return freshPos;
+      }).filter(Boolean);
+      
+      await kv.set('btc_active_bot_positions', JSON.stringify(updatedPositions));
 
       if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
         const currentWalletStr = await kv.get('btc_paper_wallet');

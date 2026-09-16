@@ -266,42 +266,6 @@ async function processTradingSignal(
     wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
     wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
     
-    const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 10) / 100));
-    let margin = Math.round(wallet.balance * allocationPct * 100) / 100;
-    
-    if (margin > wallet.balance) margin = wallet.balance;
-    if (margin < 10) {
-      console.log(`[TRADE BLOCKED] Insufficient free margin: $${wallet.balance.toFixed(2)} available, min required: $10.00`);
-      return;
-    }
-
-    // CRITICAL GATE 2: Protection against stale signals:
-    // Re-check strategy status immediately before order submission!
-    if (!strategyManager.isStrategyActive(signal.strategyId)) {
-      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} Strategy: ${signal.strategyName} Reason: STRATEGY_INACTIVE (stale signal)`);
-      return;
-    }
-
-    // We can proceed to execute
-    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. ORDER SENT.`);
-    
-    const lev = config.leverage || auth.strategy?.defaultLeverage || 3;
-    const notional = margin * lev;
-    const quantity = notional / currentPrice;
-
-    if (isLive) {
-      const orderSide = signal.decision === 'LONG' ? 'BUY' : 'SELL';
-      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice);
-      if (!orderRes.success) {
-        console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED:`, orderRes.error);
-        return;
-      }
-    } else {
-      wallet.balance = Math.max(0, Math.round((wallet.balance - margin) * 100) / 100);
-      await kv.set('btc_paper_wallet', JSON.stringify(wallet));
-    }
-
-    // Open position with authoritative strategy metadata and risk controls
     const isLong = signal.decision === 'LONG';
     let safeSl = signal.stopLoss;
     let safeTp1 = signal.tp1;
@@ -320,6 +284,61 @@ async function processTradingSignal(
       if (!safeTp1 || safeTp1 >= currentPrice) safeTp1 = currentPrice - risk * 1.5;
       if (!safeTp2 || safeTp2 >= safeTp1) safeTp2 = safeTp1 - risk * 1.0;
       if (!safeTp3 || safeTp3 >= safeTp2) safeTp3 = Math.max(currentPrice * 0.05, safeTp2 - risk * 1.5);
+    }
+
+    const slDistancePct = Math.abs(currentPrice - safeSl) / currentPrice;
+    const lev = config.leverage || auth.strategy?.defaultLeverage || 3;
+
+    // Calculate total equity including active positions for risk-based sizing
+    let totalEquity = wallet.balance;
+    currentModePositions.forEach((p: any) => {
+        totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
+    });
+
+    let margin = 0;
+    if (config.sizingMode === 'RISK_BASED') {
+        const targetRiskUsdt = totalEquity * ((config.riskPerTradePercent || 2.0) / 100);
+        const notionalSize = targetRiskUsdt / Math.max(0.008, slDistancePct);
+        margin = notionalSize / lev;
+        margin = Math.min(margin, totalEquity * 0.45); // Max 45% of portfolio per position
+    } else {
+        const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 10) / 100));
+        margin = totalEquity * allocationPct;
+    }
+
+    margin = Math.round(margin * 100) / 100;
+    if (margin > wallet.balance) margin = wallet.balance;
+
+    if (margin < 10) {
+      console.log(`[TRADE BLOCKED] Insufficient free margin: $${wallet.balance.toFixed(2)} available, min required: $10.00`);
+      return;
+    }
+
+    // CRITICAL GATE 2: Protection against stale signals:
+    // Re-check strategy status immediately before order submission!
+    if (!strategyManager.isStrategyActive(signal.strategyId)) {
+      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} Strategy: ${signal.strategyName} Reason: STRATEGY_INACTIVE (stale signal)`);
+      return;
+    }
+
+    // We can proceed to execute
+    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. ORDER SENT.`);
+
+    const notional = margin * lev;
+    const quantity = notional / currentPrice;
+
+    if (isLive) {
+      const orderSide = isLong ? 'BUY' : 'SELL';
+      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice);
+      if (!orderRes.success) {
+        console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED:`, orderRes.error);
+        return;
+      }
+    } else {
+      const freshWalletStr = await kv.get('btc_paper_wallet');
+      let freshWallet = freshWalletStr ? JSON.parse(freshWalletStr) : { balance: 1000, realizedPnl: 0 };
+      freshWallet.balance = Math.max(0, Math.round((freshWallet.balance - margin) * 100) / 100);
+      await kv.set('btc_paper_wallet', JSON.stringify(freshWallet));
     }
 
     const liqPrice = isLong
@@ -381,8 +400,10 @@ async function processTradingSignal(
     logs.unshift(newLog);
     await kv.set('btc_bot_logs', JSON.stringify(logs.slice(0, 500)));
     
-    positions.push(newPos);
-    await kv.set('btc_active_bot_positions', JSON.stringify(positions));
+    const freshPosStr = await kv.get('btc_active_bot_positions');
+    const freshPositions = freshPosStr ? JSON.parse(freshPosStr) : [];
+    freshPositions.push(newPos);
+    await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
     
     console.log(`[POSITION] ${symbol} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
 
