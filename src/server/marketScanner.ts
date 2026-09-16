@@ -72,9 +72,11 @@ export async function scanAllPairs() {
     scannerState.activeStrategiesCount = activeStrategies.length;
     scannerState.status = 'RUNNING';
 
-    let rawAllowed = config.allowedSymbols || [];
+    const rawAllowed = (Array.isArray(config.allowedSymbols) && config.allowedSymbols.length > 0)
+      ? config.allowedSymbols
+      : RESPECTED_TRADING_PAIRS.map(p => p.baseAsset);
     // Convert base symbols like "BTC" to "BTCUSDT"
-    let allowedToExecute = rawAllowed.map((s: string) => s.endsWith('USDT') ? s : s + 'USDT');
+    const allowedToExecute = rawAllowed.map((s: string) => s.toUpperCase().endsWith('USDT') ? s.toUpperCase() : s.toUpperCase() + 'USDT');
     
     // The scanner will ALWAYS monitor all respected pairs from the Header.
     let enabledPairs = RESPECTED_TRADING_PAIRS.map(p => p.symbol);
@@ -198,6 +200,26 @@ async function processTradingSignal(
   isLive: boolean
 ) {
   try {
+    // CRITICAL GATE 0: Re-check latest authoritative botConfig from KV
+    // Prevents entering trades if user disabled the bot or presets in UI while scan loop was running
+    const latestConfigStr = await kv.get('btc_bot_config');
+    const latestConfig = latestConfigStr ? JSON.parse(latestConfigStr) : config;
+    if (!latestConfig || !latestConfig.enabled) {
+      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Bot is disabled (enabled: false)`);
+      return;
+    }
+
+    if (latestConfig.circuitBreakerTripped) {
+      console.log(`[TRADE BLOCKED] ${symbol} - Circuit Breaker Tripped`);
+      return;
+    }
+
+    const activePresets: string[] = Array.isArray(latestConfig.activePresets) ? latestConfig.activePresets : [];
+    if (activePresets.length === 0 || !activePresets.includes(signal.strategyId)) {
+      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Strategy ${signal.strategyId} not in activePresets (total active: ${activePresets.length})`);
+      return;
+    }
+
     // CRITICAL GATE 1: Authorization with StrategyManager
     const auth = await strategyManager.authorizeTrade({
       strategyId: signal.strategyId,

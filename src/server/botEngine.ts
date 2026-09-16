@@ -278,10 +278,7 @@ export const startBotEngine = () => {
   engineInterval = setInterval(async () => {
     try {
       const botConfigStr = await kv.get('btc_bot_config');
-      if (!botConfigStr) return;
-      const botConfig = JSON.parse(botConfigStr);
-      
-      if (!botConfig.enabled) return;
+      const botConfig = botConfigStr ? JSON.parse(botConfigStr) : { enabled: false };
 
       const positionsStr = await kv.get('btc_active_bot_positions');
       if (!positionsStr) return;

@@ -315,6 +315,30 @@ class StrategyManager {
     side: 'BUY' | 'SELL' | 'LONG' | 'SHORT';
   }): Promise<{ authorized: boolean; reason?: string; strategy?: StrategyDefinition }> {
     const { strategyId, symbol, side } = params;
+
+    // Rule 0: Global Bot MUST be explicitly enabled
+    const configStr = await kv.get('btc_bot_config');
+    const config = configStr ? JSON.parse(configStr) : null;
+    if (!config || !config.enabled) {
+      const reason = 'BOT_DISABLED';
+      await this.logAudit(
+        `[TRADE BLOCKED] ${symbol} ${side} - Global Bot is Disabled (${reason})`,
+        true
+      );
+      return { authorized: false, reason };
+    }
+
+    // Rule 0.5: Strategy must be in activePresets of btc_bot_config
+    const activePresets: string[] = Array.isArray(config.activePresets) ? config.activePresets : [];
+    if (!activePresets.includes(strategyId)) {
+      const reason = 'STRATEGY_NOT_IN_ACTIVE_PRESETS';
+      await this.logAudit(
+        `[TRADE BLOCKED] ${symbol} ${side} - Strategy ${strategyId} is not in user active presets`,
+        true
+      );
+      return { authorized: false, reason };
+    }
+
     const strat = this.getStrategy(strategyId);
 
     // Rule 1: Unknown or missing strategy

@@ -392,6 +392,7 @@ export const App: React.FC = () => {
       riskPerTradePercent: 2.0,
       cooldownMinutes: 10,
       multiPairScanning: true,
+      allowedSymbols: RESPECTED_TRADING_PAIRS.map(p => p.baseAsset),
     };
     try {
       const saved = apiStorage.getItem('btc_bot_config');
@@ -1706,6 +1707,82 @@ export const App: React.FC = () => {
     playAudioChime();
   }, [language, ticker?.price, playAudioChime]);
 
+  // Centralized Bot Manual Activation & Deactivation Toggle
+  const handleToggleBot = useCallback(() => {
+    setBotConfig((prev) => {
+      const nextEnabled = !prev.enabled;
+
+      // When manually turning ON the bot, ensure at least one strategy is configured
+      if (nextEnabled) {
+        const activeCount = prev.activePresets?.length || 0;
+        if (activeCount === 0) {
+          const isAr = language === 'ar';
+          const msg = isAr 
+            ? '⚠️ لا يمكن تشغيل البوت بدون اختيار استراتيجية واحدة على الأقل. يرجى اختيار وتفعيل استراتيجية من القائمة أدناه أولاً.'
+            : '⚠️ Cannot start bot without selecting at least one strategy. Please choose and configure a strategy below first.';
+          const alert: PushAlert = {
+            id: `alert-no-strat-${Date.now()}`,
+            title: isAr ? '⚠️ لم يتم اختيار استراتيجية' : '⚠️ No Strategy Selected',
+            body: msg,
+            timestamp: Date.now(),
+            type: 'SYSTEM',
+            read: false,
+          };
+          setAlerts((a) => [alert, ...(a || []).slice(0, 29)]);
+          triggerToastAlert(alert);
+          playAudioChime();
+          return prev; // Strictly reject activation
+        }
+
+        const isAr = language === 'ar';
+        const startLog: AutoTradeLog = {
+          id: `log-start-${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'STRATEGY_AUDIT',
+          symbol: 'PORTFOLIO',
+          side: 'BUY',
+          price: ticker?.price || 0,
+          amountUsdt: 0,
+          reason: isAr
+            ? `⚡ تم تفعيل وتشغيل البوت يدوياً بنجاح (${prev.activePresets?.length} استراتيجية نشطة).`
+            : `⚡ Bot manually activated successfully (${prev.activePresets?.length} active strategies).`,
+          mode: executionModeRef.current === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'PAPER',
+        };
+        addBotLog(startLog);
+        playAudioChime();
+      } else {
+        const isAr = language === 'ar';
+        const stopLog: AutoTradeLog = {
+          id: `log-stop-${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'STRATEGY_AUDIT',
+          symbol: 'PORTFOLIO',
+          side: 'SELL',
+          price: ticker?.price || 0,
+          amountUsdt: 0,
+          reason: isAr
+            ? '⏸️ تم إيقاف البوت يدوياً. لن يتم فتح أي صفقات جديدة حتى يتم تفعيله يدوياً.'
+            : '⏸️ Bot manually paused. No new positions will open until manually resumed.',
+          mode: executionModeRef.current === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'PAPER',
+        };
+        addBotLog(stopLog);
+        playAudioChime();
+      }
+
+      if (nextEnabled && prev.circuitBreakerTripped) {
+        return {
+          ...prev,
+          enabled: true,
+          enabledAt: Date.now(),
+          circuitBreakerTripped: false,
+          circuitBreakerTrippedAt: undefined,
+          circuitBreakerResetAt: Date.now(),
+        };
+      }
+      return { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
+    });
+  }, [language, ticker?.price, playAudioChime, triggerToastAlert, addBotLog]);
+
   const handleFullReset = useCallback(async () => {
     // 1. Immediately zero out refs to prevent background intervals or ticks from writing back stale positions
     activeBotPositionsRef.current = [];
@@ -1776,27 +1853,78 @@ export const App: React.FC = () => {
     latestTickerRef.current = ticker;
   }, [ticker]);
 
-  // Background PnL History Sampler for all active positions
+  // Background PnL History Sampler & Multi-Pair Real-Time Price Sync for all active positions
   useEffect(() => {
-    const interval = setInterval(() => {
-      const currentTicker = latestTickerRef.current;
-      if (!currentTicker?.price || isNaN(currentTicker.price) || currentTicker.price <= 0) return;
-      const normTickerSym = normalizeSymbol(currentTicker.symbol);
-      setActiveBotPositions((prevPositions) =>
-        prevPositions.map((pos) => {
-          if (normTickerSym !== normalizeSymbol(pos.symbol)) return pos;
+    const updatePositionsWithPrices = (pricesMap: Record<string, number>) => {
+      setActiveBotPositions((prevPositions) => {
+        if (!prevPositions || prevPositions.length === 0) return prevPositions;
+        let changed = false;
+        const updated = prevPositions.map((pos) => {
+          const normPosSym = normalizeSymbol(pos.symbol);
+          const p = pricesMap[normPosSym] || pricesMap[pos.symbol.toUpperCase()];
+          if (!p || isNaN(p) || p <= 0) return pos;
+
           const isLong = pos.decision === 'LONG';
           const lev = pos.leverage || 1;
-          const priceDiffPct = ((currentTicker.price - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+          const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
           const currentRoePercent = priceDiffPct * lev;
+          const remainingMargin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
+            ? pos.remainingAmountUsdt
+            : (pos.marginUsdt || pos.initialAmountUsdt || 0);
+          const unrealizedPnlUsdt = remainingMargin * (currentRoePercent / 100);
+
+          changed = true;
           return {
             ...pos,
-            currentPrice: currentTicker.price,
-            pnlHistory: [...(pos.pnlHistory || []), currentRoePercent].slice(-50),
+            currentPrice: p,
+            roePercent: Math.round(currentRoePercent * 100) / 100,
+            unrealizedPnlUsdt: Math.round(unrealizedPnlUsdt * 100) / 100,
+            pnlHistory: [...(pos.pnlHistory || []), Math.round(currentRoePercent * 10) / 10].slice(-50),
           };
-        })
-      );
-    }, 5000);
+        });
+        return changed ? updated : prevPositions;
+      });
+    };
+
+    const interval = setInterval(async () => {
+      const positions = activeBotPositionsRef.current;
+      const pricesMap: Record<string, number> = {};
+
+      const currentTicker = latestTickerRef.current;
+      if (currentTicker?.price && !isNaN(currentTicker.price) && currentTicker.price > 0) {
+        pricesMap[normalizeSymbol(currentTicker.symbol)] = currentTicker.price;
+        pricesMap[currentTicker.symbol.toUpperCase()] = currentTicker.price;
+      }
+
+      if (positions && positions.length > 0) {
+        const symbolsToFetch = Array.from(new Set(positions.map(p => p.symbol.toUpperCase())))
+          .filter(sym => !pricesMap[normalizeSymbol(sym)]);
+
+        if (symbolsToFetch.length > 0) {
+          try {
+            const res = await fetch(`/api/bot/prices?symbols=${symbolsToFetch.join(',')}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.prices) {
+                Object.entries(data.prices).forEach(([sym, price]) => {
+                  if (typeof price === 'number' && price > 0) {
+                    pricesMap[normalizeSymbol(sym)] = price;
+                    pricesMap[sym.toUpperCase()] = price;
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            // Silently fall back to ticker prices
+          }
+        }
+      }
+
+      if (Object.keys(pricesMap).length > 0) {
+        updatePositionsWithPrices(pricesMap);
+      }
+    }, 3000);
+
     return () => clearInterval(interval);
   }, []); // Empty dependency array prevents interval from resetting on every tick
 
@@ -2049,6 +2177,28 @@ export const App: React.FC = () => {
                          const history = JSON.parse(serverData.btc_trade_history);
                          setTradeHistory(history);
                          tradeHistoryRef.current = history;
+                     }
+                 }
+
+                 // Check if bot logs changed on server
+                 if (serverData.btc_bot_logs) {
+                     const currentLocal = JSON.stringify(botLogsRef.current);
+                     if (serverData.btc_bot_logs !== currentLocal) {
+                         const logs = JSON.parse(serverData.btc_bot_logs);
+                         setBotLogs(logs);
+                         botLogsRef.current = logs;
+                     }
+                 }
+
+                 // Check if bot config changed on server
+                 if (serverData.btc_bot_config) {
+                     const currentLocal = JSON.stringify(botConfigRef.current);
+                     if (serverData.btc_bot_config !== currentLocal) {
+                         try {
+                             const remoteConfig = JSON.parse(serverData.btc_bot_config);
+                             setBotConfig((prev) => ({ ...prev, ...remoteConfig }));
+                             botConfigRef.current = { ...botConfigRef.current, ...remoteConfig };
+                         } catch (e) {}
                      }
                  }
              }
@@ -2543,7 +2693,7 @@ export const App: React.FC = () => {
               onLogout={handleLogout}
               username={username || 'JAOUAD'}
               botEnabled={botConfig.enabled}
-              onToggleBot={() => setBotConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
+              onToggleBot={handleToggleBot}
               activeTab={activeTab}
               onNavigateTab={setActiveTab}
               openPositionsCount={activeBotPositions.length}
@@ -2734,22 +2884,7 @@ export const App: React.FC = () => {
               binanceConfig={binanceConfig}
               onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
               onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
-              onToggleBot={() => {
-                setBotConfig((prev) => {
-                  const nextEnabled = !prev.enabled;
-                  if (nextEnabled && prev.circuitBreakerTripped) {
-                    return {
-                      ...prev,
-                      enabled: true,
-                      enabledAt: Date.now(),
-                      circuitBreakerTripped: false,
-                      circuitBreakerTrippedAt: undefined,
-                      circuitBreakerResetAt: Date.now(),
-                    };
-                  }
-                  return { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
-                });
-              }}
+              onToggleBot={handleToggleBot}
               onUpdateConfig={(partial) => {
                 if (partial.marketType && partial.marketType !== botConfig.marketType) {
                   handleToggleMarketType(partial.marketType);

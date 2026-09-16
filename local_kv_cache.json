@@ -1,0 +1,20 @@
+{
+  "quantura_active_strategies": "{\"MOMENTUM\":false,\"SCALPER\":false,\"SWING\":false,\"BREAKOUT\":false,\"MEAN_REVERSION\":false,\"INSTITUTIONAL_SMC\":false}",
+  "quantura_risk_drawdown_state": "{\"startingDailyEquity\":1000,\"lastDailyResetTimestamp\":1789511855416,\"peakEquity\":1000,\"dailyRealizedPnl\":-2.575319851423821,\"dailyFeesPaid\":0,\"dailyFundingPaid\":0,\"consecutiveLosses\":1,\"consecutiveWins\":0,\"lastClosedTradePnl\":-2.575319851423821,\"lastClosedTradeSizeUsdt\":0,\"lastClosedTradeLeverage\":1}",
+  "btc_bot_config": "{\"enabled\":false,\"activePresets\":[],\"tradeAllocationPercent\":20,\"minConfidence\":65,\"mode\":\"SCALE_OUT_REBUY\",\"autoCompound\":true,\"maxOpenTrades\":3,\"timeframe\":\"1h\",\"marketType\":\"FUTURES\",\"leverage\":3,\"marginMode\":\"ISOLATED\",\"trailingStopEnabled\":true,\"trailingStopPercent\":1.2,\"trailingActivationProfitPercent\":1.5,\"dailyDrawdownLimitPercent\":5,\"circuitBreakerTripped\":false,\"sizingMode\":\"FIXED_PERCENT\",\"riskPerTradePercent\":2,\"cooldownMinutes\":10,\"multiPairScanning\":true,\"allowedSymbols\":[\"BTC\",\"ETH\",\"SOL\",\"BNB\",\"XRP\",\"ADA\",\"AVAX\",\"DOT\",\"MATIC\",\"LINK\",\"DOGE\",\"LTC\",\"UNI\",\"ATOM\",\"TRX\",\"ETC\",\"BCH\",\"XLM\",\"ALGO\",\"VET\"]}",
+  "btc_active_bot_positions": "[]",
+  "app_telegram_bot_token": "",
+  "app_telegram_chat_id": "",
+  "app_dev_mode": "false",
+  "app_language": "fr",
+  "app_sound_enabled": "true",
+  "app_timezone": "GMT+1",
+  "binance_api_config": "{\"apiKey\":\"\",\"apiSecret\":\"\",\"useTestnet\":false,\"isLiveModeEnabled\":false,\"isConnected\":false,\"accountInfo\":null,\"autoTradingEnabled\":false}",
+  "btc_bot_logs": "[{\"id\":\"audit-1789555597032-jv8r\",\"timestamp\":1789555597032,\"type\":\"STRATEGY_AUDIT\",\"symbol\":\"SYSTEM\",\"side\":\"BUY\",\"price\":0,\"amountUsdt\":0,\"reason\":\"[STRATEGY] Momentum Grid → DEACTIVATED\",\"mode\":\"PAPER\"},{\"id\":\"audit-1789555583268-ur3s\",\"timestamp\":1789555583268,\"type\":\"STRATEGY_AUDIT\",\"symbol\":\"SYSTEM\",\"side\":\"BUY\",\"price\":0,\"amountUsdt\":0,\"reason\":\"[STRATEGY] Momentum Grid → ACTIVATED\",\"mode\":\"PAPER\"}]",
+  "btc_paper_wallet": "{\"balance\":1000,\"realizedPnl\":0,\"openPosition\":null,\"history\":[]}",
+  "btc_push_alerts": "[]",
+  "btc_trade_history": "[]",
+  "min_confidence_threshold": "75",
+  "quantura_display_mode": "standard",
+  "trading_execution_mode": "PAPER"
+}

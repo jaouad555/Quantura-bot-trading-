@@ -185,7 +185,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
             onUpdateConfig({
               activePresets: backendActive,
-              enabled: backendActive.length > 0 && botConfig.enabled,
+              ...(backendActive.length === 0 && botConfig.enabled ? { enabled: false } : {}),
             });
           }
         }
@@ -214,8 +214,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     }).catch((err) => console.error('[StrategyManager] Failed to toggle strategy state:', err));
 
     let newConfig: Partial<AutoBotConfig> = { 
-      enabled: currentPresets.length > 0,
-      activePresets: currentPresets 
+      // The bot MUST strictly remain disabled until the user manually clicks Start Bot.
+      // Modifying or activating a strategy must NEVER enable the bot automatically!
+      activePresets: currentPresets,
+      ...(currentPresets.length === 0 && botConfig.enabled ? { enabled: false } : {})
     };
     
     // Apply specific parameters based on selection
@@ -339,8 +341,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
     const isFutures = botConfig.marketType === 'FUTURES';
     onUpdateConfig({
-      enabled: enable,
       activePresets: newPresets,
+      ...(newPresets.length === 0 && botConfig.enabled ? { enabled: false } : {}),
       timeframe: enable ? 'AUTO' : botConfig.timeframe,
       leverage: enable ? (isFutures ? 3 : 1) : botConfig.leverage,
       tradeAllocationPercent: enable ? 15 : botConfig.tradeAllocationPercent,
@@ -607,11 +609,17 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
-            {/* 1. Entry */}
+            {/* 1. Entry & Live Price */}
             <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-              <div className="text-slate-400 text-[10px] mb-0.5">{isArabic ? 'سعر الدخول' : "Entry Price"}</div>
+              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
+                <span>{isArabic ? 'الدخول / الحالي' : 'Entry / Current'}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              </div>
               <div className="font-bold text-white font-mono">${formatCoinPrice(activePosition.entryPrice, activePosition.symbol)}</div>
-              <div className="text-[10px] text-slate-400 mt-1 font-mono">${metrics.margin.toFixed(0)} Mgn</div>
+              <div className="text-[10px] text-cyan-300 font-mono mt-0.5 flex items-center justify-between">
+                <span>${formatCoinPrice(metrics.currentP, activePosition.symbol)}</span>
+                <span className="text-slate-400">${metrics.margin.toFixed(0)} Mgn</span>
+              </div>
             </div>
 
             {/* 2. TP1 */}

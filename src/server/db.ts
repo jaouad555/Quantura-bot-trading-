@@ -11,61 +11,134 @@ try {
   console.error('Could not load firebase-applet-config.json');
 }
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, firebaseConfig?.firestoreDatabaseId);
+let app: any = null;
+let db: any = null;
+try {
+  if (firebaseConfig && firebaseConfig.apiKey) {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app, firebaseConfig?.firestoreDatabaseId);
+  }
+} catch (e) {
+  console.warn('Firebase initialization skipped or failed, using local storage cache.');
+}
 
 const SECRET = 'quantura_bot_secret_2026';
 const KV_COLLECTION = `server_data/${SECRET}/kv_store`;
 
+// Local In-Memory & File-Based Storage Cache (Protects against Firestore Free-Tier Quota Exhaustion)
+const LOCAL_STORAGE_FILE = path.join(process.cwd(), 'local_kv_cache.json');
+let localMemoryCache: Record<string, string> = {};
+
+// Load initial state from local file if exists
+try {
+  if (fs.existsSync(LOCAL_STORAGE_FILE)) {
+    const raw = fs.readFileSync(LOCAL_STORAGE_FILE, 'utf8');
+    localMemoryCache = JSON.parse(raw);
+  }
+} catch (err) {
+  console.warn('Could not read local_kv_cache.json:', err);
+}
+
+const persistLocalCache = () => {
+  try {
+    fs.writeFileSync(LOCAL_STORAGE_FILE, JSON.stringify(localMemoryCache, null, 2), 'utf8');
+  } catch (err) {
+    // Non-fatal if filesystem is restricted
+  }
+};
+
+let firestoreQuotaExceeded = false;
+
 export const initDb = () => {
-  console.log('Firebase Firestore initialized as backend DB.');
+  console.log('Database initialized with local resilient cache and Firestore backup.');
 };
 
 export const kv = {
   get: async (key: string): Promise<string | null> => {
-    try {
-      const snap = await getDoc(doc(db, KV_COLLECTION, key));
-      if (snap.exists()) {
-        return snap.data().value as string;
+    // 1. Return from memory cache if available
+    if (localMemoryCache[key] !== undefined) {
+      return localMemoryCache[key];
+    }
+    
+    // 2. Fallback to Firestore if quota has not exceeded
+    if (db && !firestoreQuotaExceeded) {
+      try {
+        const snap = await getDoc(doc(db, KV_COLLECTION, key));
+        if (snap.exists()) {
+          const val = snap.data().value as string;
+          localMemoryCache[key] = val;
+          persistLocalCache();
+          return val;
+        }
+      } catch (e: any) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+          console.warn('[DB] Firestore quota reached. Seamlessly using local memory & disk storage.');
+        } else {
+          console.error('KV Get Error:', e?.message || e);
+        }
       }
-    } catch (e) {
-      console.error('KV Get Error:', e);
     }
     return null;
   },
   getAll: async (): Promise<Record<string, string>> => {
-    const result: Record<string, string> = {};
-    try {
-      const snap = await getDocs(collection(db, KV_COLLECTION));
-      snap.forEach(d => {
-        result[d.id] = d.data().value;
-      });
-    } catch (e) {
-      console.error('KV GetAll Error:', e);
+    if (db && !firestoreQuotaExceeded) {
+      try {
+        const snap = await getDocs(collection(db, KV_COLLECTION));
+        snap.forEach(d => {
+          localMemoryCache[d.id] = d.data().value;
+        });
+        persistLocalCache();
+      } catch (e: any) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+        } else {
+          console.error('KV GetAll Error:', e?.message || e);
+        }
+      }
     }
-    return result;
+    return { ...localMemoryCache };
   },
   set: async (key: string, value: string): Promise<void> => {
-    try {
-      await setDoc(doc(db, KV_COLLECTION, key), { value });
-    } catch (e) {
-      console.error('KV Set Error:', e);
+    // Always store immediately in local memory & disk
+    localMemoryCache[key] = value;
+    persistLocalCache();
+
+    // Async sync to Firestore without blocking if quota allows
+    if (db && !firestoreQuotaExceeded) {
+      setDoc(doc(db, KV_COLLECTION, key), { value }).catch((e: any) => {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+        }
+      });
     }
   },
   delete: async (key: string): Promise<void> => {
-    try {
-      await deleteDoc(doc(db, KV_COLLECTION, key));
-    } catch (e) {
-      console.error('KV Delete Error:', e);
+    delete localMemoryCache[key];
+    persistLocalCache();
+
+    if (db && !firestoreQuotaExceeded) {
+      deleteDoc(doc(db, KV_COLLECTION, key)).catch((e: any) => {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+        }
+      });
     }
   },
   clear: async (): Promise<void> => {
-    try {
-      const snap = await getDocs(collection(db, KV_COLLECTION));
-      const promises = snap.docs.map(d => deleteDoc(doc(db, KV_COLLECTION, d.id)));
-      await Promise.all(promises);
-    } catch (e) {
-      console.error('KV Clear Error:', e);
+    localMemoryCache = {};
+    persistLocalCache();
+
+    if (db && !firestoreQuotaExceeded) {
+      try {
+        const snap = await getDocs(collection(db, KV_COLLECTION));
+        const promises = snap.docs.map(d => deleteDoc(doc(db, KV_COLLECTION, d.id)));
+        await Promise.all(promises);
+      } catch (e: any) {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+        }
+      }
     }
   }
 };
