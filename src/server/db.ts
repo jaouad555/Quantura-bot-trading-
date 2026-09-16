@@ -135,7 +135,8 @@ export const kv = {
   },
   
   getAll: async (): Promise<Record<string, string>> => {
-    if (db && !firestoreQuotaExceeded) {
+    // If local memory cache is completely empty, attempt initial seed from Firestore
+    if (Object.keys(localMemoryCache).length === 0 && db && !firestoreQuotaExceeded) {
       try {
         const snap = await getDocs(collection(db, KV_COLLECTION));
         snap.forEach(d => {
@@ -145,8 +146,6 @@ export const kv = {
       } catch (e: any) {
         if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
           firestoreQuotaExceeded = true;
-        } else {
-          console.error('KV GetAll Error:', e?.message || e);
         }
       }
     }
@@ -158,10 +157,14 @@ export const kv = {
     localMemoryCache[key] = value;
     persistLocalCache();
     
-    // Queue for Firestore sync
+    // Sync immediately to Firestore in non-blocking background
     if (db && !firestoreQuotaExceeded) {
-      pendingDeletes.delete(key);
-      pendingSyncs.set(key, value);
+      setDoc(doc(db, KV_COLLECTION, key), { value }).catch((e: any) => {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+          console.warn('[DB] Firestore quota reached. Seamlessly using local storage.');
+        }
+      });
     }
   },
   
@@ -170,8 +173,11 @@ export const kv = {
     persistLocalCache();
     
     if (db && !firestoreQuotaExceeded) {
-      pendingSyncs.delete(key);
-      pendingDeletes.add(key);
+      deleteDoc(doc(db, KV_COLLECTION, key)).catch((e: any) => {
+        if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
+          firestoreQuotaExceeded = true;
+        }
+      });
     }
   },
   
@@ -180,10 +186,10 @@ export const kv = {
     persistLocalCache();
     
     if (db && !firestoreQuotaExceeded) {
-      pendingSyncs.clear();
       try {
         const snap = await getDocs(collection(db, KV_COLLECTION));
-        snap.docs.forEach(d => pendingDeletes.add(d.id));
+        const deletePromises = snap.docs.map(d => deleteDoc(doc(db, KV_COLLECTION, d.id)).catch(() => {}));
+        await Promise.allSettled(deletePromises);
       } catch (e: any) {
         if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {
           firestoreQuotaExceeded = true;

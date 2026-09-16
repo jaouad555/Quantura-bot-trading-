@@ -283,6 +283,19 @@ app.post('/api/trading/reset', async (req, res) => {
       history: [],
     }));
     await kv.set('btc_push_alerts', '[]');
+    await kv.set('quantura_risk_drawdown_state', JSON.stringify({
+      startingDailyEquity: 1000,
+      lastDailyResetTimestamp: Date.now(),
+      peakEquity: 1000,
+      dailyRealizedPnl: 0,
+      dailyFeesPaid: 0,
+      dailyFundingPaid: 0,
+      consecutiveLosses: 0,
+      consecutiveWins: 0,
+      lastClosedTradePnl: 0,
+      lastClosedTradeSizeUsdt: 0,
+      lastClosedTradeLeverage: 1,
+    }));
 
     if (scannerState) {
       scannerState.activeStrategiesCount = 0;
@@ -300,6 +313,86 @@ app.post('/api/trading/reset', async (req, res) => {
     res.json({ success: true, message: 'Trading state and strategy activations wiped and reset to default INACTIVE' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to reset trading data' });
+  }
+});
+
+app.post('/api/system/reset', async (req, res) => {
+  try {
+    strategyManager.resetToDefaults();
+    await kv.set('quantura_active_strategies', JSON.stringify({
+      MOMENTUM: false,
+      SCALPER: false,
+      SWING: false,
+      BREAKOUT: false,
+      MEAN_REVERSION: false,
+      INSTITUTIONAL_SMC: false,
+    }));
+    
+    const defaultCfg = {
+      enabled: false,
+      activePresets: [],
+      tradeAllocationPercent: 25,
+      minConfidence: 75,
+      mode: 'SCALE_OUT_REBUY',
+      autoCompound: true,
+      maxOpenTrades: 3,
+      timeframe: 'AUTO',
+      marketType: 'FUTURES',
+      leverage: 3,
+      marginMode: 'ISOLATED',
+      trailingStopEnabled: true,
+      trailingStopPercent: 1.2,
+      trailingActivationProfitPercent: 1.5,
+      dailyDrawdownLimitPercent: 5.0,
+      circuitBreakerTripped: false,
+      sizingMode: 'FIXED_PERCENT',
+      riskPerTradePercent: 2.0,
+      cooldownMinutes: 10,
+      multiPairScanning: true,
+      allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
+    };
+
+    await kv.set('btc_bot_config', JSON.stringify(defaultCfg));
+    await kv.set('btc_active_bot_positions', '[]');
+    await kv.set('btc_trade_history', '[]');
+    await kv.set('btc_bot_logs', '[]');
+    await kv.set('btc_paper_wallet', JSON.stringify({
+      balance: 1000,
+      realizedPnl: 0,
+      openPosition: null,
+      history: [],
+    }));
+    await kv.set('btc_push_alerts', '[]');
+    await kv.set('quantura_risk_drawdown_state', JSON.stringify({
+      startingDailyEquity: 1000,
+      lastDailyResetTimestamp: Date.now(),
+      peakEquity: 1000,
+      dailyRealizedPnl: 0,
+      dailyFeesPaid: 0,
+      dailyFundingPaid: 0,
+      consecutiveLosses: 0,
+      consecutiveWins: 0,
+      lastClosedTradePnl: 0,
+      lastClosedTradeSizeUsdt: 0,
+      lastClosedTradeLeverage: 1,
+    }));
+
+    if (scannerState) {
+      scannerState.activeStrategiesCount = 0;
+      if (scannerState.symbolStates) {
+        Object.keys(scannerState.symbolStates).forEach((k) => {
+          if (scannerState.symbolStates[k]) {
+            scannerState.symbolStates[k].lastSignal = undefined;
+            scannerState.symbolStates[k].signalDirection = undefined;
+            scannerState.symbolStates[k].strategyName = undefined;
+          }
+        });
+      }
+    }
+
+    res.json({ success: true, message: 'Factory reset completed' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset system data' });
   }
 });
 

@@ -452,12 +452,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 onClick={async () => {
                   try {
+                    await apiStorage.resetTradingData();
                     if (onFullReset) {
                       await onFullReset();
                     }
-                    await apiStorage.resetTradingData();
-                    apiStorage.clear();
-                  } catch {}
+                  } catch (err) {
+                    console.error('Reset error:', err);
+                  }
                   window.location.reload();
                 }}
                 className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-950/60 transition flex items-center gap-1.5"
