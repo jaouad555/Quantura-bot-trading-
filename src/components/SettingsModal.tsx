@@ -2,7 +2,7 @@ import { apiStorage } from "../utils/apiStorage";
 import React, { useState } from 'react';
 import { Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet } from '../types';
 import { translations } from '../utils/translations';
-import { X, Globe, Clock, AlertTriangle, Bell, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut } from 'lucide-react';
+import { X, Globe, Clock, AlertTriangle, Bell, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2 } from 'lucide-react';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
 
 interface SettingsModalProps {
@@ -27,7 +27,7 @@ interface SettingsModalProps {
   onConfidenceChange: (val: number) => void;
   onTelegramConfigChange?: (token: string, chatId: string) => void;
   onLogout?: () => void;
-  onFullReset?: () => void;
+  onFullReset?: () => void | Promise<void>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -55,6 +55,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onFullReset,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [localTgToken, setLocalTgToken] = useState(telegramBotToken);
   const [localTgChatId, setLocalTgChatId] = useState(telegramChatId);
 
@@ -444,27 +445,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-rose-500/20">
               <button
+                type="button"
+                disabled={isResetting}
                 onClick={() => setShowResetConfirm(false)}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-bold transition cursor-pointer"
               >
                 {isArabic ? 'إلغاء' : 'Annuler'}
               </button>
               <button
+                type="button"
+                disabled={isResetting}
                 onClick={async () => {
+                  setIsResetting(true);
                   try {
-                    await apiStorage.resetTradingData();
                     if (onFullReset) {
                       await onFullReset();
+                    } else {
+                      await apiStorage.resetTradingData();
                     }
                   } catch (err) {
                     console.error('Reset error:', err);
+                  } finally {
+                    setIsResetting(false);
+                    setShowResetConfirm(false);
+                    onClose();
                   }
-                  window.location.reload();
                 }}
-                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-950/60 transition flex items-center gap-1.5"
+                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-black shadow-lg shadow-rose-950/60 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                {isArabic ? 'تأكيد المسح نهائياً' : 'Oui, Réinitialiser'}
+                {isResetting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isResetting
+                    ? (isArabic ? 'جاري المسح...' : language === 'en' ? 'Resetting...' : 'Réinitialisation...')
+                    : (isArabic ? 'تأكيد المسح نهائياً' : language === 'en' ? 'Yes, Reset All' : 'Oui, Réinitialiser')}
+                </span>
               </button>
             </div>
           </div>

@@ -1831,7 +1831,21 @@ export const App: React.FC = () => {
     } catch (e) {}
 
     playAudioChime();
-  }, [playAudioChime]);
+
+    const resetAlert: PushAlert = {
+      id: `reset-alert-${Date.now()}`,
+      timestamp: Date.now(),
+      type: 'SYSTEM',
+      title: language === 'ar' ? 'إعادة ضبط شاملة للمنصة 🔄' : language === 'fr' ? 'Réinitialisation Totale Réussie 🔄' : 'Full Platform Reset 🔄',
+      body: language === 'ar'
+        ? 'تم تصفير المحفظة بنجاح إلى 1,000 USDT ومسح جميع الصفقات والسجلات وإيقاف تشغيل الاستراتيجيات.'
+        : language === 'fr'
+        ? 'Le portefeuille a été remis à 1 000 USDT, les positions/logs ont été effacés et les stratégies désactivées.'
+        : 'Paper wallet reset to $1,000 USDT, all positions and history wiped, and strategies set to inactive.',
+      read: false,
+    };
+    triggerToastAlert(resetAlert);
+  }, [language, playAudioChime, triggerToastAlert]);
 
   // Trim excess positions if open positions exceed maxOpenTrades
   const handleTrimExcessPositions = useCallback(() => {

@@ -320,6 +320,15 @@ export interface AlertSettings {
   notifyRegimeChange: boolean;
 }
 
+export type BacktestStrategyId =
+  | 'MOMENTUM'
+  | 'SCALPER'
+  | 'SWING'
+  | 'BREAKOUT'
+  | 'MEAN_REVERSION'
+  | 'INSTITUTIONAL_SMC'
+  | 'ALL_STRATEGIES';
+
 export interface BacktestConfig {
   timeframe: Timeframe;
   months: number; // 1 to 24 months
@@ -331,6 +340,7 @@ export interface BacktestConfig {
   minSignalStrength: number; // e.g. 65
   slAtrMultiplier: number; // e.g. 1.5
   marketType?: 'SPOT' | 'FUTURES';
+  strategyId?: BacktestStrategyId;
   strategyPreset?: 'FUTURES_MOMENTUM_TREND' | 'CONSERVATIVE_PULLBACK' | 'AGGRESSIVE_BREAKOUT' | 'SCALPING_FAST' | 'CUSTOM';
   trailingStopEnabled?: boolean;
   trailingStopPercent?: number; // e.g. 1.2%
@@ -344,6 +354,8 @@ export interface BacktestConfig {
 export interface BacktestTrade {
   id: string;
   symbol: string;
+  strategyId?: BacktestStrategyId;
+  strategyName?: string;
   entryTime: number;
   exitTime: number;
   type: 'LONG' | 'SHORT';

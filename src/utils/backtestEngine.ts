@@ -7,9 +7,136 @@ import {
   EquityDataPoint,
   MultiCoinBacktestResult,
   TechnicalIndicators,
+  BacktestStrategyId,
 } from '../types';
 import { calculateEMA, calculateSMA } from './indicators';
-import { calculateQuantitativeScore } from './quantEngine';
+
+export interface BacktestStrategyInfo {
+  id: BacktestStrategyId;
+  name: string;
+  nameAr: string;
+  shortDesc: string;
+  shortDescAr: string;
+  defaultTimeframe: Timeframe;
+  defaultLeverage: number;
+  defaultSlAtr: number;
+  defaultRiskReward: number;
+  badge: string;
+  color: string;
+}
+
+export const BACKTEST_STRATEGIES: BacktestStrategyInfo[] = [
+  {
+    id: 'MOMENTUM',
+    name: 'Momentum Trend Pro',
+    nameAr: 'زخم الاتجاه الخوارزمي (Momentum Trend Pro)',
+    shortDesc: 'EMA 20/50 alignment + ADX > 20 + MACD expansion',
+    shortDescAr: 'رافعة 3x • فريم 1H • تأكيد الزخم ADX/RSI • وقف متحرك 1.2%',
+    defaultTimeframe: '1h',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.5,
+    defaultRiskReward: 2.0,
+    badge: 'MOMENTUM',
+    color: '#06b6d4', // cyan-500
+  },
+  {
+    id: 'SCALPER',
+    name: 'High-Freq Scalper',
+    nameAr: 'سكالبينج عالي التردد (High-Freq Scalper)',
+    shortDesc: 'Oversold/Overbought Stoch + RSI bounce at Bollinger bands',
+    shortDescAr: 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق وسريع',
+    defaultTimeframe: '15m',
+    defaultLeverage: 5,
+    defaultSlAtr: 1.0,
+    defaultRiskReward: 1.6,
+    badge: 'SCALPER',
+    color: '#f59e0b', // amber-500
+  },
+  {
+    id: 'BREAKOUT',
+    name: 'Breakout Sniper',
+    nameAr: 'قناص الاختراقات السعرية (Breakout Sniper)',
+    shortDesc: 'Bollinger bandwidth squeeze expansion + volume surge',
+    shortDescAr: 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي',
+    defaultTimeframe: '30m',
+    defaultLeverage: 4,
+    defaultSlAtr: 1.2,
+    defaultRiskReward: 2.2,
+    badge: 'BREAKOUT',
+    color: '#8b5cf6', // purple-500
+  },
+  {
+    id: 'MEAN_REVERSION',
+    name: 'Mean Reversion Pro',
+    nameAr: 'ارتداد القمم والقيعان (Mean Reversion Pro)',
+    shortDesc: 'Counter-trend statistical return to EMA20 / BB Mean',
+    shortDescAr: 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند',
+    defaultTimeframe: '15m',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.2,
+    defaultRiskReward: 1.8,
+    badge: 'REVERSION',
+    color: '#ec4899', // pink-500
+  },
+  {
+    id: 'INSTITUTIONAL_SMC',
+    name: 'Smart Money SMC',
+    nameAr: 'صانع السوق المؤسسي (Smart Money SMC)',
+    shortDesc: 'Market structure (BOS / CHoCH) + Liquidity sweeps & Order Blocks',
+    shortDescAr: 'رافعة 2x • فريم 1H • تتبع صانع السوق وكتل الأوامر Order Blocks وFVG',
+    defaultTimeframe: '1h',
+    defaultLeverage: 2,
+    defaultSlAtr: 1.4,
+    defaultRiskReward: 2.4,
+    badge: 'SMART MONEY',
+    color: '#14b8a6', // teal-500
+  },
+  {
+    id: 'SWING',
+    name: 'Conservative Swing',
+    nameAr: 'سوينغ محافظ ومستقر (Conservative Swing)',
+    shortDesc: 'Multi-day HTF trend alignment (Price > EMA50 > EMA200) with low DD',
+    shortDescAr: 'رافعة 2x • فريم 4H • صفقات متأرجحة بأقل نسبة تراجع ووقف متحرك 1.8%',
+    defaultTimeframe: '4h',
+    defaultLeverage: 2,
+    defaultSlAtr: 2.0,
+    defaultRiskReward: 2.5,
+    badge: 'SAFE SWING',
+    color: '#10b981', // emerald-500
+  },
+  {
+    id: 'ALL_STRATEGIES',
+    name: 'Multi-Strategy Ensemble',
+    nameAr: 'محفظة الاستراتيجيات الشاملة (All Strategies Ensemble)',
+    shortDesc: 'Dynamic ensemble evaluating all 6 strategies with confidence weighting',
+    shortDescAr: 'محفظة ذكية متكاملة تجمع وتفاضل بين كافة الاستراتيجيات الست لاختيار أفضل الفرص',
+    defaultTimeframe: '1h',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.5,
+    defaultRiskReward: 2.0,
+    badge: 'ENSEMBLE',
+    color: '#6366f1', // indigo-500
+  },
+];
+
+export interface StrategyComparisonItem {
+  strategyId: BacktestStrategyId;
+  strategyName: string;
+  strategyNameAr: string;
+  badge: string;
+  color: string;
+  netProfitUsdt: number;
+  netReturnPercent: number;
+  winRate: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  profitFactor: number;
+  maxDrawdownPercent: number;
+  sharpeRatio: number;
+  expectancy: number;
+  isBest?: boolean;
+}
 
 /**
  * Default Backtest configuration values
@@ -19,12 +146,13 @@ export const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
   months: 6,
   candleLimit: 1000,
   initialBalance: 1000,
-  leverage: 1, // Spot (1x) or Futures (2x, 3x, 5x, 10x)
+  leverage: 3, // Futures 3x
   tradeAllocationPercent: 20, // 20% margin per trade
   riskRewardTarget: 2.0,
   minSignalStrength: 65,
   slAtrMultiplier: 1.5,
-  marketType: 'SPOT',
+  marketType: 'FUTURES',
+  strategyId: 'ALL_STRATEGIES',
   trailingStopEnabled: true,
   trailingStopPercent: 1.2,
   trailingActivationProfitPercent: 1.5,
@@ -193,6 +321,27 @@ function precalculateVectorizedIndicators(klines: KlineCandle[]): TechnicalIndic
     }
   }
 
+  // Stochastic (14, 3, 3) in O(N)
+  const stochK: number[] = new Array(len).fill(50);
+  const stochD: number[] = new Array(len).fill(50);
+  for (let i = 0; i < len; i++) {
+    if (i >= 13) {
+      let minLow = lows[i];
+      let maxHigh = highs[i];
+      for (let j = 0; j < 14; j++) {
+        if (lows[i - j] < minLow) minLow = lows[i - j];
+        if (highs[i - j] > maxHigh) maxHigh = highs[i - j];
+      }
+      const range = maxHigh - minLow;
+      stochK[i] = range > 0 ? Math.round((((closes[i] - minLow) / range) * 100) * 10) / 10 : 50;
+    }
+    if (i >= 15) {
+      stochD[i] = Math.round(((stochK[i] + stochK[i - 1] + stochK[i - 2]) / 3) * 10) / 10;
+    } else {
+      stochD[i] = stochK[i];
+    }
+  }
+
   // Rolling 20-period volume average in O(N)
   const volumeAvg20: number[] = new Array(len);
   let volSum = 0;
@@ -242,6 +391,10 @@ function precalculateVectorizedIndicators(klines: KlineCandle[]): TechnicalIndic
       ema200: e200,
       sma200: sma200[i] || c,
       rsi14: rsi[i] || 50,
+      stoch: {
+        k: stochK[i],
+        d: stochD[i],
+      },
       macd: {
         macdLine: Math.round((macdLine[i] || 0) * 100) / 100,
         signalLine: Math.round((signalLine[i] || 0) * 100) / 100,
@@ -270,7 +423,7 @@ function precalculateVectorizedIndicators(klines: KlineCandle[]): TechnicalIndic
         structure,
         swingHigh: maxHigh,
         swingLow: minLow,
-        bos: 'NONE',
+        bos: isHigher ? 'BULLISH_BOS' : isLower ? 'BEARISH_BOS' : 'NONE',
         choch: 'NONE',
       },
     };
@@ -298,6 +451,320 @@ function downsampleEquityCurve(points: EquityDataPoint[], maxPoints = 120): Equi
   return result;
 }
 
+interface EvaluatedSignal {
+  decision: 'LONG' | 'SHORT' | 'WAIT';
+  confidence: number;
+  stopLoss: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  reason: string;
+  strategyId: BacktestStrategyId;
+  strategyName: string;
+}
+
+/**
+ * Strategy-specific signal evaluation for the 6 core strategies
+ */
+function evaluateSingleStrategy(
+  targetStrategyId: BacktestStrategyId,
+  currentPrice: number,
+  inds: TechnicalIndicators,
+  riskRewardTarget: number,
+  slAtrMultiplier: number,
+  isFutures: boolean
+): EvaluatedSignal | null {
+  const atr = Math.max(inds.atr14, currentPrice * 0.005);
+  const rsi = inds.rsi14 || 50;
+  const ema20 = inds.ema20 || currentPrice;
+  const ema50 = inds.ema50 || currentPrice;
+  const ema200 = inds.ema200 || currentPrice;
+  const adx = inds.adx14 || 20;
+  const bb = inds.bollingerBands;
+  const stoch = inds.stoch || { k: 50, d: 50 };
+  const ms = inds.marketStructure;
+
+  switch (targetStrategyId) {
+    case 'MOMENTUM': {
+      // Trend following: EMA 20/50 alignment, ADX > 18, RSI 48-72 / 28-52
+      const isBullish = currentPrice > ema20 && ema20 > ema50 && adx >= 18;
+      const isBearish = currentPrice < ema20 && ema20 < ema50 && adx >= 18;
+
+      if (isBullish && rsi >= 48 && rsi <= 72) {
+        const rawSl = Math.min(ema50, currentPrice - atr * slAtrMultiplier);
+        const stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * slAtrMultiplier, currentPrice * 0.008);
+        const risk = currentPrice - stopLoss;
+        return {
+          decision: 'LONG',
+          confidence: Math.min(94, Math.round(66 + (adx - 18) * 1.2 + (rsi - 50) * 0.4)),
+          stopLoss,
+          tp1: currentPrice + risk * 1.2,
+          tp2: currentPrice + risk * riskRewardTarget,
+          tp3: currentPrice + risk * (riskRewardTarget * 1.75),
+          reason: 'Momentum Trend: EMA alignment (20>50) with strong ADX & bullish RSI',
+          strategyId: 'MOMENTUM',
+          strategyName: 'Momentum Grid',
+        };
+      } else if (isFutures && isBearish && rsi <= 52 && rsi >= 28) {
+        const rawSl = Math.max(ema50, currentPrice + atr * slAtrMultiplier);
+        const stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * slAtrMultiplier, currentPrice * 0.008);
+        const risk = stopLoss - currentPrice;
+        return {
+          decision: 'SHORT',
+          confidence: Math.min(94, Math.round(66 + (adx - 18) * 1.2 + (50 - rsi) * 0.4)),
+          stopLoss,
+          tp1: currentPrice - risk * 1.2,
+          tp2: currentPrice - risk * riskRewardTarget,
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * (riskRewardTarget * 1.75)),
+          reason: 'Momentum Trend: Bearish EMA alignment (20<50) with high ADX',
+          strategyId: 'MOMENTUM',
+          strategyName: 'Momentum Grid',
+        };
+      }
+      break;
+    }
+
+    case 'SCALPER': {
+      // HFT Micro Scalper: Stoch < 25 / > 75 with RSI confirmation near Bollinger bands
+      const isOversold = (stoch.k < 28 && stoch.k > stoch.d && rsi <= 46) || (rsi <= 35 && currentPrice <= bb.lower * 1.006);
+      const isOverbought = (stoch.k > 72 && stoch.k < stoch.d && rsi >= 54) || (rsi >= 65 && currentPrice >= bb.upper * 0.994);
+
+      if (isOversold) {
+        const risk = Math.max(atr * 0.85 * (slAtrMultiplier / 1.5), currentPrice * 0.006);
+        const stopLoss = currentPrice - risk;
+        return {
+          decision: 'LONG',
+          confidence: Math.min(92, Math.round(70 + (30 - stoch.k) * 0.7)),
+          stopLoss,
+          tp1: currentPrice + risk * 1.2,
+          tp2: currentPrice + risk * Math.max(1.5, riskRewardTarget * 0.85),
+          tp3: currentPrice + risk * (riskRewardTarget * 1.5),
+          reason: 'HFT Scalper: Oversold oscillator bounce (Stoch & RSI) near Lower BB',
+          strategyId: 'SCALPER',
+          strategyName: 'HFT Scalper',
+        };
+      } else if (isFutures && isOverbought) {
+        const risk = Math.max(atr * 0.85 * (slAtrMultiplier / 1.5), currentPrice * 0.006);
+        const stopLoss = currentPrice + risk;
+        return {
+          decision: 'SHORT',
+          confidence: Math.min(92, Math.round(70 + (stoch.k - 70) * 0.7)),
+          stopLoss,
+          tp1: currentPrice - risk * 1.2,
+          tp2: currentPrice - risk * Math.max(1.5, riskRewardTarget * 0.85),
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * (riskRewardTarget * 1.5)),
+          reason: 'HFT Scalper: Overbought oscillator rejection near Upper BB',
+          strategyId: 'SCALPER',
+          strategyName: 'HFT Scalper',
+        };
+      }
+      break;
+    }
+
+    case 'SWING': {
+      // Conservative Swing: Price > EMA50 > EMA200 with wider stops & high reward
+      const isSwingBullish = currentPrice > ema50 && ema50 > ema200 && adx >= 18 && rsi >= 45 && rsi <= 68;
+      const isSwingBearish = currentPrice < ema50 && ema50 < ema200 && adx >= 18 && rsi >= 32 && rsi <= 55;
+
+      if (isSwingBullish) {
+        const rawSl = Math.min(ema200, currentPrice - atr * 2.0 * (slAtrMultiplier / 1.5));
+        const stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 2.0, currentPrice * 0.015);
+        const risk = currentPrice - stopLoss;
+        return {
+          decision: 'LONG',
+          confidence: 86,
+          stopLoss,
+          tp1: currentPrice + risk * 1.5,
+          tp2: currentPrice + risk * Math.max(2.5, riskRewardTarget * 1.25),
+          tp3: currentPrice + risk * (riskRewardTarget * 2.2),
+          reason: 'Conservative Swing: HTF trend alignment (Price > EMA50 > EMA200)',
+          strategyId: 'SWING',
+          strategyName: 'Swing Trend',
+        };
+      } else if (isFutures && isSwingBearish) {
+        const rawSl = Math.max(ema200, currentPrice + atr * 2.0 * (slAtrMultiplier / 1.5));
+        const stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 2.0, currentPrice * 0.015);
+        const risk = stopLoss - currentPrice;
+        return {
+          decision: 'SHORT',
+          confidence: 86,
+          stopLoss,
+          tp1: currentPrice - risk * 1.5,
+          tp2: currentPrice - risk * Math.max(2.5, riskRewardTarget * 1.25),
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * (riskRewardTarget * 2.2)),
+          reason: 'Conservative Swing: Bearish HTF alignment (Price < EMA50 < EMA200)',
+          strategyId: 'SWING',
+          strategyName: 'Swing Trend',
+        };
+      }
+      break;
+    }
+
+    case 'BREAKOUT': {
+      // Volatility Breakout: Bollinger bandwidth expansion > 2.8% piercing envelope
+      const isBandwidthExpanding = bb.bandwidthPercent > 2.8;
+      if (isBandwidthExpanding && currentPrice >= bb.upper && rsi >= 56) {
+        const rawSl = Math.min(bb.middle, currentPrice - atr * 1.2 * (slAtrMultiplier / 1.5));
+        const stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.2, currentPrice * 0.008);
+        const risk = currentPrice - stopLoss;
+        return {
+          decision: 'LONG',
+          confidence: Math.min(94, Math.round(72 + bb.bandwidthPercent * 1.8)),
+          stopLoss,
+          tp1: currentPrice + risk * 1.4,
+          tp2: currentPrice + risk * (riskRewardTarget * 1.2),
+          tp3: currentPrice + risk * (riskRewardTarget * 2.0),
+          reason: `Volatility Breakout: BB bandwidth (${bb.bandwidthPercent.toFixed(1)}%) expansion piercing upper band`,
+          strategyId: 'BREAKOUT',
+          strategyName: 'Volatility Breakout',
+        };
+      } else if (isFutures && isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 44) {
+        const rawSl = Math.max(bb.middle, currentPrice + atr * 1.2 * (slAtrMultiplier / 1.5));
+        const stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.2, currentPrice * 0.008);
+        const risk = stopLoss - currentPrice;
+        return {
+          decision: 'SHORT',
+          confidence: Math.min(94, Math.round(72 + bb.bandwidthPercent * 1.8)),
+          stopLoss,
+          tp1: currentPrice - risk * 1.4,
+          tp2: currentPrice - risk * (riskRewardTarget * 1.2),
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * (riskRewardTarget * 2.0)),
+          reason: `Volatility Breakout: BB bandwidth (${bb.bandwidthPercent.toFixed(1)}%) downward expansion piercing lower band`,
+          strategyId: 'BREAKOUT',
+          strategyName: 'Volatility Breakout',
+        };
+      }
+      break;
+    }
+
+    case 'MEAN_REVERSION': {
+      // Mean Reversion: Statistical extreme reversal towards EMA20 / BB Middle
+      if (currentPrice <= bb.lower || (rsi < 30 && currentPrice < ema20)) {
+        const risk = Math.max(atr * 1.1 * (slAtrMultiplier / 1.5), currentPrice * 0.007);
+        const stopLoss = currentPrice - risk;
+        const tp1 = Math.max(currentPrice + risk * 1.2, ema20 > currentPrice ? ema20 : currentPrice + risk * 1.2);
+        const tp2 = Math.max(tp1 + risk * 0.8, bb.middle > tp1 ? bb.middle : tp1 + risk * 0.8);
+        const tp3 = Math.max(tp2 + risk * 1.0, bb.upper > tp2 ? bb.upper : tp2 + risk * 1.0);
+        return {
+          decision: 'LONG',
+          confidence: Math.min(90, Math.round(68 + (30 - rsi) * 0.9)),
+          stopLoss,
+          tp1,
+          tp2,
+          tp3,
+          reason: `Mean Reversion: Extreme deviation below Lower BB / RSI ${rsi.toFixed(1)} targeting EMA20`,
+          strategyId: 'MEAN_REVERSION',
+          strategyName: 'Mean Reversion',
+        };
+      } else if (isFutures && (currentPrice >= bb.upper || (rsi > 70 && currentPrice > ema20))) {
+        const risk = Math.max(atr * 1.1 * (slAtrMultiplier / 1.5), currentPrice * 0.007);
+        const stopLoss = currentPrice + risk;
+        const tp1 = Math.min(currentPrice - risk * 1.2, ema20 < currentPrice ? ema20 : currentPrice - risk * 1.2);
+        const tp2 = Math.min(tp1 - risk * 0.8, bb.middle < tp1 ? bb.middle : tp1 - risk * 0.8);
+        const tp3 = Math.max(currentPrice * 0.05, Math.min(tp2 - risk * 1.0, bb.lower < tp2 ? bb.lower : tp2 - risk * 1.0));
+        return {
+          decision: 'SHORT',
+          confidence: Math.min(90, Math.round(68 + (rsi - 70) * 0.9)),
+          stopLoss,
+          tp1,
+          tp2,
+          tp3,
+          reason: `Mean Reversion: Extreme deviation above Upper BB / RSI ${rsi.toFixed(1)} targeting EMA20`,
+          strategyId: 'MEAN_REVERSION',
+          strategyName: 'Mean Reversion',
+        };
+      }
+      break;
+    }
+
+    case 'INSTITUTIONAL_SMC': {
+      // Institutional SMC: Market structure (BOS / CHoCH) + Liquidity sweeps
+      const isSmcBullish = (ms.trend === 'UPTREND' || ms.structure === 'HIGHER_HIGH' || ms.bos === 'BULLISH_BOS') && currentPrice > ema50 && rsi >= 46;
+      const isSmcBearish = (ms.trend === 'DOWNTREND' || ms.structure === 'LOWER_LOW' || ms.bos === 'BEARISH_BOS') && currentPrice < ema50 && rsi <= 54;
+
+      if (isSmcBullish) {
+        const risk = Math.max(atr * 1.35 * (slAtrMultiplier / 1.5), currentPrice * 0.01);
+        const stopLoss = currentPrice - risk;
+        return {
+          decision: 'LONG',
+          confidence: 84,
+          stopLoss,
+          tp1: currentPrice + risk * 1.6,
+          tp2: currentPrice + risk * Math.max(2.4, riskRewardTarget * 1.2),
+          tp3: currentPrice + risk * (riskRewardTarget * 2.0),
+          reason: 'Institutional SMC: Bullish structure break (BOS) with discount liquidity pool mitigation',
+          strategyId: 'INSTITUTIONAL_SMC',
+          strategyName: 'Institutional SMC',
+        };
+      } else if (isFutures && isSmcBearish) {
+        const risk = Math.max(atr * 1.35 * (slAtrMultiplier / 1.5), currentPrice * 0.01);
+        const stopLoss = currentPrice + risk;
+        return {
+          decision: 'SHORT',
+          confidence: 84,
+          stopLoss,
+          tp1: currentPrice - risk * 1.6,
+          tp2: currentPrice - risk * Math.max(2.4, riskRewardTarget * 1.2),
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * (riskRewardTarget * 2.0)),
+          reason: 'Institutional SMC: Bearish structure break (BOS) with premium liquidity mitigation',
+          strategyId: 'INSTITUTIONAL_SMC',
+          strategyName: 'Institutional SMC',
+        };
+      }
+      break;
+    }
+
+    default:
+      return null;
+  }
+
+  return null;
+}
+
+/**
+ * Evaluates entry signal for selected strategy or multi-strategy ensemble
+ */
+function evaluateStrategyEntrySignal(
+  strategyId: BacktestStrategyId = 'ALL_STRATEGIES',
+  currentPrice: number,
+  inds: TechnicalIndicators,
+  minSignalStrength: number,
+  riskRewardTarget: number,
+  slAtrMultiplier: number,
+  isFutures: boolean
+): EvaluatedSignal | null {
+  if (strategyId !== 'ALL_STRATEGIES') {
+    const single = evaluateSingleStrategy(strategyId, currentPrice, inds, riskRewardTarget, slAtrMultiplier, isFutures);
+    if (single && single.confidence >= minSignalStrength) {
+      return single;
+    }
+    return null;
+  }
+
+  // ALL_STRATEGIES Ensemble: evaluate all 6 and select the highest confidence signal
+  const activeIds: BacktestStrategyId[] = [
+    'MOMENTUM',
+    'SCALPER',
+    'SWING',
+    'BREAKOUT',
+    'MEAN_REVERSION',
+    'INSTITUTIONAL_SMC',
+  ];
+
+  let bestSignal: EvaluatedSignal | null = null;
+  let highestConfidence = 0;
+
+  for (const id of activeIds) {
+    const sig = evaluateSingleStrategy(id, currentPrice, inds, riskRewardTarget, slAtrMultiplier, isFutures);
+    if (sig && sig.confidence >= minSignalStrength && sig.confidence > highestConfidence) {
+      highestConfidence = sig.confidence;
+      bestSignal = sig;
+    }
+  }
+
+  return bestSignal;
+}
+
 /**
  * Executes a deterministic historical backtest on actual Binance candles with capital & leverage modeling
  */
@@ -313,9 +780,10 @@ export function runHistoricalBacktest(
     minSignalStrength = 65,
     slAtrMultiplier = 1.5,
     initialBalance = 1000,
-    leverage = 1,
+    leverage = 3,
     tradeAllocationPercent = 20,
-    marketType = 'SPOT',
+    marketType = 'FUTURES',
+    strategyId = 'ALL_STRATEGIES',
     trailingStopEnabled = true,
     trailingStopPercent = 1.2,
     trailingActivationProfitPercent = 1.5,
@@ -352,7 +820,7 @@ export function runHistoricalBacktest(
       tp2Rate: 0,
       tp3Rate: 0,
       slRate: 0,
-      trades: [] as BacktestTrade[],
+      trades: [],
       equityCurve: [],
       sharpeRatio: 0,
       sortinoRatio: 0,
@@ -376,6 +844,8 @@ export function runHistoricalBacktest(
     peakPrice: number;
     isTrailingActive: boolean;
     totalFeeUsdt: number;
+    strategyId?: BacktestStrategyId;
+    strategyName?: string;
   } | null = null;
 
   let activeType: 'LONG' | 'SHORT' = 'LONG';
@@ -418,7 +888,7 @@ export function runHistoricalBacktest(
     const nextCandle = slice[i + 1];
 
     if (inTrade && activeTrade) {
-      const { high, low, close, open, time } = nextCandle;
+      const { high, low, close, time } = nextCandle;
       const isLong = activeType === 'LONG';
 
       // 1. Trailing Stop Loss Updates on Intra-bar Extremes
@@ -472,6 +942,8 @@ export function runHistoricalBacktest(
           trades.push({
             id: `bt-${symbol}-${trades.length + 1}`,
             symbol,
+            strategyId: activeTrade.strategyId,
+            strategyName: activeTrade.strategyName,
             entryTime: activeTrade.entryTime,
             exitTime: time,
             type: activeType,
@@ -560,6 +1032,8 @@ export function runHistoricalBacktest(
             trades.push({
               id: `bt-${symbol}-${trades.length + 1}`,
               symbol,
+              strategyId: activeTrade.strategyId,
+              strategyName: activeTrade.strategyName,
               entryTime: activeTrade.entryTime,
               exitTime: time,
               type: 'LONG',
@@ -582,14 +1056,14 @@ export function runHistoricalBacktest(
             inTrade = false;
             activeTrade = null;
           } else if (low <= activeSL) {
-            // Stop Loss triggered (Could be Breakeven SL, Trailing SL, or Initial SL)
+            // Stop Loss triggered
             slHits++;
             const marginPortion = activeTrade.remainingMargin;
             const priceDiffPct = ((activeSL - activeEntryPrice) / activeEntryPrice) * 100;
             const pnlUsdt = marginPortion * (priceDiffPct * effectiveLeverage / 100);
             const exitFee = (marginPortion * effectiveLeverage) * combinedFeeRate;
             const netRemainingPnl = pnlUsdt - exitFee;
-            
+
             const returnedAmount = Math.max(0, marginPortion + netRemainingPnl);
             const actualRealizedPnl = returnedAmount - marginPortion;
 
@@ -622,6 +1096,8 @@ export function runHistoricalBacktest(
             trades.push({
               id: `bt-${symbol}-${trades.length + 1}`,
               symbol,
+              strategyId: activeTrade.strategyId,
+              strategyName: activeTrade.strategyName,
               entryTime: activeTrade.entryTime,
               exitTime: time,
               type: 'LONG',
@@ -646,7 +1122,6 @@ export function runHistoricalBacktest(
           }
         } else if (isFutures) {
           // SHORT Position Scale-Out Execution
-          // Check TP1
           if (!activeTrade.tp1Reached && low <= activeTP1) {
             activeTrade.tp1Reached = true;
             tp1Hits++;
@@ -661,11 +1136,9 @@ export function runHistoricalBacktest(
             activeTrade.totalFeeUsdt += exitFee;
             currentBalance += marginPortion + netPartialGain;
 
-            // Move SL to Breakeven
             activeSL = Math.min(activeSL, activeEntryPrice);
           }
 
-          // Check TP2
           if (activeTrade.tp1Reached && !activeTrade.tp2Reached && low <= activeTP2) {
             activeTrade.tp2Reached = true;
             tp2Hits++;
@@ -680,11 +1153,9 @@ export function runHistoricalBacktest(
             activeTrade.totalFeeUsdt += exitFee;
             currentBalance += marginPortion + netPartialGain;
 
-            // Lock in TP1 price as trailing ceiling
             activeSL = Math.min(activeSL, activeTP1);
           }
 
-          // Check TP3
           if (low <= activeTP3) {
             tp3Hits++;
             const marginPortion = activeTrade.remainingMargin;
@@ -707,6 +1178,8 @@ export function runHistoricalBacktest(
             trades.push({
               id: `bt-${symbol}-${trades.length + 1}`,
               symbol,
+              strategyId: activeTrade.strategyId,
+              strategyName: activeTrade.strategyName,
               entryTime: activeTrade.entryTime,
               exitTime: time,
               type: 'SHORT',
@@ -729,7 +1202,6 @@ export function runHistoricalBacktest(
             inTrade = false;
             activeTrade = null;
           } else if (high >= activeSL) {
-            // Short Stop Loss hit
             slHits++;
             const marginPortion = activeTrade.remainingMargin;
             const priceDiffPct = ((activeEntryPrice - activeSL) / activeEntryPrice) * 100;
@@ -769,6 +1241,8 @@ export function runHistoricalBacktest(
             trades.push({
               id: `bt-${symbol}-${trades.length + 1}`,
               symbol,
+              strategyId: activeTrade.strategyId,
+              strategyName: activeTrade.strategyName,
               entryTime: activeTrade.entryTime,
               exitTime: time,
               type: 'SHORT',
@@ -793,17 +1267,22 @@ export function runHistoricalBacktest(
           }
         }
       }
+    }
 
+    // Dynamic Mark-to-Market Total Portfolio Value calculation
+    {
+      const { close, time } = nextCandle;
+      const isLong = activeType === 'LONG';
       let totalEquity = currentBalance;
+
       if (inTrade && activeTrade) {
-        const isLong = activeType === 'LONG';
         const priceDiffPct = ((close - activeEntryPrice) / activeEntryPrice) * (isLong ? 1 : -1) * 100;
         const floatingPnl = activeTrade.remainingMargin * (priceDiffPct * effectiveLeverage / 100);
         totalEquity = currentBalance + activeTrade.remainingMargin + activeTrade.realizedPnlUsdt + floatingPnl;
       }
 
       // Equity Curve Data Point recording
-      if (i % 2 === 0 || !inTrade) { // Record every other candle or on trade exit to avoid huge arrays but keep curve smooth
+      if (i % 2 === 0 || !inTrade) {
         const botReturnPct = ((totalEquity - initialBalance) / initialBalance) * 100;
         const buyHoldReturnPct = ((close - initialClose) / initialClose) * 100;
         rawEquityCurve.push({
@@ -815,7 +1294,7 @@ export function runHistoricalBacktest(
         });
       }
 
-      // Drawdown tracking (based on total equity)
+      // Drawdown tracking
       if (totalEquity > peakBalance) {
         peakBalance = totalEquity;
       }
@@ -830,23 +1309,33 @@ export function runHistoricalBacktest(
       try {
         const inds = indicatorsVector[i];
         if (inds) {
-          const score = calculateQuantitativeScore(timeframe, currentCandle.close, inds, null, null, null);
-          const atrVal = Math.max(inds.atr14, currentCandle.close * 0.005);
-          const riskDist = atrVal * slAtrMultiplier;
-          const allocPct = Math.min(100, Math.max(5, tradeAllocationPercent));
-          const allocatedMargin = currentBalance * (allocPct / 100);
-          const entryFee = (allocatedMargin * effectiveLeverage) * combinedFeeRate;
+          const sig = evaluateStrategyEntrySignal(
+            strategyId,
+            currentCandle.close,
+            inds,
+            minSignalStrength,
+            riskRewardTarget,
+            slAtrMultiplier,
+            isFutures
+          );
 
-          if (score.bullishScore >= minSignalStrength && score.bullishScore > score.bearishScore + 10) {
-            // Open LONG
+          if (sig && (sig.decision === 'LONG' || (isFutures && sig.decision === 'SHORT'))) {
+            const allocPct = Math.min(100, Math.max(5, tradeAllocationPercent));
+            const allocatedMargin = currentBalance * (allocPct / 100);
+            const entryFee = (allocatedMargin * effectiveLeverage) * combinedFeeRate;
+
             inTrade = true;
-            activeType = 'LONG';
+            activeType = sig.decision;
             activeEntryPrice = currentCandle.close;
-            activeSL = Math.max(0.000001, activeEntryPrice - riskDist);
-            activeTP1 = activeEntryPrice + riskDist * 1.2;
-            activeTP2 = activeEntryPrice + riskDist * riskRewardTarget;
-            activeTP3 = activeEntryPrice + riskDist * (riskRewardTarget * 1.75);
-            activeLiquidationPrice = isFutures ? activeEntryPrice * (1 - (1 / effectiveLeverage) * 0.95) : 0;
+            activeSL = sig.stopLoss;
+            activeTP1 = sig.tp1;
+            activeTP2 = sig.tp2;
+            activeTP3 = sig.tp3;
+            activeLiquidationPrice = isFutures
+              ? (sig.decision === 'LONG'
+                  ? activeEntryPrice * (1 - (1 / effectiveLeverage) * 0.95)
+                  : activeEntryPrice * (1 + (1 / effectiveLeverage) * 0.95))
+              : 0;
 
             currentBalance -= allocatedMargin;
             currentBalance -= entryFee;
@@ -862,32 +1351,8 @@ export function runHistoricalBacktest(
               peakPrice: activeEntryPrice,
               isTrailingActive: false,
               totalFeeUsdt: entryFee,
-            };
-          } else if (isFutures && score.bearishScore >= minSignalStrength && score.bearishScore > score.bullishScore + 10) {
-            // Open SHORT (Futures only)
-            inTrade = true;
-            activeType = 'SHORT';
-            activeEntryPrice = currentCandle.close;
-            activeSL = activeEntryPrice + riskDist;
-            activeTP1 = Math.max(0.000001, activeEntryPrice - riskDist * 1.2);
-            activeTP2 = Math.max(0.000001, activeEntryPrice - riskDist * riskRewardTarget);
-            activeTP3 = Math.max(0.000001, activeEntryPrice - riskDist * (riskRewardTarget * 1.75));
-            activeLiquidationPrice = activeEntryPrice * (1 + (1 / effectiveLeverage) * 0.95);
-
-            currentBalance -= allocatedMargin;
-            currentBalance -= entryFee;
-
-            activeTrade = {
-              entryTime: currentCandle.time,
-              entryCandleIndex: i,
-              tp1Reached: false,
-              tp2Reached: false,
-              initialMargin: allocatedMargin,
-              remainingMargin: allocatedMargin,
-              realizedPnlUsdt: -entryFee,
-              peakPrice: activeEntryPrice,
-              isTrailingActive: false,
-              totalFeeUsdt: entryFee,
+              strategyId: sig.strategyId,
+              strategyName: sig.strategyName,
             };
           }
         }
@@ -948,16 +1413,14 @@ export function runHistoricalBacktest(
     if (downsideDev > 0) sortinoRatio = Math.round((meanReturn / downsideDev) * Math.sqrt(Math.min(50, trades.length)) * 10) / 10;
   }
 
-  const finalBalance = Math.round(currentBalance * 100) / 100;
-  const netProfitUsdt = Math.round((finalBalance - initialBalance) * 100) / 100;
+  const netProfitUsdt = Math.round((currentBalance - initialBalance) * 100) / 100;
   const netReturnPercent = Math.round(finalBotReturnPct * 100) / 100;
 
   return {
     symbol,
     config,
-    equityCurve,
     initialBalance,
-    finalBalance,
+    finalBalance: Math.round(currentBalance * 100) / 100,
     netProfitUsdt,
     netReturnPercent,
     maxDrawdownPercent: Math.round(maxDrawdownPercent * 100) / 100,
@@ -967,6 +1430,7 @@ export function runHistoricalBacktest(
     losingTrades,
     winRate,
     lossRate,
+    equityCurve,
     profitFactor,
     averageRR: riskRewardTarget,
     expectancy,
@@ -984,6 +1448,70 @@ export function runHistoricalBacktest(
 }
 
 /**
+ * Runs comparative backtest for all 6 individual strategies + ensemble side-by-side
+ */
+export function runComparativeStrategyBacktest(
+  klines: KlineCandle[],
+  baseConfig: BacktestConfig,
+  symbol = 'BTCUSDT'
+): StrategyComparisonItem[] {
+  const allIds: BacktestStrategyId[] = [
+    'ALL_STRATEGIES',
+    'MOMENTUM',
+    'SCALPER',
+    'SWING',
+    'BREAKOUT',
+    'MEAN_REVERSION',
+    'INSTITUTIONAL_SMC',
+  ];
+
+  const results: StrategyComparisonItem[] = [];
+
+  allIds.forEach((id) => {
+    const stratInfo = BACKTEST_STRATEGIES.find((s) => s.id === id);
+    const specificConfig: BacktestConfig = {
+      ...baseConfig,
+      strategyId: id,
+    };
+
+    const res = runHistoricalBacktest(klines, specificConfig, symbol);
+    results.push({
+      strategyId: id,
+      strategyName: stratInfo?.name || id,
+      strategyNameAr: stratInfo?.nameAr || id,
+      badge: stratInfo?.badge || 'Strategy',
+      color: stratInfo?.color || '#0ea5e9',
+      netProfitUsdt: res.netProfitUsdt,
+      netReturnPercent: res.netReturnPercent,
+      winRate: res.winRate,
+      totalTrades: res.totalTrades,
+      winningTrades: res.winningTrades,
+      losingTrades: res.losingTrades,
+      profitFactor: res.profitFactor,
+      maxDrawdownPercent: res.maxDrawdownPercent,
+      sharpeRatio: res.sharpeRatio || 0,
+      expectancy: res.expectancy,
+    });
+  });
+
+  // Find best performing strategy by Net Profit
+  let maxProfit = -Infinity;
+  let bestIdx = -1;
+  results.forEach((r, idx) => {
+    if (r.netProfitUsdt > maxProfit) {
+      maxProfit = r.netProfitUsdt;
+      bestIdx = idx;
+    }
+  });
+
+  if (bestIdx >= 0) {
+    results[bestIdx].isBest = true;
+  }
+
+  return results;
+}
+
+/**
  * Runs a simultaneous multi-currency backtest across all given symbols and aggregates portfolio stats
  */
 export function runMultiCoinBacktest(
@@ -993,13 +1521,11 @@ export function runMultiCoinBacktest(
   const symbols = Object.keys(coinKlinesMap);
   const resultsByCoin: Record<string, BacktestResult> = {};
 
-  // 1. Generate isolated trades for every coin
   symbols.forEach((sym) => {
     const klines = coinKlinesMap[sym] || [];
     resultsByCoin[sym] = runHistoricalBacktest(klines, config, sym);
   });
 
-  // 2. Pool and sort all potential trades chronologically by entryTime
   const allPotentialTrades: BacktestTrade[] = [];
   symbols.forEach((sym) => {
     allPotentialTrades.push(...resultsByCoin[sym].trades);
@@ -1007,12 +1533,11 @@ export function runMultiCoinBacktest(
 
   type PortfolioEvent = { time: number; type: 'ENTRY' | 'EXIT'; trade: BacktestTrade };
   const events: PortfolioEvent[] = [];
-  allPotentialTrades.forEach(t => {
+  allPotentialTrades.forEach((t) => {
     events.push({ time: t.entryTime, type: 'ENTRY', trade: t });
     events.push({ time: t.exitTime, type: 'EXIT', trade: t });
   });
 
-  // Sort events. If same time, process EXITS first to free up slots before new ENTRYS
   events.sort((a, b) => {
     if (a.time !== b.time) return a.time - b.time;
     if (a.type === 'EXIT' && b.type === 'ENTRY') return -1;
@@ -1020,13 +1545,14 @@ export function runMultiCoinBacktest(
     return 0;
   });
 
-  // 3. Global Portfolio Simulation (Max 5 concurrent trades)
   const MAX_CONCURRENT_TRADES = 5;
   let currentPortfolioBalance = config.initialBalance;
   const activeTrades = new Set<string>();
   const activeTradeAllocations = new Map<string, number>();
   const executedTradesByCoin: Record<string, BacktestTrade[]> = {};
-  symbols.forEach(s => { executedTradesByCoin[s] = []; });
+  symbols.forEach((s) => {
+    executedTradesByCoin[s] = [];
+  });
 
   let totalTrades = 0;
   let totalWinningTrades = 0;
@@ -1035,18 +1561,14 @@ export function runMultiCoinBacktest(
   let peakPortfolioBalance = currentPortfolioBalance;
 
   const rawPortfolioCurve: EquityDataPoint[] = [];
-
-  // Build Buy/Hold reference: an equal-weighted basket at start
   const sampleSymbol = symbols[0] || 'BTCUSDT';
   const baseTimeline = resultsByCoin[sampleSymbol]?.equityCurve || [];
   let baseTimelineIdx = 0;
 
-  events.forEach(event => {
+  events.forEach((event) => {
     if (event.type === 'ENTRY') {
       if (activeTrades.size < MAX_CONCURRENT_TRADES) {
-        // Enforce max 1 active trade per symbol (single coin backtest already does this naturally)
         activeTrades.add(event.trade.id);
-        
         const allocPct = Math.min(100, Math.max(5, config.tradeAllocationPercent || 20));
         const allocationUsdt = currentPortfolioBalance * (allocPct / 100);
         currentPortfolioBalance = Math.max(0, currentPortfolioBalance - allocationUsdt);
@@ -1055,16 +1577,12 @@ export function runMultiCoinBacktest(
     } else if (event.type === 'EXIT') {
       if (activeTrades.has(event.trade.id)) {
         activeTrades.delete(event.trade.id);
-        
         const allocationUsdt = activeTradeAllocations.get(event.trade.id) || 0;
         activeTradeAllocations.delete(event.trade.id);
-        
-        // pnlPercent is Return on Equity of the margin
+
         const tradePnlUsdt = allocationUsdt * (event.trade.pnlPercent / 100);
-        
         currentPortfolioBalance += Math.max(0, allocationUsdt + tradePnlUsdt);
-        
-        // Track max drawdown on portfolio
+
         if (currentPortfolioBalance > peakPortfolioBalance) {
           peakPortfolioBalance = currentPortfolioBalance;
         } else {
@@ -1072,96 +1590,81 @@ export function runMultiCoinBacktest(
           if (dd > maxPortfolioDrawdownPercent) maxPortfolioDrawdownPercent = dd;
         }
 
-        // Clone and adjust trade for global stats
         const scale = currentPortfolioBalance / config.initialBalance;
         const executedTrade = { ...event.trade };
         executedTrade.pnlUsdt = Math.round(tradePnlUsdt * 100) / 100;
         executedTrade.balanceAfter = Math.round(currentPortfolioBalance * 100) / 100;
-        executedTrade.feeUsdt = Math.round((event.trade.feeUsdt * scale) * 100) / 100;
-        executedTradesByCoin[event.trade.symbol].push(executedTrade);
-        
+        executedTrade.feeUsdt = Math.round((event.trade.feeUsdt || 0) * scale * 100) / 100;
+        executedTradesByCoin[event.trade.symbol]?.push(executedTrade);
+
         totalTrades++;
         if (event.trade.pnlPercent > 0) totalWinningTrades++;
         else totalLosingTrades++;
-        
-        // Sample timeline for equity curve
-        while (baseTimelineIdx < baseTimeline.length - 1 && baseTimeline[baseTimelineIdx].timestamp < event.time) {
+
+        while (
+          baseTimelineIdx < baseTimeline.length - 1 &&
+          baseTimeline[baseTimelineIdx].timestamp < event.time
+        ) {
           baseTimelineIdx++;
         }
-        
+
         let sumBuyHoldEquity = 0;
-        symbols.forEach(sym => {
-           const curve = resultsByCoin[sym]?.equityCurve || [];
-           const pt = curve[Math.min(baseTimelineIdx, curve.length - 1)] || curve[0];
-           // original buyHoldEquityUsdt assumed full initialBalance per coin. 
-           // Divide by symbols.length for an equal-weighted basket of the global initialBalance.
-           sumBuyHoldEquity += pt ? (pt.buyHoldEquityUsdt / symbols.length) : (config.initialBalance / symbols.length);
+        symbols.forEach((sym) => {
+          const curve = resultsByCoin[sym]?.equityCurve || [];
+          const pt = curve[Math.min(baseTimelineIdx, curve.length - 1)] || curve[0];
+          sumBuyHoldEquity += pt
+            ? pt.buyHoldEquityUsdt || config.initialBalance / symbols.length
+            : config.initialBalance / symbols.length;
         });
 
+        const botRetPct = ((currentPortfolioBalance - config.initialBalance) / config.initialBalance) * 100;
+        const bhRetPct = ((sumBuyHoldEquity - config.initialBalance) / config.initialBalance) * 100;
+
         rawPortfolioCurve.push({
-           timestamp: event.time,
-           botEquityUsdt: Math.round(currentPortfolioBalance * 100) / 100,
-           botReturn: Math.round(((currentPortfolioBalance - config.initialBalance) / config.initialBalance) * 10000) / 100,
-           buyHoldEquityUsdt: Math.round(sumBuyHoldEquity * 100) / 100,
-           buyHoldReturn: Math.round(((sumBuyHoldEquity - config.initialBalance) / config.initialBalance) * 10000) / 100,
+          timestamp: event.time * 1000,
+          botEquityUsdt: Math.round(currentPortfolioBalance * 100) / 100,
+          botReturn: Math.round(botRetPct * 100) / 100,
+          buyHoldEquityUsdt: Math.round(sumBuyHoldEquity * 100) / 100,
+          buyHoldReturn: Math.round(bhRetPct * 100) / 100,
         });
       }
     }
   });
 
   const totalNetProfitUsdt = Math.round((currentPortfolioBalance - config.initialBalance) * 100) / 100;
-  const totalNetReturnPercent = config.initialBalance > 0 
-      ? Math.round(((currentPortfolioBalance - config.initialBalance) / config.initialBalance) * 10000) / 100 
-      : 0;
+  const totalNetReturnPercent = Math.round(((currentPortfolioBalance - config.initialBalance) / config.initialBalance) * 10000) / 100;
   const overallWinRate = totalTrades > 0 ? Math.round((totalWinningTrades / totalTrades) * 1000) / 10 : 0;
 
-  // 4. Rank coins based on their executed trades in the global portfolio
-  const coinsRanked = symbols.map(sym => {
-     const trades = executedTradesByCoin[sym];
-     const tradesCount = trades.length;
-     const wins = trades.filter(t => t.pnlPercent > 0).length;
-     const winRate = tradesCount > 0 ? (wins / tradesCount) * 100 : 0;
-     const netProfitUsdt = trades.reduce((sum, t) => sum + t.pnlUsdt, 0);
-     
-     // netReturnPercent here is contribution to global portfolio ROI % 
-     const netReturnPercent = config.initialBalance > 0 ? (netProfitUsdt / config.initialBalance) * 100 : 0;
-
-     let grossProfit = 0;
-     let grossLoss = 0;
-     trades.forEach(t => {
-       if (t.pnlUsdt >= 0) grossProfit += t.pnlUsdt;
-       else grossLoss += Math.abs(t.pnlUsdt);
-     });
-     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? 99.9 : 0);
-
-     const coinShare = symbols.length > 0 ? config.initialBalance / symbols.length : config.initialBalance;
-     const coinFinalBalance = Math.max(0, coinShare + netProfitUsdt);
-
-     // Max drawdown for a specific coin in a shared wallet is complex, so we approximate
-     return {
-       symbol: sym,
-       winRate: Math.round(winRate * 10) / 10,
-       totalTrades: tradesCount,
-       netReturnPercent: Math.round(netReturnPercent * 100) / 100, 
-       netProfitUsdt: Math.round(netProfitUsdt * 100) / 100,
-       finalBalance: Math.round(coinFinalBalance * 100) / 100, 
-       profitFactor: Math.round(profitFactor * 100) / 100,
-       maxDrawdownPercent: 0, 
-     };
-  }).sort((a, b) => b.netReturnPercent - a.netReturnPercent);
+  const coinsRanked = symbols
+    .map((sym) => {
+      const res = resultsByCoin[sym];
+      return {
+        symbol: sym,
+        winRate: res.winRate,
+        totalTrades: res.totalTrades,
+        netReturnPercent: res.netReturnPercent,
+        netProfitUsdt: res.netProfitUsdt,
+        finalBalance: res.finalBalance,
+        profitFactor: res.profitFactor,
+        maxDrawdownPercent: res.maxDrawdownPercent,
+      };
+    })
+    .sort((a, b) => b.netReturnPercent - a.netReturnPercent);
 
   const bestCoin = coinsRanked[0] || { symbol: 'N/A', netReturnPercent: 0, netProfitUsdt: 0 };
   const worstCoin = coinsRanked[coinsRanked.length - 1] || { symbol: 'N/A', netReturnPercent: 0, netProfitUsdt: 0 };
 
   let portfolioEquityCurve = downsampleEquityCurve(rawPortfolioCurve, 100);
   if (portfolioEquityCurve.length === 0) {
-     portfolioEquityCurve = [{
-         timestamp: Date.now(),
-         botEquityUsdt: config.initialBalance,
-         botReturn: 0,
-         buyHoldEquityUsdt: config.initialBalance,
-         buyHoldReturn: 0
-     }];
+    portfolioEquityCurve = [
+      {
+        timestamp: Date.now(),
+        botEquityUsdt: config.initialBalance,
+        botReturn: 0,
+        buyHoldEquityUsdt: config.initialBalance,
+        buyHoldReturn: 0,
+      },
+    ];
   }
 
   return {
@@ -1189,6 +1692,7 @@ export function runMultiCoinBacktest(
     coinsRanked,
   };
 }
+
 export function generateFallbackKlines(
   symbol = 'BTCUSDT',
   timeframe: Timeframe = '1h',
