@@ -240,13 +240,39 @@ app.post('/api/trading/reset', async (req, res) => {
       MEAN_REVERSION: false,
       INSTITUTIONAL_SMC: false,
     }));
+    
+    let cfg: any = {
+      enabled: false,
+      activePresets: [],
+      tradeAllocationPercent: 25,
+      minConfidence: 75,
+      mode: 'SCALE_OUT_REBUY',
+      autoCompound: true,
+      maxOpenTrades: 3,
+      timeframe: 'AUTO',
+      marketType: 'FUTURES',
+      leverage: 3,
+      marginMode: 'ISOLATED',
+      trailingStopEnabled: true,
+      trailingStopPercent: 1.2,
+      trailingActivationProfitPercent: 1.5,
+      dailyDrawdownLimitPercent: 5.0,
+      circuitBreakerTripped: false,
+      sizingMode: 'FIXED_PERCENT',
+      riskPerTradePercent: 2.0,
+      cooldownMinutes: 10,
+      multiPairScanning: true,
+      allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
+    };
+
     const botConfigStr = await kv.get('btc_bot_config');
     if (botConfigStr) {
-      const cfg = JSON.parse(botConfigStr);
-      cfg.activePresets = [];
-      cfg.enabled = false;
-      await kv.set('btc_bot_config', JSON.stringify(cfg));
+      try {
+        const parsed = JSON.parse(botConfigStr);
+        cfg = { ...cfg, ...parsed, activePresets: [], enabled: false };
+      } catch (e) {}
     }
+    await kv.set('btc_bot_config', JSON.stringify(cfg));
     await kv.set('btc_active_bot_positions', '[]');
     await kv.set('btc_trade_history', '[]');
     await kv.set('btc_bot_logs', '[]');
@@ -257,6 +283,20 @@ app.post('/api/trading/reset', async (req, res) => {
       history: [],
     }));
     await kv.set('btc_push_alerts', '[]');
+
+    if (scannerState) {
+      scannerState.activeStrategiesCount = 0;
+      if (scannerState.symbolStates) {
+        Object.keys(scannerState.symbolStates).forEach((k) => {
+          if (scannerState.symbolStates[k]) {
+            scannerState.symbolStates[k].lastSignal = undefined;
+            scannerState.symbolStates[k].signalDirection = undefined;
+            scannerState.symbolStates[k].strategyName = undefined;
+          }
+        });
+      }
+    }
+
     res.json({ success: true, message: 'Trading state and strategy activations wiped and reset to default INACTIVE' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to reset trading data' });

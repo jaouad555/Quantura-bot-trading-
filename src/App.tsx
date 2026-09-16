@@ -668,6 +668,7 @@ export const App: React.FC = () => {
 
   const botConfigRef = useRef<AutoBotConfig>(botConfig);
   botConfigRef.current = botConfig;
+  const lastConfigUpdateRef = useRef<number>(0);
 
   const tradeHistoryRef = useRef<TradeHistoryItem[]>(tradeHistory);
   useEffect(() => {
@@ -1769,8 +1770,9 @@ export const App: React.FC = () => {
         playAudioChime();
       }
 
+      let nextConfig: AutoBotConfig;
       if (nextEnabled && prev.circuitBreakerTripped) {
-        return {
+        nextConfig = {
           ...prev,
           enabled: true,
           enabledAt: Date.now(),
@@ -1778,8 +1780,13 @@ export const App: React.FC = () => {
           circuitBreakerTrippedAt: undefined,
           circuitBreakerResetAt: Date.now(),
         };
+      } else {
+        nextConfig = { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
       }
-      return { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
+      botConfigRef.current = nextConfig;
+      lastConfigUpdateRef.current = Date.now();
+      apiStorage.setItem('btc_bot_config', JSON.stringify(nextConfig));
+      return nextConfig;
     });
   }, [language, ticker?.price, playAudioChime, triggerToastAlert, addBotLog]);
 
@@ -1795,6 +1802,16 @@ export const App: React.FC = () => {
       history: [],
     };
 
+    const resetBotConfig: AutoBotConfig = {
+      ...botConfigRef.current,
+      enabled: false,
+      activePresets: [],
+      circuitBreakerTripped: false,
+    };
+    botConfigRef.current = resetBotConfig;
+    lastConfigUpdateRef.current = Date.now();
+    apiStorage.setItem('btc_bot_config', JSON.stringify(resetBotConfig));
+
     // 2. Clear state
     setActiveBotPositions([]);
     setTradeHistory([]);
@@ -1806,6 +1823,7 @@ export const App: React.FC = () => {
       openPosition: null,
       history: [],
     });
+    setBotConfig(resetBotConfig);
 
     // 3. Clear database and local storage via dedicated reset endpoint
     try {

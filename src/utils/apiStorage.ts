@@ -93,6 +93,39 @@ class ApiStorage {
   }
 
   async resetTradingData() {
+    const defaultBotConfig = JSON.stringify({
+      enabled: false,
+      activePresets: [],
+      tradeAllocationPercent: 25,
+      minConfidence: 75,
+      mode: 'SCALE_OUT_REBUY',
+      autoCompound: true,
+      maxOpenTrades: 3,
+      timeframe: 'AUTO',
+      marketType: 'FUTURES',
+      leverage: 3,
+      marginMode: 'ISOLATED',
+      trailingStopEnabled: true,
+      trailingStopPercent: 1.2,
+      trailingActivationProfitPercent: 1.5,
+      dailyDrawdownLimitPercent: 5.0,
+      circuitBreakerTripped: false,
+      sizingMode: 'FIXED_PERCENT',
+      riskPerTradePercent: 2.0,
+      cooldownMinutes: 10,
+      multiPairScanning: true,
+      allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
+    });
+
+    const defaultStrategies = JSON.stringify({
+      MOMENTUM: false,
+      SCALPER: false,
+      SWING: false,
+      BREAKOUT: false,
+      MEAN_REVERSION: false,
+      INSTITUTIONAL_SMC: false,
+    });
+
     this.mem['btc_active_bot_positions'] = '[]';
     this.mem['btc_trade_history'] = '[]';
     this.mem['btc_bot_logs'] = '[]';
@@ -103,6 +136,8 @@ class ApiStorage {
       history: [],
     });
     this.mem['btc_push_alerts'] = '[]';
+    this.mem['btc_bot_config'] = defaultBotConfig;
+    this.mem['quantura_active_strategies'] = defaultStrategies;
 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -116,6 +151,8 @@ class ApiStorage {
           history: [],
         }));
         window.localStorage.setItem('btc_push_alerts', '[]');
+        window.localStorage.setItem('btc_bot_config', defaultBotConfig);
+        window.localStorage.setItem('quantura_active_strategies', defaultStrategies);
       } catch (e) {}
     }
 
