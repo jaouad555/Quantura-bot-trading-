@@ -24,7 +24,7 @@ import {
   RefreshCcwDot,
   Copy
 } from 'lucide-react';
-import { Language, PaperWallet, ActiveBotPosition } from '../types';
+import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { 
@@ -244,35 +244,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Top bar with Quantura Logo and Close button */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            {/* Small Brand Avatar with Glow */}
-            <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/30 to-cyan-400/40 blur-md rounded-xl" />
-              <div className="relative w-11 h-11 rounded-xl bg-slate-950 border border-cyan-500/40 flex items-center justify-center p-1 shadow-[0_0_15px_rgba(6,182,212,0.35)] overflow-hidden">
+            {/* Enhanced Brand Avatar with Dual Ambient Glow */}
+            <div className="relative group/logo shrink-0">
+              <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/40 via-cyan-400/50 to-emerald-400/40 blur-md rounded-2xl opacity-75 group-hover/logo:opacity-100 transition-all duration-500" />
+              <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-[#030712] border-2 border-cyan-500/50 flex items-center justify-center p-1 shadow-[0_0_20px_rgba(6,182,212,0.4)] overflow-hidden transition-transform duration-300 group-hover/logo:scale-105">
                 <img 
                   src="/logo.png" 
                   alt="Quantura" 
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover rounded-xl"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}
                 />
               </div>
+              {/* Active Pulse Ring Indicator */}
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-950"></span>
+              </span>
             </div>
 
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-sm uppercase text-sweep-shine leading-none">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="font-['Syncopate',sans-serif] font-black text-white tracking-[0.18em] text-sm sm:text-[15px] uppercase text-sweep-shine leading-none">
                   QUANTURA
                 </h1>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-300 font-mono font-bold border border-cyan-500/40">
-                  PRO
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 font-mono font-bold border border-cyan-500/40 shadow-xs">
+                  {APP_VERSION_TAG}
                 </span>
               </div>
-              <p className="text-cyan-400 text-[9px] font-mono font-black tracking-[0.25em] uppercase mt-1">
-                TRADE SMARTER
-              </p>
-              <p className="text-slate-400 text-[8px] font-mono tracking-wider uppercase">
-                {isArabic ? 'المنصة الكمية والذكاء الاصطناعي' : 'Quantitative AI Precision'}
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-cyan-400 text-[9px] font-mono font-black tracking-[0.22em] uppercase">
+                  TRADE SMARTER
+                </span>
+                <span className="text-slate-600 text-[8px]">•</span>
+                <span className="text-amber-400 text-[8px] font-mono font-semibold tracking-wider uppercase">
+                  PRO AI
+                </span>
+              </div>
+              <p className="text-slate-400 text-[8px] font-mono tracking-wider uppercase truncate mt-0.5">
+                {isArabic ? 'المنصة المؤسسية الكمية' : 'Institutional Quant Terminal'}
               </p>
             </div>
           </div>
@@ -281,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-900/90 border border-slate-700/80 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-500 transition shadow-md cursor-pointer"
+              className="w-8 h-8 rounded-full bg-slate-900/90 border border-slate-700/80 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-500 transition shadow-md cursor-pointer shrink-0"
               title="إغلاق القائمة"
             >
               <X className="w-4 h-4" />
@@ -498,20 +509,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Bottom Credits */}
         <div className="flex items-center justify-between px-1 pt-2 border-t border-slate-800/40">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-slate-950 border border-cyan-500/30 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="w-6 h-6 rounded-lg bg-slate-950 border border-cyan-500/40 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
               <img src="/logo.png" alt="Quantura" className="w-full h-full object-cover" />
             </div>
-            <div className="flex flex-col text-left">
-              <span className="font-['Syncopate',sans-serif] font-bold text-slate-300 text-[9px] tracking-wider uppercase leading-tight">
+            <div className="flex flex-col text-left rtl:text-right">
+              <span className="font-['Syncopate',sans-serif] font-bold text-slate-200 text-[9px] tracking-wider uppercase leading-tight">
                 QUANTURA
               </span>
-              <span className="text-cyan-400 text-[8px] font-mono font-bold tracking-[0.2em] uppercase leading-tight">
+              <span className="text-cyan-400 text-[7.5px] font-mono font-bold tracking-[0.2em] uppercase leading-tight">
                 TRADE SMARTER
               </span>
             </div>
           </div>
-          <span className="text-slate-500 text-[8.5px] uppercase tracking-wider font-mono">
-            v5.1 AI CORE
+          <span className="text-cyan-400/90 text-[8.5px] uppercase tracking-wider font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
+            {APP_VERSION_TAG} CORE
           </span>
         </div>
       </div>

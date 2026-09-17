@@ -24,24 +24,36 @@ export interface PivotPointsResult {
  * Calculates Exponential Moving Average (EMA)
  */
 export function calculateEMA(klines: KlineCandle[], period: number): IndicatorPoint[] {
-  if (!klines || klines.length < period) return [];
+  if (!klines || klines.length === 0) return [];
 
   const k = 2 / (period + 1);
   const result: IndicatorPoint[] = [];
 
-  // Initial SMA as starting point
-  let sum = 0;
-  for (let i = 0; i < period; i++) {
-    sum += klines[i].close;
-  }
-  let prevEma = sum / period;
-  result.push({ time: klines[period - 1].time, value: Number(prevEma.toFixed(4)) });
+  if (klines.length >= period) {
+    // Standard calculation with full warm-up period
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += klines[i].close;
+    }
+    let prevEma = sum / period;
+    result.push({ time: klines[period - 1].time, value: Number(prevEma.toFixed(4)) });
 
-  for (let i = period; i < klines.length; i++) {
-    const currentPrice = klines[i].close;
-    const currentEma = currentPrice * k + prevEma * (1 - k);
-    result.push({ time: klines[i].time, value: Number(currentEma.toFixed(4)) });
-    prevEma = currentEma;
+    for (let i = period; i < klines.length; i++) {
+      const currentPrice = klines[i].close;
+      const currentEma = currentPrice * k + prevEma * (1 - k);
+      result.push({ time: klines[i].time, value: Number(currentEma.toFixed(4)) });
+      prevEma = currentEma;
+    }
+  } else {
+    // Graceful calculation when available history is less than period
+    let currentEma = klines[0].close;
+    result.push({ time: klines[0].time, value: Number(currentEma.toFixed(4)) });
+
+    for (let i = 1; i < klines.length; i++) {
+      const currentPrice = klines[i].close;
+      currentEma = currentPrice * k + currentEma * (1 - k);
+      result.push({ time: klines[i].time, value: Number(currentEma.toFixed(4)) });
+    }
   }
 
   return result;
@@ -51,15 +63,17 @@ export function calculateEMA(klines: KlineCandle[], period: number): IndicatorPo
  * Calculates Simple Moving Average (SMA)
  */
 export function calculateSMA(klines: KlineCandle[], period: number): IndicatorPoint[] {
-  if (!klines || klines.length < period) return [];
+  if (!klines || klines.length === 0) return [];
   const result: IndicatorPoint[] = [];
 
-  for (let i = period - 1; i < klines.length; i++) {
+  const effectivePeriod = Math.min(period, klines.length);
+  for (let i = effectivePeriod - 1; i < klines.length; i++) {
     let sum = 0;
-    for (let j = 0; j < period; j++) {
+    const windowSize = Math.min(period, i + 1);
+    for (let j = 0; j < windowSize; j++) {
       sum += klines[i - j].close;
     }
-    result.push({ time: klines[i].time, value: Number((sum / period).toFixed(4)) });
+    result.push({ time: klines[i].time, value: Number((sum / windowSize).toFixed(4)) });
   }
 
   return result;

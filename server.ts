@@ -554,7 +554,7 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
 async function fetchBinanceKlines(
   symbol = 'BTCUSDT',
   interval: Timeframe = '1h',
-  limit = 150,
+  limit = 350,
   marketType: 'SPOT' | 'FUTURES' = 'SPOT'
 ): Promise<KlineCandle[]> {
   const normSymbol = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
@@ -1140,7 +1140,7 @@ app.get('/api/binance/market-data', async (req, res) => {
     const [tickerResult, klinesResult, orderBookResult, derivativesResult, mtfResult] =
       await Promise.allSettled([
         fetchBinanceTicker(symbol, marketType),
-        fetchBinanceKlines(symbol, timeframe, 150, marketType),
+        fetchBinanceKlines(symbol, timeframe, 350, marketType),
         fetchBinanceOrderBook(symbol, marketType),
         fetchBinanceDerivatives(symbol),
         fetchMultiTimeframeConfluence(symbol, marketType),
@@ -1154,11 +1154,13 @@ app.get('/api/binance/market-data', async (req, res) => {
 
       console.warn(`Falling back to synthetic data due to: ${errorMsg}`);
       
-      const numCandles = 150;
+      const numCandles = 350;
       const syntheticKlines: KlineCandle[] = [];
       const nowTs = Math.floor(Date.now() / 1000);
       let tfSeconds = 3600;
-      if (timeframe === '15m') tfSeconds = 15 * 60;
+      if (timeframe === '5m') tfSeconds = 5 * 60;
+      else if (timeframe === '15m') tfSeconds = 15 * 60;
+      else if (timeframe === '30m') tfSeconds = 30 * 60;
       else if (timeframe === '1h') tfSeconds = 3600;
       else if (timeframe === '4h') tfSeconds = 4 * 3600;
       else if (timeframe === '1d') tfSeconds = 24 * 3600;

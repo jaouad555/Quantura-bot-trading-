@@ -1,6 +1,6 @@
 import { apiStorage } from "../utils/apiStorage";
 import React, { useState } from 'react';
-import { Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet } from '../types';
+import { Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, APP_VERSION_TAG } from '../types';
 import { translations } from '../utils/translations';
 import { X, Globe, Clock, AlertTriangle, Bell, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2 } from 'lucide-react';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
@@ -83,8 +83,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-base sm:text-lg uppercase text-sweep-shine">QUANTURA</h3>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-amber-400 font-mono font-bold border border-amber-500/30">
-                  v2.5
+                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-mono font-bold border border-cyan-500/40">
+                  {APP_VERSION_TAG}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">

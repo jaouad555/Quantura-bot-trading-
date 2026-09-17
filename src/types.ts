@@ -1,3 +1,6 @@
+export const APP_VERSION = '2.5.0';
+export const APP_VERSION_TAG = 'v2.5.0';
+
 export type DecisionType = 'LONG' | 'SHORT' | 'WAIT' | 'NO_TRADE';
 export type BiasType = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'MODERATE' | 'HIGH' | 'EXTREME';

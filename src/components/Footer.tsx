@@ -24,8 +24,11 @@ import {
   BadgeCheck,
   Fingerprint,
   Award,
+  Radio,
+  Sliders,
+  CheckCircle2,
 } from 'lucide-react';
-import { Language, TradingExecutionMode, BinanceApiConfig } from '../types';
+import { Language, TradingExecutionMode, BinanceApiConfig, APP_VERSION_TAG, APP_VERSION } from '../types';
 
 interface FooterProps {
   language: Language;
@@ -57,13 +60,13 @@ export const Footer: React.FC<FooterProps> = ({
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="mt-20 border-t border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-950 to-[#050811] text-slate-400 relative z-10 overflow-hidden font-sans">
+    <footer className="mt-20 border-t border-slate-800/80 bg-gradient-to-b from-slate-950 via-[#060a12] to-[#02050b] text-slate-400 relative z-10 overflow-hidden font-sans">
       {/* Top subtle decorative ambient glow line */}
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent"></div>
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-24 bg-cyan-500/[0.03] blur-3xl pointer-events-none rounded-full"></div>
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-24 bg-cyan-500/[0.04] blur-3xl pointer-events-none rounded-full"></div>
 
       {/* Top Bar: Live Institutional Ticker / Ecosystem Status */}
-      <div className="border-b border-slate-800/60 bg-slate-900/40 backdrop-blur-md px-4 sm:px-8 py-3">
+      <div className="border-b border-slate-800/70 bg-slate-900/50 backdrop-blur-md px-4 sm:px-8 py-3">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             {/* Live Gateway Status */}
@@ -94,7 +97,7 @@ export const Footer: React.FC<FooterProps> = ({
 
             {/* Risk Guard State */}
             <div className="hidden md:flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
-              <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
               <span>RISK GUARD: <strong className="text-cyan-300">STRICT ARMED</strong></span>
             </div>
           </div>
@@ -103,7 +106,7 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={onOpenBinanceModal}
-              className="px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/80 text-[11px] font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
             >
               <Key className="w-3 h-3 text-amber-400" />
               <span>{binanceConfig.isConnected ? 'API CONNECTED' : 'SETUP API KEYS'}</span>
@@ -111,10 +114,10 @@ export const Footer: React.FC<FooterProps> = ({
 
             <button
               onClick={scrollToTop}
-              className="p-1.5 rounded-md bg-slate-800/80 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 border border-slate-700/80 transition-all cursor-pointer"
+              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 border border-slate-700 transition-all cursor-pointer shadow-xs group"
               title={isArabic ? 'الرجوع إلى الأعلى' : 'Back to top'}
             >
-              <ArrowUp className="w-3.5 h-3.5" />
+              <ArrowUp className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" />
             </button>
           </div>
         </div>
@@ -133,24 +136,27 @@ export const Footer: React.FC<FooterProps> = ({
                   className="relative group cursor-pointer shrink-0"
                   onClick={scrollToTop}
                 >
-                  <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/30 via-cyan-500/30 to-blue-500/30 rounded-2xl blur-lg opacity-40 group-hover:opacity-90 transition duration-500"></div>
-                  <img
-                    src="/logo.png"
-                    alt="Quantura Logo"
-                    className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-amber-500/40 shadow-2xl transition-all duration-500 group-hover:scale-105 object-cover"
-                  />
+                  <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/40 via-cyan-400/40 to-emerald-400/40 rounded-2xl blur-lg opacity-50 group-hover:opacity-100 transition duration-500"></div>
+                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-[#02050b] border-2 border-cyan-500/50 p-1 shadow-2xl transition-all duration-500 group-hover:scale-105 flex items-center justify-center overflow-hidden">
+                    <img
+                      src="/logo.png"
+                      alt="Quantura Logo"
+                      className="w-full h-full rounded-xl object-cover"
+                    />
+                  </div>
                 </div>
+
                 <div className="flex flex-col text-left rtl:text-right">
-                  <div className="flex items-center gap-2">
-                    <span className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-lg sm:text-xl uppercase text-sweep-shine">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-['Syncopate',sans-serif] font-black text-white tracking-[0.18em] text-lg sm:text-xl uppercase text-sweep-shine">
                       QUANTURA
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[9px] font-bold tracking-wider">
-                      PRO v2.5
+                    <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-[9.5px] font-bold tracking-wider shadow-xs">
+                      {APP_VERSION_TAG}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-cyan-400 text-xs font-mono font-black tracking-[0.2em] uppercase">
+                    <span className="text-cyan-400 text-xs font-mono font-black tracking-[0.22em] uppercase">
                       TRADE SMARTER
                     </span>
                     <span className="text-slate-600 font-mono text-xs">•</span>
@@ -186,7 +192,7 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
 
             {/* Executive Founder & Quantitative Architect Credential Card */}
-            <div className="rounded-2xl bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-[#070b14] border border-slate-800 hover:border-cyan-500/40 p-4 sm:p-4.5 shadow-2xl relative overflow-hidden group transition-all duration-500">
+            <div className="rounded-2xl bg-gradient-to-b from-slate-900/95 via-slate-900/80 to-[#070b14] border border-slate-800 hover:border-cyan-500/40 p-4 sm:p-4.5 shadow-2xl relative overflow-hidden group transition-all duration-500">
               {/* Dynamic Top Ambient Laser Glow */}
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500/60 via-cyan-400 to-emerald-400/60 group-hover:h-[2.5px] transition-all duration-500"></div>
               <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-20 bg-cyan-500/10 blur-2xl pointer-events-none rounded-full group-hover:bg-cyan-500/20 transition-all duration-700"></div>
@@ -290,7 +296,7 @@ export const Footer: React.FC<FooterProps> = ({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <Bot className="w-3.5 h-3.5 text-brand-400 group-hover:translate-x-0.5 transition-transform" />
+                    <Bot className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
                     <span>{isArabic ? 'محرك البوت الآلي' : 'Quant Trading Bot'}</span>
                   </span>
                   <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-mono font-bold">
@@ -418,17 +424,17 @@ export const Footer: React.FC<FooterProps> = ({
             <div className="space-y-3 text-xs">
               <button
                 onClick={onOpenRiskModal}
-                className="w-full text-left rtl:text-right p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-brand-500/40 transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full text-left rtl:text-right p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-cyan-500/40 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div>
-                  <div className="text-slate-200 font-semibold group-hover:text-brand-300 transition-colors">
+                  <div className="text-slate-200 font-semibold group-hover:text-cyan-300 transition-colors">
                     {isArabic ? 'محرك إدارة المخاطر' : 'Risk Management Engine'}
                   </div>
                   <div className="text-[10px] text-slate-400">
                     {isArabic ? 'حد أقصى للخسارة والسحب اليومي' : 'Max SL, Daily Cap, Spread'}
                   </div>
                 </div>
-                <Shield className="w-4 h-4 text-brand-400 shrink-0" />
+                <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
               </button>
 
               <button
@@ -466,7 +472,7 @@ export const Footer: React.FC<FooterProps> = ({
         </div>
 
         {/* Institutional Risk Disclaimer (Standard for Binance, TradingView, Bybit) */}
-        <div className="mt-12 pt-8 border-t border-slate-800/60 text-[11px] text-slate-400 leading-relaxed space-y-2">
+        <div className="mt-12 pt-8 border-t border-slate-800/70 text-[11px] text-slate-400 leading-relaxed space-y-2">
           <div className="flex items-center gap-2 text-slate-300 font-mono font-bold uppercase text-[10px]">
             <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
             <span>{isArabic ? 'إخلاء المسؤولية المالي والتنظيمي' : 'INSTITUTIONAL RISK WARNING & DISCLAIMER'}</span>
@@ -479,17 +485,17 @@ export const Footer: React.FC<FooterProps> = ({
         </div>
 
         {/* Bottom Bar: Copyright & Platform Meta */}
-        <div className="mt-8 pt-6 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-400 font-mono">
+        <div className="mt-8 pt-6 border-t border-slate-800/70 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-400 font-mono">
           <div className="flex flex-wrap items-center gap-3">
-            <span>&copy; {currentYear} QUANTURA TERMINAL. ALL RIGHTS RESERVED.</span>
+            <span>&copy; {currentYear} QUANTURA TERMINAL ({APP_VERSION_TAG}). ALL RIGHTS RESERVED.</span>
             <span className="text-slate-700 hidden sm:inline">•</span>
             <span className="text-slate-300">BINANCE REST API & WEBHOOK COMPATIBLE</span>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 text-cyan-400">
+            <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
               <Cpu className="w-3 h-3" />
-              <span>QUANTURA AI QUANT CORE v2.5</span>
+              <span>QUANTURA AI QUANT CORE {APP_VERSION_TAG}</span>
             </span>
             <span className="text-slate-700">•</span>
             <span className="flex items-center gap-1 text-emerald-400">
@@ -503,3 +509,4 @@ export const Footer: React.FC<FooterProps> = ({
     </footer>
   );
 };
+
