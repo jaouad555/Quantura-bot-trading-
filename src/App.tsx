@@ -3045,6 +3045,10 @@ export const App: React.FC = () => {
                 onTimeframeChange={handleTimeframeChange}
                 activeSignal={activeSignal}
                 language={language}
+                ticker={ticker}
+                activeBotPositions={activeBotPositions}
+                marketType={botConfig.marketType || 'FUTURES'}
+                onManualClosePosition={handlePanicCloseAll}
               />
             </div>
           )}
