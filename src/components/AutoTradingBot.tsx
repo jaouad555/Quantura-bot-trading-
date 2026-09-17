@@ -46,6 +46,7 @@ import {
 } from '../types';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { calculatePortfolioMetrics, calculatePositionUnrealizedPnl } from '../utils/portfolioCalc';
+import { SentimentalBotAvatar } from './SentimentalBotAvatar';
 
 interface AutoTradingBotProps {
   language: Language;
@@ -731,21 +732,22 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       {/* Bot Master Control Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
         <div className="flex flex-col gap-5">
-          {/* Bot Title & Status Header */}
+          {/* Bot Title & Status Header with Sentimental Robot Avatar */}
           <div className="flex items-start sm:items-center gap-3.5">
-            <div className={`p-3.5 rounded-2xl border flex items-center justify-center shrink-0 ${
-              botConfig.enabled 
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' 
-                : 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}>
-              <Bot className="w-7 h-7" />
-            </div>
+            <SentimentalBotAvatar
+              enabled={botConfig.enabled}
+              floatingPnlUsdt={floatingPnl}
+              realizedPnlUsdt={totalRealizedPnl}
+              circuitBreakerTriggered={botConfig.circuitBreakerTripped}
+              language={language}
+              showMoodBadge={false}
+              size="md"
+            />
 
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-base sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                    <span className="text-cyan-400 font-mono">🤖</span>
                     <span className="text-white">
                       Moteur Quantitatif IA
                     </span>
@@ -1452,8 +1454,16 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
       ) : (
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto">
-            <Bot className="w-6 h-6" />
+          <div className="flex justify-center">
+            <SentimentalBotAvatar
+              enabled={botConfig.enabled}
+              floatingPnlUsdt={floatingPnl}
+              realizedPnlUsdt={totalRealizedPnl}
+              circuitBreakerTriggered={botConfig.circuitBreakerTripped}
+              language={language}
+              showMoodBadge={true}
+              size="lg"
+            />
           </div>
           <h3 className="font-bold text-white text-sm">
             {isArabic ? 'لا توجد عقود آجلة مفتوحة حالياً' : 'Aucune position futures active'}
