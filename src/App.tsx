@@ -1341,6 +1341,7 @@ export const App: React.FC = () => {
           }));
         }
 
+        const breakevenFeeAdjusted = isLong ? pos.entryPrice * 1.0005 : pos.entryPrice * 0.9995;
         const updatedPos: ActiveBotPosition = {
           ...pos,
           tp1Hit: true,
@@ -1349,8 +1350,10 @@ export const App: React.FC = () => {
           positionSizeUsdt: (pos.remainingAmountUsdt * 0.5) * lev,
           remainingAmountBtc: pos.remainingAmountBtc * 0.5,
           realizedPnlUsdt: pos.realizedPnlUsdt + pnlUsdt,
-          stopLoss: pos.entryPrice, // Breakeven
-          lastAction: isArabicLang ? `تم تحقيق TP1 وجني 50% وتحريك SL للتعادل ✓` : `TP1 hit: 50% closed, SL moved to breakeven ✓`,
+          stopLoss: isLong
+            ? Math.max(pos.stopLoss || 0, breakevenFeeAdjusted)
+            : Math.min(pos.stopLoss || breakevenFeeAdjusted, breakevenFeeAdjusted),
+          lastAction: isArabicLang ? `تم تحقيق TP1 وجني 50% وتأمين SL للتعادل+ ✓` : `TP1 hit: 50% closed, SL locked at breakeven+ ✓`,
         };
 
         updateBotPositionsSync((prev) => prev.map(p => p.id === pos.id ? updatedPos : p));
@@ -1478,7 +1481,10 @@ export const App: React.FC = () => {
           positionSizeUsdt: (pos.remainingAmountUsdt * 0.5) * lev,
           remainingAmountBtc: pos.remainingAmountBtc * 0.5,
           realizedPnlUsdt: pos.realizedPnlUsdt + pnlUsdt,
-          lastAction: isArabicLang ? `تم تحقيق TP2 وجني نصف المتبقي ✓` : `TP2 hit: 50% of remaining closed ✓`,
+          stopLoss: (pos.tp1 && pos.tp1 > 0)
+            ? (isLong ? Math.max(pos.stopLoss || 0, pos.tp1) : Math.min(pos.stopLoss || pos.tp1, pos.tp1))
+            : pos.stopLoss,
+          lastAction: isArabicLang ? `تم تحقيق TP2 وجني نصف المتبقي وتأمين SL على TP1 ✓` : `TP2 hit: 50% of remaining closed, SL locked at TP1 ✓`,
         };
 
         updateBotPositionsSync((prev) => prev.map(p => p.id === pos.id ? updatedPos : p));

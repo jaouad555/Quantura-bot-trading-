@@ -418,7 +418,18 @@ export const startBotEngine = () => {
           }
 
           if (roePercent >= activationProfit || pos.tp1Hit) {
-            const calculatedTrailingSl = isLong ? currentPeak * (1 - trailGapPercent) : currentPeak * (1 + trailGapPercent);
+            let calculatedTrailingSl = isLong 
+              ? currentPeak * (1 - trailGapPercent) 
+              : currentPeak * (1 + trailGapPercent);
+
+            // Once activated or TP1 hit, guarantee SL is at least Breakeven + fee buffer (+0.05%)
+            const breakevenFloor = isLong ? pos.entryPrice * 1.0005 : pos.entryPrice * 0.9995;
+            if (isLong) {
+              calculatedTrailingSl = Math.max(calculatedTrailingSl, breakevenFloor);
+            } else {
+              calculatedTrailingSl = Math.min(calculatedTrailingSl, breakevenFloor);
+            }
+
             const isTslTighter = isLong
               ? (!pos.stopLoss || calculatedTrailingSl > pos.stopLoss)
               : (!pos.stopLoss || calculatedTrailingSl < pos.stopLoss);
@@ -427,13 +438,13 @@ export const startBotEngine = () => {
               pos.stopLoss = calculatedTrailingSl;
               pos.trailingStopPrice = calculatedTrailingSl;
               pos.isTrailingActive = true;
-              pos.lastAction = `Trailing SL: ${calculatedTrailingSl.toFixed(2)} ⚡ (Server)`;
+              pos.lastAction = `Trailing SL: $${calculatedTrailingSl.toFixed(2)} ⚡ (Locked Profit)`;
               stateChanged = true;
             }
           }
         }
 
-        // 3. TP1 HIT (Take 50% profit, move SL to breakeven)
+        // 3. TP1 HIT (Take 50% profit, move SL to breakeven + fee buffer without degrading existing Trailing SL)
         const isTp1Valid = isLong ? pos.tp1 > pos.entryPrice : pos.tp1 < pos.entryPrice;
         const isTp1Triggered = isTp1Valid && !pos.tp1Hit && (isLong ? currentP >= pos.tp1 : currentP <= pos.tp1);
 
@@ -456,9 +467,14 @@ export const startBotEngine = () => {
           pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
-          // Protect capital: move stop loss to entry price
-          pos.stopLoss = pos.entryPrice;
-          pos.lastAction = 'TP1 hit: 50% closed, SL moved to breakeven ✓ (Server)';
+
+          // Protect capital: move stop loss to breakeven + 0.05% fee buffer, NEVER lowering an already higher trailing SL
+          const breakevenFeeAdjusted = isLong ? pos.entryPrice * 1.0005 : pos.entryPrice * 0.9995;
+          pos.stopLoss = isLong
+            ? Math.max(pos.stopLoss || 0, breakevenFeeAdjusted)
+            : Math.min(pos.stopLoss || breakevenFeeAdjusted, breakevenFeeAdjusted);
+
+          pos.lastAction = 'TP1 hit: 50% closed, SL locked at breakeven+ ✓ (Server)';
           stateChanged = true;
 
           logsToAdd.push({
@@ -471,12 +487,12 @@ export const startBotEngine = () => {
             amountUsdt: marginClosed * lev,
             pnlUsdt: tranchePnl,
             pnlPercent: roePercent,
-            reason: `TP1 achieved (50% closed at ${currentP}, SL moved to breakeven)`,
+            reason: `TP1 achieved (50% closed at ${currentP}, SL secured at breakeven)`,
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           });
         }
         
-        // 4. TP2 HIT (Take 50% of remaining, lock more profit)
+        // 4. TP2 HIT (Take 50% of remaining, lock SL at TP1 price)
         const isTp2Valid = isLong ? pos.tp2 > pos.entryPrice : pos.tp2 < pos.entryPrice;
         const isTp2Triggered = isTp2Valid && pos.tp1Hit && !pos.tp2Hit && (isLong ? currentP >= pos.tp2 : currentP <= pos.tp2);
 
@@ -499,7 +515,15 @@ export const startBotEngine = () => {
           pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
-          pos.lastAction = 'TP2 hit: 50% of remaining closed ✓ (Server)';
+
+          // Lock SL at TP1 price to guarantee massive gain on the remaining 25% runner!
+          if (pos.tp1 && pos.tp1 > 0) {
+            pos.stopLoss = isLong
+              ? Math.max(pos.stopLoss || 0, pos.tp1)
+              : Math.min(pos.stopLoss || pos.tp1, pos.tp1);
+          }
+
+          pos.lastAction = 'TP2 hit: 50% remaining closed, SL locked at TP1 ✓ (Server)';
           stateChanged = true;
 
           logsToAdd.push({
@@ -512,7 +536,7 @@ export const startBotEngine = () => {
             amountUsdt: marginClosed * lev,
             pnlUsdt: tranchePnl,
             pnlPercent: roePercent,
-            reason: `TP2 achieved (50% remaining closed at ${currentP})`,
+            reason: `TP2 achieved (50% remaining closed at ${currentP}, SL advanced to TP1)`,
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           });
         }
