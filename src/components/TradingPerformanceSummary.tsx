@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TradeHistoryItem, Language } from '../types';
 import { translations } from '../utils/translations';
 import {
@@ -20,6 +20,12 @@ import {
   ArrowDownRight,
   CheckCircle2,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Check,
+  Search,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -59,6 +65,40 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
   const [selectedPairFilter, setSelectedPairFilter] = useState<string>('ALL');
   // Visual chart tab: 'ROI_GROWTH' | 'WIN_LOSS_PIE' | 'PNL_BARS' | 'DAILY_PNL' | 'ALL_GRID'
   const [activeChartTab, setActiveChartTab] = useState<'ROI_GROWTH' | 'WIN_LOSS_PIE' | 'PNL_BARS' | 'DAILY_PNL' | 'ALL_GRID'>('ALL_GRID');
+
+  // Pair selector scrolling & dropdown states
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isPairDropdownOpen, setIsPairDropdownOpen] = useState(false);
+  const [pairSearchQuery, setPairSearchQuery] = useState('');
+  const pairDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close pair dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pairDropdownRef.current && !pairDropdownRef.current.contains(e.target as Node)) {
+        setIsPairDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleScrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -160, behavior: 'smooth' });
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 160, behavior: 'smooth' });
+    }
+  };
+
+  const handleSelectPair = (sym: string) => {
+    setSelectedPairFilter(sym);
+    setIsPairDropdownOpen(false);
+  };
 
   // Filter history if specific pair selected
   const filteredHistory = useMemo(() => {
@@ -262,6 +302,34 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
     return Array.from(set);
   }, [history]);
 
+  // Statistics per symbol
+  const symbolStatsMap = useMemo(() => {
+    const map: Record<string, { count: number; wins: number; winRate: number; totalPnl: number }> = {};
+    history.forEach((h) => {
+      const sym = h.symbol || 'BTCUSDT';
+      if (!map[sym]) {
+        map[sym] = { count: 0, wins: 0, winRate: 0, totalPnl: 0 };
+      }
+      map[sym].count += 1;
+      map[sym].totalPnl += h.profitPercent || 0;
+      if (h.profitPercent > 0.05) {
+        map[sym].wins += 1;
+      }
+    });
+    Object.keys(map).forEach((sym) => {
+      map[sym].winRate = map[sym].count > 0 ? (map[sym].wins / map[sym].count) * 100 : 0;
+    });
+    return map;
+  }, [history]);
+
+  // Filtered symbols for search in dropdown
+  const filteredAvailableSymbols = useMemo(() => {
+    if (!pairSearchQuery.trim()) return availableSymbols;
+    return availableSymbols.filter((sym) =>
+      sym.toLowerCase().includes(pairSearchQuery.toLowerCase())
+    );
+  }, [availableSymbols, pairSearchQuery]);
+
   // Custom Tooltip for Cumulative Area Chart
   const CustomAreaTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
     if (active && payload && payload.length) {
@@ -453,37 +521,8 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
             </div>
           </div>
 
-          {/* Quick Actions & Pair Selector */}
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {availableSymbols.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs">
-                <Filter className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
-                <button
-                  onClick={() => setSelectedPairFilter('ALL')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
-                    selectedPairFilter === 'ALL'
-                      ? 'bg-brand-500 text-slate-950'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {perf.filterAll}
-                </button>
-                {availableSymbols.map((sym) => (
-                  <button
-                    key={sym}
-                    onClick={() => setSelectedPairFilter(sym)}
-                    className={`px-2 py-1 rounded-lg font-mono font-bold transition text-[11px] ${
-                      selectedPairFilter === sym
-                        ? 'bg-brand-500 text-slate-950'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {sym.replace('USDT', '')}
-                  </button>
-                ))}
-              </div>
-            )}
-
+          {/* Quick Actions & Live sample */}
+          <div className="flex items-center gap-2">
             {history.length === 0 && onSeedSampleData && (
               <button
                 onClick={onSeedSampleData}
@@ -495,6 +534,191 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
             )}
           </div>
         </div>
+
+        {/* Enhanced Smooth Horizontal Scrollable Coin Bar & Dropdown */}
+        {availableSymbols.length > 1 && (
+          <div className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2 space-y-2">
+            <div className="flex items-center justify-between gap-2 px-1 text-xs">
+              <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-brand-400" />
+                <span>{isArabic ? 'تصفية حسب العملة :' : 'Filtrer par paire :'}</span>
+                <span className="text-[10px] font-mono text-slate-300 bg-slate-800 px-1.5 py-0.2 rounded">
+                  {availableSymbols.length} {isArabic ? 'عملات' : 'paires'}
+                </span>
+              </span>
+
+              {/* In-App Pair Dropdown Trigger */}
+              <div className="relative" ref={pairDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsPairDropdownOpen(!isPairDropdownOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-lg transition"
+                >
+                  <span className="font-mono text-brand-400">
+                    {selectedPairFilter === 'ALL'
+                      ? (isArabic ? 'الكل' : 'Toutes')
+                      : selectedPairFilter.replace('USDT', '')}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isPairDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu Modal inside App */}
+                {isPairDropdownOpen && (
+                  <div className={`absolute top-full mt-1.5 ${isArabic ? 'left-0' : 'right-0'} z-50 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 space-y-2 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150`}>
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={pairSearchQuery}
+                        onChange={(e) => setPairSearchQuery(e.target.value)}
+                        placeholder={isArabic ? 'بحث عن عملة...' : 'Rechercher une paire...'}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono"
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Pair List */}
+                    <div className="max-h-56 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPair('ALL')}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          selectedPairFilter === 'ALL'
+                            ? 'bg-brand-500 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>{perf.filterAll}</span>
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/20">
+                          {history.length} trades
+                        </span>
+                      </button>
+
+                      {filteredAvailableSymbols.map((sym) => {
+                        const sStat = symbolStatsMap[sym];
+                        return (
+                          <button
+                            key={sym}
+                            type="button"
+                            onClick={() => handleSelectPair(sym)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
+                              selectedPairFilter === sym
+                                ? 'bg-brand-500 text-slate-950 font-bold'
+                                : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              {selectedPairFilter === sym && <Check className="w-3.5 h-3.5" />}
+                              <span className="font-bold">{sym.replace('USDT', '')}</span>
+                              <span className="text-[10px] text-slate-400">/USDT</span>
+                            </span>
+                            {sStat && (
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className={`font-bold ${sStat.totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {sStat.totalPnl >= 0 ? '+' : ''}{sStat.totalPnl.toFixed(1)}%
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">
+                                  {sStat.count}
+                                </span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Scrollable Buttons Bar with Navigation Chevrons */}
+            <div className="flex items-center gap-1 min-w-0">
+              {/* Left Scroll Arrow */}
+              <button
+                type="button"
+                onClick={handleScrollLeft}
+                title={isArabic ? 'تمرير لليسار' : 'Défiler vers la gauche'}
+                className="shrink-0 p-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 text-slate-300 hover:text-white rounded-lg transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Horizontal Scroll Track */}
+              <div
+                ref={scrollContainerRef}
+                className="flex items-center gap-1.5 overflow-x-auto scroll-smooth py-1 px-1 scrollbar-thin scrollbar-thumb-slate-700 active:cursor-grabbing select-none min-w-0 flex-1 touch-pan-x"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {/* ALL Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setSelectedPairFilter('ALL');
+                    (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                  }}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition text-xs whitespace-nowrap ${
+                    selectedPairFilter === 'ALL'
+                      ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                      : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>{perf.filterAll}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${selectedPairFilter === 'ALL' ? 'bg-black/20 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'}`}>
+                    {history.length}
+                  </span>
+                </button>
+
+                {/* Individual Pair Buttons */}
+                {availableSymbols.map((sym) => {
+                  const sStat = symbolStatsMap[sym];
+                  const isSelected = selectedPairFilter === sym;
+                  return (
+                    <button
+                      key={sym}
+                      type="button"
+                      onClick={(e) => {
+                        setSelectedPairFilter(sym);
+                        (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                      }}
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono font-bold transition text-xs whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/20'
+                          : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{sym.replace('USDT', '')}</span>
+                      {sStat && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
+                          isSelected
+                            ? 'bg-black/20 text-slate-950 font-bold'
+                            : sStat.totalPnl >= 0
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        }`}>
+                          {sStat.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right Scroll Arrow */}
+              <button
+                type="button"
+                onClick={handleScrollRight}
+                title={isArabic ? 'تمرير لليمين' : 'Défiler vers la droite'}
+                className="shrink-0 p-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 text-slate-300 hover:text-white rounded-lg transition"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 4 Hero KPI Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
