@@ -609,7 +609,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
             {/* 1. Entry & Live Price */}
             <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
               <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
@@ -655,7 +655,25 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </div>
             </div>
 
-            {/* 4. Stop Loss / Trailing Stop */}
+            {/* 4. TP3 (Max Target / Runner) */}
+            <div className={`p-2.5 rounded-xl border transition ${
+              activePosition.tp3Hit 
+                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
+                : 'bg-slate-950 border-slate-800 text-slate-300'
+            }`}>
+              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
+                <span>3. TP3 (Max)</span>
+                {activePosition.tp3Hit ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Target className="w-3 h-3 text-purple-400" />}
+              </div>
+              <div className="font-bold font-mono text-purple-200">
+                ${formatCoinPrice(activePosition.tp3 || (activePosition.tp2 ? activePosition.tp2 * 1.02 : activePosition.entryPrice * 1.05), activePosition.symbol)}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {activePosition.tp3Hit ? (isArabic ? 'الهدف الأقصى ✓' : 'Max Hit ✓') : (isArabic ? 'الهدف الأقصى' : 'Final Target')}
+              </div>
+            </div>
+
+            {/* 5. Stop Loss / Trailing Stop */}
             <div className={`p-2.5 rounded-xl border ${
               activePosition.isTrailingActive 
                 ? 'bg-amber-950/30 border-amber-500/40 text-amber-300' 
@@ -679,7 +697,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </div>
             </div>
 
-            {/* 5. Liquidation Price Level (Futures Exclusive) */}
+            {/* 6. Liquidation Price Level (Futures Exclusive) */}
             <div className="bg-rose-950/20 border border-rose-500/40 p-2.5 rounded-xl text-rose-200">
               <div className="flex items-center justify-between text-rose-400 text-[10px] mb-0.5 font-bold">
                 <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
