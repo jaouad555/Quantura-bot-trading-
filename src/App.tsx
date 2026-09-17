@@ -2107,23 +2107,90 @@ export const App: React.FC = () => {
     [isDeveloperMode, minConfidenceThreshold, playAudioChime, pushNewAlert]
   );
 
-  // Fetch Full Market Data from Server
+  const fetchRequestIdRef = useRef<number>(0);
+
+  // Instant direct Binance REST fetcher for sub-80ms UI responsiveness
+  const instantFetchMarketData = useCallback(async (sym: string, tf: Timeframe, mt: MarketType) => {
+    const normSym = sym.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const isFutures = mt === 'FUTURES';
+    const tickerUrl = isFutures
+      ? `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSym}`
+      : `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSym}`;
+    const klinesUrl = isFutures
+      ? `https://fapi.binance.com/fapi/v1/klines?symbol=${normSym}&interval=${tf}&limit=350`
+      : `https://api.binance.com/api/v3/klines?symbol=${normSym}&interval=${tf}&limit=350`;
+
+    try {
+      const [tRes, kRes] = await Promise.allSettled([
+        fetch(tickerUrl, { cache: 'no-cache' }).then((r) => r.json()),
+        fetch(klinesUrl, { cache: 'no-cache' }).then((r) => r.json()),
+      ]);
+
+      if (tRes.status === 'fulfilled' && tRes.value && tRes.value.lastPrice) {
+        const data = tRes.value;
+        if (normSym === selectedSymbolRef.current.toUpperCase()) {
+          setTicker({
+            symbol: data.symbol,
+            price: parseFloat(data.lastPrice),
+            priceChange24h: parseFloat(data.priceChange || '0'),
+            priceChangePercent24h: parseFloat(data.priceChangePercent || '0'),
+            volume24h: parseFloat(data.volume || '0'),
+            quoteVolume24h: parseFloat(data.quoteVolume || '0'),
+            high24h: parseFloat(data.highPrice || data.lastPrice),
+            low24h: parseFloat(data.lowPrice || data.lastPrice),
+            updatedAt: Date.now(),
+          });
+          setConnectionState('CONNECTED');
+        }
+      }
+
+      if (kRes.status === 'fulfilled' && Array.isArray(kRes.value) && kRes.value.length > 0) {
+        if (normSym === selectedSymbolRef.current.toUpperCase() && tf === timeframeRef.current) {
+          const freshKlines: KlineCandle[] = kRes.value.map((item: any) => ({
+            time: Math.floor(item[0] / 1000),
+            open: parseFloat(item[1]),
+            high: parseFloat(item[2]),
+            low: parseFloat(item[3]),
+            close: parseFloat(item[4]),
+            volume: parseFloat(item[5]),
+          }));
+          setKlines(freshKlines);
+        }
+      }
+    } catch (e) {
+      // Fallback handled gracefully by full fetchMarketData
+    }
+  }, []);
+
+  // Fetch Full Market Data from Server with strict race-condition guards
   const fetchMarketData = useCallback(
-    async (tf: Timeframe = timeframe, sym: string = selectedSymbol, mt: MarketType = botConfig.marketType || 'FUTURES') => {
+    async (
+      tf: Timeframe = timeframeRef.current,
+      sym: string = selectedSymbolRef.current,
+      mt: MarketType = botConfigRef.current?.marketType || 'FUTURES'
+    ) => {
+      const currentReqId = ++fetchRequestIdRef.current;
       setIsRefreshing(true);
       try {
-        const res = await fetch(`/api/binance/market-data?symbol=${sym}&timeframe=${tf}&devMode=${isDeveloperMode}&marketType=${mt}`);
+        const res = await fetch(
+          `/api/binance/market-data?symbol=${sym}&timeframe=${tf}&devMode=${isDeveloperModeRef.current}&marketType=${mt}`
+        );
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
         const data: MarketDataResponse = await res.json();
+
+        // Stale response guard: discard if user switched symbol or timeframe during fetch
+        if (currentReqId !== fetchRequestIdRef.current) return;
+        if (sym.toUpperCase() !== selectedSymbolRef.current.toUpperCase()) return;
+
         setMarketData(data);
 
-        if (data.ticker) {
+        if (data.ticker && data.ticker.symbol.toUpperCase() === selectedSymbolRef.current.toUpperCase()) {
           setTicker(data.ticker);
           setConnectionState('CONNECTED');
         }
-        if (data.klines && data.klines.length > 0) {
+        if (data.klines && data.klines.length > 0 && tf === timeframeRef.current) {
           setKlines(data.klines);
         }
 
@@ -2132,10 +2199,12 @@ export const App: React.FC = () => {
       } catch (err) {
         console.warn('Error fetching market data from server:', err);
       } finally {
-        setIsRefreshing(false);
+        if (currentReqId === fetchRequestIdRef.current) {
+          setIsRefreshing(false);
+        }
       }
     },
-    [timeframe, selectedSymbol, botConfig.marketType, isDeveloperMode, runAnalysis]
+    [runAnalysis]
   );
 
   
@@ -2279,7 +2348,7 @@ export const App: React.FC = () => {
   }, []);
 
 
-  // 1. Initialize WebSocket streaming and fetch initial data
+  // 1. Initialize WebSocket streaming and periodic polling
   useEffect(() => {
     const activeMarketType = botConfig.marketType || 'FUTURES';
     binanceWsManager.connect(selectedSymbol, timeframe, activeMarketType);
@@ -2293,7 +2362,9 @@ export const App: React.FC = () => {
     });
 
     const unsubTicker = binanceWsManager.onTicker((newTicker) => {
-      setTicker(newTicker);
+      if (newTicker.symbol.toUpperCase() === selectedSymbolRef.current.toUpperCase()) {
+        setTicker(newTicker);
+      }
     });
 
     const unsubKline = binanceWsManager.onKline((kline, isClosed) => {
@@ -2311,11 +2382,9 @@ export const App: React.FC = () => {
       });
     });
 
-    fetchMarketData(timeframe, selectedSymbol, activeMarketType);
-
     // Refresh background polling every 5 seconds
     const interval = setInterval(() => {
-      fetchMarketData(timeframe, selectedSymbol, botConfigRef.current?.marketType || 'FUTURES');
+      fetchMarketData(timeframeRef.current, selectedSymbolRef.current, botConfigRef.current?.marketType || 'FUTURES');
     }, 5000);
 
     return () => {
@@ -2327,47 +2396,45 @@ export const App: React.FC = () => {
     };
   }, [timeframe, selectedSymbol, botConfig.marketType]);
 
-  const handlePairChange = (pair: TradingPair) => {
-    setSelectedSymbol(pair.symbol);
+  const handlePairChange = (pair: TradingPair | string) => {
+    const sym = typeof pair === 'string' ? pair : pair.symbol;
+    const activeMT = botConfig.marketType || 'FUTURES';
+    setSelectedSymbol(sym);
+    selectedSymbolRef.current = sym;
     try {
-      apiStorage.setItem('selected_trading_pair', pair.symbol);
+      apiStorage.setItem('selected_trading_pair', sym);
     } catch (e) {
       // ignore storage error
     }
     
-    // FAST UI UPDATE: Fetch ticker instantly from Binance REST directly for immediate visual feedback
-    const activeMT = botConfig.marketType || 'FUTURES';
-    const baseUrl = activeMT === 'FUTURES' ? 'https://fapi.binance.com/fapi/v1/ticker/24hr' : 'https://api.binance.com/api/v3/ticker/24hr';
-    fetch(`${baseUrl}?symbol=${pair.symbol}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.lastPrice) {
-          setTicker({
-            symbol: data.symbol,
-            price: parseFloat(data.lastPrice),
-            priceChange24h: parseFloat(data.priceChange || '0'),
-            priceChangePercent24h: parseFloat(data.priceChangePercent || '0'),
-            volume24h: parseFloat(data.volume || '0'),
-            quoteVolume24h: parseFloat(data.quoteVolume || '0'),
-            high24h: parseFloat(data.highPrice || data.lastPrice),
-            low24h: parseFloat(data.lowPrice || data.lastPrice),
-            updatedAt: Date.now(),
-          });
-        }
-      })
-      .catch(() => {});
+    // 1. INSTANT DIRECT REST FETCH (sub-80ms) for immediate chart & price update
+    instantFetchMarketData(sym, timeframeRef.current, activeMT);
 
-    binanceWsManager.setSymbol(pair.symbol);
-    fetchMarketData(timeframe, pair.symbol, activeMT);
+    // 2. Point WebSocket to new symbol
+    binanceWsManager.setSymbol(sym);
+
+    // 3. Fetch comprehensive AI & MTF data in background
+    fetchMarketData(timeframeRef.current, sym, activeMT);
   };
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf);
+    timeframeRef.current = tf;
     try {
       apiStorage.setItem('app_trading_timeframe', tf);
     } catch {}
+    
+    const activeMT = botConfig.marketType || 'FUTURES';
+    const sym = selectedSymbolRef.current;
+
+    // 1. INSTANT DIRECT REST FETCH for new timeframe klines
+    instantFetchMarketData(sym, tf, activeMT);
+
+    // 2. Switch WebSocket timeframe
     binanceWsManager.setTimeframe(tf);
-    fetchMarketData(tf, selectedSymbol, botConfig.marketType || 'FUTURES');
+
+    // 3. Fetch backend market data
+    fetchMarketData(tf, sym, activeMT);
   };
 
   const handleToggleMarketType = (newMarketType: MarketType) => {
@@ -2377,29 +2444,13 @@ export const App: React.FC = () => {
       leverage: newMarketType === 'FUTURES' ? ((prev.leverage && prev.leverage > 1) ? prev.leverage : 3) : 1,
     }));
     
-    // FAST UI UPDATE
-    const baseUrl = newMarketType === 'FUTURES' ? 'https://fapi.binance.com/fapi/v1/ticker/24hr' : 'https://api.binance.com/api/v3/ticker/24hr';
-    fetch(`${baseUrl}?symbol=${selectedSymbol}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.lastPrice) {
-          setTicker({
-            symbol: data.symbol,
-            price: parseFloat(data.lastPrice),
-            priceChange24h: parseFloat(data.priceChange || '0'),
-            priceChangePercent24h: parseFloat(data.priceChangePercent || '0'),
-            volume24h: parseFloat(data.volume || '0'),
-            quoteVolume24h: parseFloat(data.quoteVolume || '0'),
-            high24h: parseFloat(data.highPrice || data.lastPrice),
-            low24h: parseFloat(data.lowPrice || data.lastPrice),
-            updatedAt: Date.now(),
-          });
-        }
-      })
-      .catch(() => {});
+    const sym = selectedSymbolRef.current;
+    const tf = timeframeRef.current;
 
+    // Instant update
+    instantFetchMarketData(sym, tf, newMarketType);
     binanceWsManager.setMarketType(newMarketType);
-    fetchMarketData(timeframe, selectedSymbol, newMarketType);
+    fetchMarketData(tf, sym, newMarketType);
   };
 
   const handleClearTradeHistory = () => {
@@ -3073,7 +3124,7 @@ export const App: React.FC = () => {
                   return updated;
                 });
               }}
-              onSelectSymbol={setSelectedSymbol}
+              onSelectSymbol={handlePairChange}
               onNavigateToBot={() => setActiveTab('autoBot')}
             />
           )}

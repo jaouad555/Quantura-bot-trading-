@@ -209,6 +209,10 @@ class BinanceWebSocketManager {
 
     // 1. Ticker Stream
     if (stream.endsWith('@ticker')) {
+      const msgSymbol = (data.s || '').toUpperCase();
+      if (msgSymbol && msgSymbol !== this.currentSymbol.toUpperCase()) {
+        return; // Ignore stale symbol ticker
+      }
       const price = parseFloat(data.c);
       if (isNaN(price) || price <= 0) return;
       const ticker: BinanceTicker = {
@@ -229,6 +233,14 @@ class BinanceWebSocketManager {
     if (stream.includes('@kline')) {
       const k = data.k;
       if (k) {
+        const msgSymbol = (data.s || '').toUpperCase();
+        const expectedTf = this.mapTimeframe(this.currentTimeframe);
+        if (msgSymbol && msgSymbol !== this.currentSymbol.toUpperCase()) {
+          return; // Ignore stale symbol kline
+        }
+        if (k.i && k.i !== expectedTf) {
+          return; // Ignore stale timeframe kline
+        }
         const kline: KlineCandle = {
           time: Math.floor(k.t / 1000),
           open: parseFloat(k.o),
@@ -244,6 +256,10 @@ class BinanceWebSocketManager {
 
     // 3. Depth (Order Book) Stream
     if (stream.includes('@depth')) {
+      const msgSymbol = (data.s || '').toUpperCase();
+      if (msgSymbol && msgSymbol !== this.currentSymbol.toUpperCase()) {
+        return; // Ignore stale depth
+      }
       const bids = (data.bids || []).map((b: string[]) => ({ price: parseFloat(b[0]), qty: parseFloat(b[1]) }));
       const asks = (data.asks || []).map((a: string[]) => ({ price: parseFloat(a[0]), qty: parseFloat(a[1]) }));
 

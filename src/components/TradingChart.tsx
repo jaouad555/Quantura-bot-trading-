@@ -168,12 +168,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     return { buyersPct, sellersPct: 100 - buyersPct };
   }, [klines]);
 
-  // Real-time price display
-  const currentPrice = ticker?.price || latestCandle?.close || 0;
-  const priceChange24h = ticker?.priceChangePercent24h || 0;
-  const high24h = ticker?.high24h || latestCandle?.high || 0;
-  const low24h = ticker?.low24h || latestCandle?.low || 0;
-  const volume24h = ticker?.volume24h || 0;
+  // Real-time price display with strict symbol matching to eliminate lag/mismatch
+  const isTickerMatching = ticker?.symbol ? ticker.symbol.toUpperCase() === symbol.toUpperCase() : false;
+  const currentPrice = isTickerMatching && ticker?.price ? ticker.price : (latestCandle?.close || 0);
+  const priceChange24h = isTickerMatching ? (ticker?.priceChangePercent24h || 0) : (latestCandle?.changePct || 0);
+  const high24h = isTickerMatching && ticker?.high24h ? ticker.high24h : (latestCandle?.high || currentPrice);
+  const low24h = isTickerMatching && ticker?.low24h ? ticker.low24h : (latestCandle?.low || currentPrice);
+  const volume24h = isTickerMatching ? (ticker?.volume24h || 0) : 0;
 
   // 24h Range percentage
   const priceRangePct = useMemo(() => {
@@ -650,12 +651,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
 
       // Auto fit content on timeframe or symbol change
+      const contextKey = `${symbol}-${activeTimeframe}`;
       if (
         chartContainerRef.current &&
-        chartContainerRef.current.getAttribute('data-context') !== `${symbol}-${activeTimeframe}`
+        chartContainerRef.current.getAttribute('data-context') !== contextKey
       ) {
-        setTimeout(() => chartApiRef.current?.timeScale().fitContent(), 40);
-        chartContainerRef.current.setAttribute('data-context', `${symbol}-${activeTimeframe}`);
+        chartContainerRef.current.setAttribute('data-context', contextKey);
+        setTimeout(() => {
+          try {
+            chartApiRef.current?.timeScale().fitContent();
+          } catch (e) {}
+        }, 20);
       }
     } catch (err) {
       console.warn('Error updating chart data series:', err);

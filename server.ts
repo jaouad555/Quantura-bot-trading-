@@ -446,10 +446,12 @@ app.post('/api/telegram/send', async (req, res) => {
 const cachedTickers: Map<string, { data: BinanceTicker; timestamp: number }> = new Map();
 const cachedKlines: Map<string, { data: KlineCandle[]; timestamp: number }> = new Map();
 const cachedOrderBooks: Map<string, { data: OrderBookSummary; timestamp: number }> = new Map();
+const cachedMtfConfluence: Map<string, { data: { allTimeframes: any; mtfConfluence: MTFConfluenceData }; timestamp: number }> = new Map();
 let cachedDerivatives: { data: DerivativesData; timestamp: number } | null = null;
 const cachedAIAnalysis: Map<string, { analysis: { fr: string; ar: string; en: string }; timestamp: number; price: number }> = new Map();
 
-const CACHE_TTL_MS = 2500; // 2.5 seconds cache
+const CACHE_TTL_MS = 3000; // 3 seconds fast cache for tickers and active klines
+const MTF_CACHE_TTL_MS = 15000; // 15 seconds cache for multi-timeframe confluence calculations
 const AI_CACHE_TTL_MS = 90000; // 90 seconds AI analysis cache
 
 // Periodically clean up expired cache entries to prevent memory leaks
@@ -458,6 +460,9 @@ setInterval(() => {
   // Do NOT delete cachedTickers or cachedKlines to retain last known data for synthetic fallbacks during disconnects
   for (const [key, value] of cachedOrderBooks.entries()) {
     if (now - value.timestamp > CACHE_TTL_MS * 5) cachedOrderBooks.delete(key);
+  }
+  for (const [key, value] of cachedMtfConfluence.entries()) {
+    if (now - value.timestamp > MTF_CACHE_TTL_MS * 3) cachedMtfConfluence.delete(key);
   }
   for (const [key, value] of cachedAIAnalysis.entries()) {
     if (now - value.timestamp > AI_CACHE_TTL_MS * 5) cachedAIAnalysis.delete(key);
@@ -1047,6 +1052,14 @@ async function fetchMultiTimeframeConfluence(symbol = 'BTCUSDT', marketType: 'SP
   mtfConfluence: MTFConfluenceData;
 }> {
   const normSymbol = symbol.toUpperCase();
+  const cacheKey = `mtf_${marketType}_${normSymbol}`;
+  const now = Date.now();
+  const cached = cachedMtfConfluence.get(cacheKey);
+
+  if (cached && now - cached.timestamp < MTF_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const tfList: Timeframe[] = ['5m', '15m', '30m', '1h', '4h', '1d', '1w'];
 
   const results = await Promise.allSettled(
@@ -1109,7 +1122,9 @@ async function fetchMultiTimeframeConfluence(symbol = 'BTCUSDT', marketType: 'SP
     alignmentPercent,
   };
 
-  return { allTimeframes, mtfConfluence };
+  const finalResult = { allTimeframes, mtfConfluence };
+  cachedMtfConfluence.set(cacheKey, { data: finalResult, timestamp: now });
+  return finalResult;
 }
 
 // -------------------------------------------------------------
