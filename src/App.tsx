@@ -2060,9 +2060,12 @@ export const App: React.FC = () => {
         currentMarketData.ticker.symbol || selectedSymbol
       );
 
-      // If called from background interval and analyzed recently, just update the mathematical plan
+      // If called from background interval and analyzed recently, update the mathematical plan & check for fresh alerts
       if (!force && now - lastAnalysisCallRef.current < 60000 && activeSignalRef.current) {
         setActiveSignal((prev) => (prev ? { ...fastPlan, detailedAnalysis: prev.detailedAnalysis } : fastPlan));
+        if (fastPlan.confidence >= minConfidenceThreshold && (fastPlan.decision === 'LONG' || fastPlan.decision === 'SHORT')) {
+          pushNewAlert(fastPlan);
+        }
         return;
       }
 
@@ -2326,18 +2329,43 @@ export const App: React.FC = () => {
           const data = await res.json();
           setScannerState(data);
           
-          // Check for strong signals to alert
+          // Check for strong signals to alert across all scanned pairs
           if (data && data.symbolStates) {
             Object.values(data.symbolStates).forEach((state: any) => {
-              if (state.confidence >= minConfidenceThresholdRef.current && (state.lastSignal === 'LONG' || state.lastSignal === 'SHORT')) {
-                // If it's a new strong signal that we haven't alerted for recently, we can alert
-                // To avoid spam, we'd need to track alerted symbols + timestamps.
-                // Simple implementation:
-                if (Date.now() - state.lastAnalyzed < 5000) {
-                  // Actually, let's just push simple alerts
-                  const mockSignal = { decision: state.lastSignal, confidence: state.confidence };
-                  // pushNewAlert(mockSignal as any, false, state.symbol);
-                }
+              if (
+                state &&
+                state.symbol &&
+                state.confidence >= minConfidenceThresholdRef.current &&
+                (state.lastSignal === 'LONG' || state.lastSignal === 'SHORT' || state.signalDirection === 'LONG' || state.signalDirection === 'SHORT')
+              ) {
+                const signalDecision = (state.lastSignal === 'LONG' || state.lastSignal === 'SHORT') ? state.lastSignal : state.signalDirection;
+                const entryP = state.price || 0;
+                const isLong = signalDecision === 'LONG';
+                const slP = isLong ? entryP * 0.985 : entryP * 1.015;
+                const tp1P = isLong ? entryP * 1.015 : entryP * 0.985;
+                const tp2P = isLong ? entryP * 1.03 : entryP * 0.97;
+                const tp3P = isLong ? entryP * 1.05 : entryP * 0.95;
+
+                const descText = `[${state.strategyName || 'Multi-Pair Scanner'}] ${signalDecision} signal detected on ${state.symbol}`;
+                const scannerAlertPlan: any = {
+                  decision: signalDecision,
+                  confidence: state.confidence,
+                  marketRegime: state.strategyName || 'TRENDING_BULLISH',
+                  recommendedTimeframe: '15m',
+                  currentPrice: entryP,
+                  entryZone: { min: entryP * 0.998, max: entryP * 1.002, ideal: entryP },
+                  targets: { tp1: tp1P, tp2: tp2P, tp3: tp3P },
+                  stopLoss: slP,
+                  riskRewardRatio: 2.5,
+                  detailedAnalysis: {
+                    fr: descText,
+                    ar: descText,
+                    en: descText,
+                  },
+                  generatedAt: Date.now(),
+                };
+
+                pushNewAlert(scannerAlertPlan as AIAnalysisResult, false, state.symbol);
               }
             });
           }

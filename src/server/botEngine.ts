@@ -171,6 +171,34 @@ export const startTelegramSync = () => {
   console.log('📢 Telegram Periodic Sync Started!');
 };
 
+/**
+ * Instant Telegram Notification Helper for Trade Events
+ */
+export const sendServerTelegramNotification = async (text: string) => {
+  try {
+    const token = await kv.get('app_telegram_bot_token');
+    const chatId = await kv.get('app_telegram_chat_id');
+    if (!token || !chatId || !text) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+      }),
+      signal: controller.signal,
+    }).catch(() => {});
+    clearTimeout(timeout);
+  } catch (err) {
+    // Non-blocking
+  }
+};
+
 
 // Add helper to fetch binance config
 const getBinanceConfig = async () => {
@@ -477,6 +505,14 @@ export const startBotEngine = () => {
           pos.lastAction = 'TP1 hit: 50% closed, SL locked at breakeven+ ✓ (Server)';
           stateChanged = true;
 
+          sendServerTelegramNotification(
+            `🎯 <b>TP1 Target Achieved!</b>\n\n` +
+            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
+            `💰 Closed: 50% at $${currentP.toLocaleString()}\n` +
+            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roePercent.toFixed(1)}%)\n` +
+            `🛡️ Stop Loss moved to Break-Even (${pos.entryPrice.toLocaleString()})`
+          );
+
           logsToAdd.push({
             id: `log-tp1-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -526,6 +562,14 @@ export const startBotEngine = () => {
           pos.lastAction = 'TP2 hit: 50% remaining closed, SL locked at TP1 ✓ (Server)';
           stateChanged = true;
 
+          sendServerTelegramNotification(
+            `🎯 <b>TP2 Target Hit! (Runner Secured)</b>\n\n` +
+            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
+            `💰 Closed: 50% remaining at $${currentP.toLocaleString()}\n` +
+            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roePercent.toFixed(1)}%)\n` +
+            `🛡️ Stop Loss advanced to TP1 (${(pos.tp1 || 0).toLocaleString()})`
+          );
+
           logsToAdd.push({
             id: `log-tp2-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -569,6 +613,20 @@ export const startBotEngine = () => {
           }
           
           const logType = isTp3 ? 'AUTO_SELL_TP3' : (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'AUTO_SL');
+          
+          const closeTitle = isTp3 
+            ? '🏆 <b>TP3 Final Moonbag Target Achieved!</b>' 
+            : (pos.isTrailingActive ? '⚡ <b>Trailing Stop Executed (Profit Locked)</b>' : '🛑 <b>Stop Loss Triggered</b>');
+          const pnlSign = totalTradePnl >= 0 ? '+' : '';
+
+          sendServerTelegramNotification(
+            `${closeTitle}\n\n` +
+            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
+            `📊 Exit Price: $${currentP.toLocaleString()}\n` +
+            `💵 Net Trade PnL: ${pnlSign}$${totalTradePnl.toFixed(2)}\n` +
+            `⏱ Strategy: ${pos.strategyName || 'Quantitative'}`
+          );
+
           logsToAdd.push({
             id: `log-server-${Date.now()}-${i}`,
             timestamp: Date.now(),

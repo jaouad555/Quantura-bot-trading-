@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { kv } from './db.js';
-import { serverExecuteOrder } from './botEngine.js';
+import { serverExecuteOrder, sendServerTelegramNotification } from './botEngine.js';
 import { RiskEngine } from './riskEngine/RiskEngine.js';
 import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
@@ -405,6 +405,18 @@ async function processTradingSignal(
     freshPositions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
     
+    // Dispatch instant Telegram Notification
+    const sideEmoji = signal.decision === 'LONG' ? '🟢' : '🔴';
+    sendServerTelegramNotification(
+      `🤖 <b>New Position Opened (${isLive ? 'LIVE' : 'PAPER'})</b>\n\n` +
+      `${sideEmoji} Pair: <b>${symbol}</b> (${signal.decision})\n` +
+      `⚡ Strategy: <b>${signal.strategyName}</b> (${signal.confidence}% Confidence)\n` +
+      `💵 Entry Price: $${currentPrice.toLocaleString()}\n` +
+      `💰 Margin: $${margin.toFixed(2)} (x${lev})\n` +
+      `🎯 TP1: $${safeTp1.toLocaleString()} | TP2: $${safeTp2.toLocaleString()} | TP3: $${safeTp3.toLocaleString()}\n` +
+      `🛑 SL: $${safeSl.toLocaleString()}`
+    );
+
     console.log(`[POSITION] ${symbol} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
 
   } catch (err) {

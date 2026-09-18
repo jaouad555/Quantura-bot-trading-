@@ -62,6 +62,26 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'ALL' | 'BUY' | 'SELL' | 'INFO'>('ALL');
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+
+  const handleRequestPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setPermissionStatus(perm);
+        if (perm === 'granted' && onSendTestAlert) {
+          onSendTestAlert();
+        }
+      } catch (e) {
+        console.warn('Error requesting permission', e);
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -129,7 +149,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 {isArabic ? 'مركز الإشعارات والتنبيهات' : language === 'en' ? 'Notification Center' : 'Centre de Notifications'}
               </h2>
               <p className="text-[11px] text-slate-400">
-                {isArabic ? 'تمييز صفقات الشراء والبيع والتنبيهات مع زوج العملة' : 'Distingue les signaux ACHAT, VENTE et alertes avec la paire'}
+                {isArabic ? 'تنبيهات الصفقات والإشارات الحية + تليجرام' : 'Signaux réels, alertes audio & Telegram'}
               </p>
             </div>
           </div>
@@ -141,6 +161,24 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Browser Permission Banner if not granted */}
+        {permissionStatus !== 'granted' && (
+          <div className="my-2 p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bell className="w-4 h-4 text-cyan-400 shrink-0 animate-bounce" />
+              <div className="text-[11px] text-slate-300 truncate">
+                {isArabic ? 'تفعيل إشعارات المتصفح المنبثقة' : 'Activer les notifications du navigateur'}
+              </div>
+            </div>
+            <button
+              onClick={handleRequestPermission}
+              className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[11px] rounded-lg transition shrink-0 shadow-sm shadow-cyan-500/30"
+            >
+              {isArabic ? 'تفعيل الآن' : 'Autoriser'}
+            </button>
+          </div>
+        )}
 
         {/* Filter Chips Bar */}
         <div className="flex items-center gap-1.5 pt-3 pb-1 overflow-x-auto no-scrollbar">
