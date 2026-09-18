@@ -11,6 +11,7 @@ import {
   Volume2,
   VolumeX,
   Bell,
+  BellOff,
   Settings,
   Globe,
   Smartphone,
@@ -48,6 +49,7 @@ import {
   Sliders,
   Search,
   X,
+  HelpCircle,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -58,10 +60,12 @@ interface HeaderProps {
   connectionState: ConnectionState;
   language: Language;
   timezone: TimezoneMode;
-  onTimezoneChange?: (tz: TimezoneMode) => void;
+  onTimezoneChange: (tz: TimezoneMode) => void;
   isAndroidView: boolean;
   unreadAlertsCount: number;
   soundEnabled: boolean;
+  notificationsEnabled?: boolean;
+  onToggleNotifications?: () => void;
   isRefreshing: boolean;
   isDeveloperMode: boolean;
   binanceConfig?: BinanceApiConfig;
@@ -78,6 +82,7 @@ interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
   onOpenRiskModal?: () => void;
+  onOpenHelp?: () => void;
   onPanicCloseAll?: () => void;
   onToggleSound: () => void;
   onRefreshData: () => void;
@@ -103,6 +108,8 @@ export const Header: React.FC<HeaderProps> = ({
   isAndroidView,
   unreadAlertsCount,
   soundEnabled,
+  notificationsEnabled = true,
+  onToggleNotifications,
   isRefreshing,
   isDeveloperMode,
   binanceConfig,
@@ -120,6 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenSettings,
   onOpenRiskModal,
+  onOpenHelp,
   onPanicCloseAll,
   onToggleSound,
   onRefreshData,
@@ -864,6 +872,23 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
+            {/* Quick Start / Help Guide Button */}
+            {onOpenHelp && (
+              <button
+                id="btn-header-help-guide"
+                type="button"
+                onClick={onOpenHelp}
+                className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 shadow-xs"
+                title={isArabic ? 'دليل الاستخدام والبدء السريع (Quick Start & Help)' : 'Guide & Démarrage Rapide'}
+                aria-label="Help Guide"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} />
+                <span className="text-[11px] font-bold font-mono hidden sm:inline">
+                  {isArabic ? 'دليل البدء' : 'Guide'}
+                </span>
+              </button>
+            )}
+
             {/* Settings Button */}
             <button
               id="btn-header-settings"
@@ -1093,16 +1118,40 @@ export const Header: React.FC<HeaderProps> = ({
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} /> : <VolumeX className="w-3.5 h-3.5" strokeWidth={2} />}
             </button>
 
-            {/* Notifications Button */}
+            {/* Notification Toggle Button (Activer / Désactiver) */}
+            <button
+              id="btn-header-notif-toggle"
+              type="button"
+              onClick={onToggleNotifications}
+              className={`h-8 w-8 rounded-xl border flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95 ${
+                notificationsEnabled
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-xs'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+              title={
+                notificationsEnabled
+                  ? (isArabic ? 'إيقاف التنبيهات (اضغط للتعطيل)' : 'Désactiver les notifications')
+                  : (isArabic ? 'تشغيل التنبيهات (اضغط للتفعيل)' : 'Activer les notifications')
+              }
+              aria-label="Toggle Notifications"
+            >
+              {notificationsEnabled ? (
+                <Bell className="w-3.5 h-3.5 text-amber-400" strokeWidth={2} />
+              ) : (
+                <BellOff className="w-3.5 h-3.5" strokeWidth={2} />
+              )}
+            </button>
+
+            {/* Notifications Center Modal Button */}
             <button
               id="btn-header-alerts"
               type="button"
               onClick={onOpenNotifications}
               className="h-8 w-8 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition relative shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'الإشعارات' : 'Notifications'}
-              aria-label="Notifications"
+              title={isArabic ? 'مركز الإشعارات والسجل' : 'Centre de notifications'}
+              aria-label="Notifications Center"
             >
-              <Bell className="w-3.5 h-3.5" strokeWidth={2} />
+              <Activity className="w-3.5 h-3.5" strokeWidth={2} />
               {unreadAlertsCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse">
                   {unreadAlertsCount > 9 ? '9+' : unreadAlertsCount}

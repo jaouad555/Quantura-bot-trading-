@@ -10,7 +10,7 @@ import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
-import { startBotEngine, startTelegramSync, fetchSymbolPrice } from './src/server/botEngine';
+import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect } from './src/server/botEngine';
 import { startMarketScanner, scannerState, scanAllPairs } from './src/server/marketScanner';
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
@@ -172,6 +172,24 @@ app.get('/api/bot/prices', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Explicit Server-Authoritative Position Closing Endpoints
+app.post('/api/bot/close-position', async (req, res) => {
+  const { posId, price, reason } = req.body;
+  if (!posId) {
+    return res.status(400).json({ error: 'posId is required' });
+  }
+  const result = await closePositionDirect(posId, price ? Number(price) : undefined, reason || 'Manual Close');
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+  return res.json(result);
+});
+
+app.post('/api/bot/panic-close-all', async (req, res) => {
+  const result = await panicCloseAllDirect();
+  return res.json(result);
 });
 
 // --- STRATEGY ACTIVATION & MANAGEMENT ROUTES ---

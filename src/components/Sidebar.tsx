@@ -22,7 +22,9 @@ import {
   AlertTriangle,
   RefreshCw,
   RefreshCcwDot,
-  Copy
+  Copy,
+  BookOpen,
+  HelpCircle,
 } from 'lucide-react';
 import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
@@ -55,6 +57,7 @@ interface SidebarProps {
   activeBotPositions?: ActiveBotPosition[];
   isDesktopOpen?: boolean;
   isAndroidView?: boolean;
+  onOpenHelp?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -72,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeBotPositions,
   isDesktopOpen = true,
   isAndroidView = false,
+  onOpenHelp,
 }) => {
   const t = translations[language] || translations.en;
   const isArabic = language === 'ar';
@@ -495,6 +499,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="truncate">{isArabic ? 'إعدادات 2FA' : 'Gestion 2FA'}</span>
           </button>
         </div>
+
+        {/* Quick Start & Help Guide Button */}
+        {onOpenHelp && (
+          <button
+            type="button"
+            onClick={onOpenHelp}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-emerald-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-300 hover:text-white border border-cyan-500/30 text-xs font-bold font-mono transition cursor-pointer group shadow-xs"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+            <span>{isArabic ? '📖 دليل البدء السريع & المساعدة' : '📖 Guide & Démarrage Rapide'}</span>
+          </button>
+        )}
 
         {/* Logout Action Button */}
         <button

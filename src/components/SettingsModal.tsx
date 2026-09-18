@@ -2,7 +2,7 @@ import { apiStorage } from "../utils/apiStorage";
 import React, { useState } from 'react';
 import { Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, APP_VERSION_TAG } from '../types';
 import { translations } from '../utils/translations';
-import { X, Globe, Clock, AlertTriangle, Bell, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2 } from 'lucide-react';
+import { X, Globe, Clock, AlertTriangle, Bell, BellOff, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2, BookOpen, HelpCircle } from 'lucide-react';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
 
 interface SettingsModalProps {
@@ -12,6 +12,7 @@ interface SettingsModalProps {
   timezone: TimezoneMode;
   isDeveloperMode: boolean;
   soundEnabled: boolean;
+  notificationsEnabled?: boolean;
   minConfidenceThreshold: number;
   telegramBotToken?: string;
   telegramChatId?: string;
@@ -20,10 +21,12 @@ interface SettingsModalProps {
   paperWallet?: PaperWallet;
   onOpenBinanceModal?: () => void;
   onOpenCustomBalanceModal?: () => void;
+  onOpenHelp?: () => void;
   onLanguageChange: (lang: Language) => void;
   onTimezoneChange: (tz: TimezoneMode) => void;
   onToggleDeveloperMode: (active: boolean) => void;
   onToggleSound: () => void;
+  onToggleNotifications?: () => void;
   onConfidenceChange: (val: number) => void;
   onTelegramConfigChange?: (token: string, chatId: string) => void;
   onLogout?: () => void;
@@ -37,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   timezone,
   isDeveloperMode,
   soundEnabled,
+  notificationsEnabled = true,
   minConfidenceThreshold,
   telegramBotToken = '',
   telegramChatId = '',
@@ -45,10 +49,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   paperWallet,
   onOpenBinanceModal,
   onOpenCustomBalanceModal,
+  onOpenHelp,
   onLanguageChange,
   onTimezoneChange,
   onToggleDeveloperMode,
   onToggleSound,
+  onToggleNotifications,
   onConfidenceChange,
   onTelegramConfigChange,
   onLogout,
@@ -105,6 +111,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-4 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+          {/* Quick Start & Help Guide Banner */}
+          {onOpenHelp && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-cyan-500/15 via-blue-500/10 to-emerald-500/10 border border-cyan-500/30 flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                    <span>{isArabic ? 'دليل البدء السريع وإدارة المخاطر' : 'Guide de Démarrage & Gestion du Risque'}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">5 Steps</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {isArabic 
+                      ? 'تعلم كيفية قراءة إشارات الذكاء الاصطناعي، تفعيل البوت، وقواعد الأمان.' 
+                      : 'Apprenez à interpréter les signaux IA, configurer le bot et sécuriser vos fonds.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenHelp();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition shrink-0 cursor-pointer active:scale-95 flex items-center gap-1"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'فتح الدليل' : 'Ouvrir'}</span>
+              </button>
+            </div>
+          )}
+
           {/* Paper Trading Custom Balance Card */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-teal-500/5 border border-amber-500/30 space-y-3">
             <div className="flex items-center justify-between">
@@ -271,21 +310,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Sound & Notifications */}
-          <div className="space-y-3 pt-3 border-t border-slate-800">
+          <div className="space-y-4 pt-3 border-t border-slate-800">
+            {/* Sound Toggle */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Volume2 className="w-4 h-4 text-brand-400" />
+                <Volume2 className="w-4 h-4 text-cyan-400" />
                 <span className="text-sm font-medium text-white">{t.settings.soundEnabled}</span>
               </div>
               <button
+                id="btn-settings-toggle-sound"
+                type="button"
                 onClick={onToggleSound}
-                className={`w-11 h-6 rounded-full transition relative ${
-                  soundEnabled ? 'bg-brand-500' : 'bg-slate-800'
+                className={`w-11 h-6 rounded-full transition relative cursor-pointer ${
+                  soundEnabled ? 'bg-cyan-500' : 'bg-slate-800'
                 }`}
+                title={soundEnabled ? 'Désactiver' : 'Activer'}
               >
                 <div
                   className={`w-4 h-4 rounded-full bg-slate-950 transition-all absolute top-1 ${
                     soundEnabled ? 'right-1' : 'left-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Notification Alerts Toggle (Activer / Désactiver les notifications) */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {notificationsEnabled ? (
+                  <Bell className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <BellOff className="w-4 h-4 text-slate-500" />
+                )}
+                <div>
+                  <span className="text-sm font-medium text-white">
+                    {isArabic ? 'تنبيهات وإشعارات الصفقات (Notifications)' : 'Notifications & Alertes de Signaux'}
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    {isArabic
+                      ? 'تفعيل أو إيقاف وصول نوافذ التنبيهات المنبثقة للتحليلات والإشارات'
+                      : 'Activer ou désactiver les popups et alertes en direct des signaux'}
+                  </p>
+                </div>
+              </div>
+              <button
+                id="btn-settings-toggle-notifications"
+                type="button"
+                onClick={onToggleNotifications}
+                className={`w-11 h-6 rounded-full transition relative shrink-0 cursor-pointer ${
+                  notificationsEnabled ? 'bg-amber-500' : 'bg-slate-800'
+                }`}
+                title={notificationsEnabled ? (isArabic ? 'تعطيل التنبيهات' : 'Désactiver notifications') : (isArabic ? 'تفعيل التنبيهات' : 'Activer notifications')}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-slate-950 transition-all absolute top-1 ${
+                    notificationsEnabled ? 'right-1' : 'left-1'
                   }`}
                 />
               </button>

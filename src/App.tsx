@@ -32,6 +32,7 @@ import { QwenAnalysisView } from './components/QwenAnalysisView';
 import { TradeHistory } from './components/TradeHistory';
 import { SettingsModal } from './components/SettingsModal';
 import { RiskManagementModal } from './components/RiskManagementModal';
+import { HelpQuickStartModal } from './components/HelpQuickStartModal';
 
 import { NotificationCenter } from './components/NotificationCenter';
 import { BinanceConnectionModal } from './components/BinanceConnectionModal';
@@ -218,6 +219,7 @@ export const App: React.FC = () => {
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [activeToastAlert, setActiveToastAlert] = useState<PushAlert | null>(null);
 
@@ -235,6 +237,26 @@ export const App: React.FC = () => {
     } catch {}
     return true;
   });
+
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = apiStorage.getItem('app_notifications_enabled');
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return true;
+  });
+
+  const notificationsEnabledRef = useRef<boolean>(notificationsEnabled);
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled;
+    try {
+      apiStorage.setItem('app_notifications_enabled', String(notificationsEnabled));
+    } catch {}
+  }, [notificationsEnabled]);
+
+  const toggleNotifications = useCallback(() => {
+    setNotificationsEnabled((prev) => !prev);
+  }, []);
 
   const [telegramBotToken, setTelegramBotToken] = useState<string>(() => {
     try {
@@ -648,11 +670,17 @@ export const App: React.FC = () => {
     activeBotPositionsRef.current = activeBotPositions;
   }, [activeBotPositions]);
 
+  // Set of closed position IDs to prevent them from reappearing due to polling race conditions
+  const recentlyClosedPositionIdsRef = useRef<Set<string>>(new Set<string>());
+
   const updateBotPositionsSync = useCallback((updater: (prev: ActiveBotPosition[]) => ActiveBotPosition[]) => {
-    activeBotPositionsRef.current = updater(activeBotPositionsRef.current);
-    setActiveBotPositions([...activeBotPositionsRef.current]);
+    const rawUpdated = updater(activeBotPositionsRef.current);
+    // Filter out any positions that have been marked as closed
+    const safeUpdated = rawUpdated.filter(p => !recentlyClosedPositionIdsRef.current.has(p.id));
+    activeBotPositionsRef.current = safeUpdated;
+    setActiveBotPositions([...safeUpdated]);
     // Explicitly update storage to avoid useEffect infinite loops / race conditions
-    apiStorage.setItem('btc_active_bot_positions', JSON.stringify(activeBotPositionsRef.current));
+    apiStorage.setItem('btc_active_bot_positions', JSON.stringify(safeUpdated));
   }, []);
 
   const updatePaperWalletSync = useCallback((updater: (prev: PaperWallet) => PaperWallet) => {
@@ -774,9 +802,14 @@ export const App: React.FC = () => {
         read: false,
       };
 
-      setAlerts((prev) => [newAlert, ...(prev || []).slice(0, 29)]);
-      triggerToastAlert(newAlert);
-      playAudioChime();
+      // Always record in alert history log
+      setAlerts((prev) => [newAlert, ...(prev || []).slice(0, 49)]);
+
+      // Only trigger UI toast and sound if notifications are enabled or user specifically requested it
+      if (notificationsEnabledRef.current || isUserInitiated) {
+        triggerToastAlert(newAlert);
+        playAudioChime();
+      }
       
       // Telegram Notification
       if (telegramBotTokenRef.current && telegramChatIdRef.current) {
@@ -784,8 +817,8 @@ export const App: React.FC = () => {
         sendTelegramMessage(telegramBotTokenRef.current, telegramChatIdRef.current, tgMessage);
       }
 
-      // Native Browser Notification (if granted)
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      // Native Browser Notification (if granted and enabled)
+      if (notificationsEnabledRef.current && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         try {
           new Notification(title, {
             body,
@@ -1044,24 +1077,38 @@ export const App: React.FC = () => {
           const firstPreset = String(currentConfig.activePresets[0] || 'Custom');
           if (currentConfig.activePresets.length === 1) {
             strategyName = firstPreset.charAt(0) + firstPreset.slice(1).toLowerCase();
+            if (isFutures) {
+              if (firstPreset === 'SCALPER') leverage = currentConfig.leverage || 5;
+              else if (firstPreset === 'BREAKOUT') leverage = currentConfig.leverage || 4;
+              else if (firstPreset === 'MOMENTUM') leverage = currentConfig.leverage || 3;
+              else if (firstPreset === 'MEAN_REVERSION') leverage = currentConfig.leverage || 3;
+              else if (firstPreset === 'SWING') leverage = currentConfig.leverage || 2;
+              else if (firstPreset === 'INSTITUTIONAL_SMC') leverage = currentConfig.leverage || 2;
+              else leverage = currentConfig.leverage || leverage;
+            }
           } else {
             // Multi-Strategy Mode: Determine specific strategy based on signal timeframe
             const tf = currentConfig.timeframe === 'AUTO' ? (autoBotTimeframeInfo?.effectiveTimeframe || timeframeRef.current) : (currentConfig.timeframe || timeframeRef.current);
             if (tf === '15m' || tf === '5m') {
               strategyName = 'Scalper';
-              if (isFutures) leverage = currentConfig.activePresets.includes('SCALPER') ? 5 : leverage;
+              if (isFutures) leverage = currentConfig.activePresets.includes('SCALPER') ? (currentConfig.leverage || 5) : leverage;
+            } else if (tf === '30m') {
+              strategyName = 'Breakout';
+              if (isFutures) leverage = currentConfig.activePresets.includes('BREAKOUT') ? (currentConfig.leverage || 4) : leverage;
             } else if (tf === '1h') {
               strategyName = 'Momentum';
-              if (isFutures) leverage = currentConfig.activePresets.includes('MOMENTUM') ? 3 : leverage;
+              if (isFutures) leverage = currentConfig.activePresets.includes('MOMENTUM') ? (currentConfig.leverage || 3) : leverage;
             } else if (tf === '4h' || tf === '1d') {
               strategyName = 'Swing';
-              if (isFutures) leverage = currentConfig.activePresets.includes('SWING') ? 2 : leverage;
+              if (isFutures) leverage = currentConfig.activePresets.includes('SWING') ? (currentConfig.leverage || 2) : leverage;
             } else {
               strategyName = 'Multi-Strategy';
+              if (isFutures) leverage = currentConfig.leverage || leverage;
             }
           }
         } else if (currentConfig.timeframe === 'AUTO') {
           strategyName = 'Multi-Strategy';
+          if (isFutures) leverage = currentConfig.leverage || leverage;
         }
 
         const totalEquity = isLiveMode && currentBinance.accountInfo?.totalUsdtEquity
@@ -1096,13 +1143,6 @@ export const App: React.FC = () => {
         let tradeMargin = 0;
         let effectiveLeverage = leverage;
         const slDistancePct = Math.abs(entryPrice - stopLoss) / entryPrice;
-
-        if (isFutures) {
-          const maxSafeLeverage = Math.floor(1 / (slDistancePct + 0.005));
-          if (effectiveLeverage > maxSafeLeverage) {
-            effectiveLeverage = Math.max(1, maxSafeLeverage);
-          }
-        }
 
         if (currentConfig.sizingMode === 'RISK_BASED') {
           const targetRiskUsdt = totalEquity * ((currentConfig.riskPerTradePercent || 2.0) / 100);
@@ -1541,7 +1581,21 @@ export const App: React.FC = () => {
         }
 
         lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
+        recentlyClosedPositionIdsRef.current.add(pos.id);
         updateBotPositionsSync((prev) => prev.filter(p => p.id !== pos.id));
+
+        // Call server-side authoritative close endpoint to update backend KV immediately
+        fetch('/api/bot/close-position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            positionId: pos.id,
+            exitPrice: actualP,
+            reason: customReason || (actionType === 'SL' ? (pos.isTrailingActive ? 'TRAILING_SL' : 'SL_HIT') : (actionType === 'TP3' ? 'TP3_HIT' : 'MANUAL_CLOSE')),
+            realizedPnlUsdt: finalPnlUsdt,
+            profitPercent: roePercent,
+          }),
+        }).catch(() => {});
 
         const closedHistoryItem: TradeHistoryItem = {
           id: `history-${Date.now()}`,
@@ -1663,6 +1717,10 @@ export const App: React.FC = () => {
     } catch {}
 
     // Tell backend KV directly to clear positions so background engine sync won't restore them
+    fetch('/api/bot/panic-close-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
     fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2262,12 +2320,17 @@ export const App: React.FC = () => {
                  
                  // Check if positions changed on server
                  if (serverData.btc_active_bot_positions) {
-                     const currentLocal = JSON.stringify(activeBotPositionsRef.current);
-                     if (serverData.btc_active_bot_positions !== currentLocal) {
+                     try {
                          const positions = JSON.parse(serverData.btc_active_bot_positions);
-                         setActiveBotPositions(positions);
-                         activeBotPositionsRef.current = positions;
-                     }
+                         const validPositions = Array.isArray(positions) 
+                           ? positions.filter((p: any) => !recentlyClosedPositionIdsRef.current.has(p.id))
+                           : [];
+                         const currentLocal = JSON.stringify(activeBotPositionsRef.current);
+                         if (JSON.stringify(validPositions) !== currentLocal) {
+                             setActiveBotPositions(validPositions);
+                             activeBotPositionsRef.current = validPositions;
+                         }
+                     } catch (e) {}
                  }
                  
                  // Check if wallet changed on server
@@ -2763,6 +2826,7 @@ export const App: React.FC = () => {
             activeBotPositions={activeBotPositions}
             isDesktopOpen={isDesktopSidebarOpen}
             isAndroidView={isAndroidView}
+            onOpenHelp={() => setIsHelpModalOpen(true)}
           />
 
           {/* Main Workspace */}
@@ -2787,6 +2851,8 @@ export const App: React.FC = () => {
               isAndroidView={isAndroidView}
               unreadAlertsCount={alerts.filter((a) => !a.read).length}
               soundEnabled={soundEnabled}
+              notificationsEnabled={notificationsEnabled}
+              onToggleNotifications={toggleNotifications}
               isRefreshing={isRefreshing}
               isDeveloperMode={isDeveloperMode}
               binanceConfig={binanceConfig}
@@ -2804,6 +2870,7 @@ export const App: React.FC = () => {
               onOpenNotifications={() => setIsNotificationsOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenRiskModal={() => setIsRiskModalOpen(true)}
+              onOpenHelp={() => setIsHelpModalOpen(true)}
               onPanicCloseAll={handlePanicCloseAll}
               onToggleSound={() => setSoundEnabled(!soundEnabled)}
               onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'FUTURES')}
@@ -3260,6 +3327,7 @@ export const App: React.FC = () => {
           timezone={timezone}
           isDeveloperMode={isDeveloperMode}
           soundEnabled={soundEnabled}
+          notificationsEnabled={notificationsEnabled}
           minConfidenceThreshold={minConfidenceThreshold}
           telegramBotToken={telegramBotToken}
           telegramChatId={telegramChatId}
@@ -3274,10 +3342,15 @@ export const App: React.FC = () => {
             setIsSettingsOpen(false);
             setIsCustomBalanceModalOpen(true);
           }}
+          onOpenHelp={() => {
+            setIsSettingsOpen(false);
+            setIsHelpModalOpen(true);
+          }}
           onLanguageChange={setLanguage}
           onTimezoneChange={setTimezone}
           onToggleDeveloperMode={setIsDeveloperMode}
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          onToggleNotifications={toggleNotifications}
           onConfidenceChange={setMinConfidenceThreshold}
           onTelegramConfigChange={(token, chatId) => {
             setTelegramBotToken(token);
@@ -3342,6 +3415,29 @@ export const App: React.FC = () => {
           }}
           language={language}
           onSendTestAlert={() => activeSignal && pushNewAlert(activeSignal, true)}
+        />
+
+        {/* Quick Start & Help Guide Modal */}
+        <HelpQuickStartModal
+          isOpen={isHelpModalOpen}
+          onClose={() => setIsHelpModalOpen(false)}
+          language={language}
+          onNavigateToTab={(tab) => {
+            setIsHelpModalOpen(false);
+            setActiveTab(tab as any);
+          }}
+          onOpenBinanceModal={() => {
+            setIsHelpModalOpen(false);
+            setIsBinanceModalOpen(true);
+          }}
+          onOpenRiskModal={() => {
+            setIsHelpModalOpen(false);
+            setIsRiskModalOpen(true);
+          }}
+          onOpenSettingsModal={() => {
+            setIsHelpModalOpen(false);
+            setIsSettingsOpen(true);
+          }}
         />
 
         {/* Floating Recommendation Notification Toast Alert */}

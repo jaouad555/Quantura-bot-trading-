@@ -721,3 +721,125 @@ export const startBotEngine = () => {
   }, 3000); // Run every 3 seconds independently
 };
 
+/**
+ * Server-authoritative position closer (Manual / SL / TP / Panic)
+ */
+export const closePositionDirect = async (posId: string, customExitPrice?: number, reason: string = 'Manual Close') => {
+  try {
+    const posStr = await kv.get('btc_active_bot_positions');
+    const positions = posStr ? JSON.parse(posStr) : [];
+    const pos = positions.find((p: any) => p.id === posId);
+    if (!pos) {
+      return { success: false, error: 'Position not found' };
+    }
+
+    const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol);
+    const isLong = pos.decision === 'LONG';
+    const lev = Math.max(1, pos.leverage || 1);
+    const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+    const roePercent = priceDiffPct * lev;
+    const marginClosed = pos.remainingAmountUsdt || 0;
+    let tranchePnl = marginClosed * (roePercent / 100);
+    if (tranchePnl < -marginClosed) tranchePnl = -marginClosed;
+    const cashReturned = Math.max(0, marginClosed + tranchePnl);
+    const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
+
+    const binanceConfig = await getBinanceConfig();
+    const isLiveMode = (await kv.get('app_execution_mode')) === 'BINANCE_LIVE';
+
+    if (isLiveMode && binanceConfig.isConnected) {
+      await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+    } else {
+      const currentWalletStr = await kv.get('btc_paper_wallet');
+      const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
+      currentWallet.balance = Math.max(0, Math.round(((Number(currentWallet.balance) || 1000) + cashReturned) * 100) / 100);
+      currentWallet.realizedPnl = Math.round(((Number(currentWallet.realizedPnl) || 0) + tranchePnl) * 100) / 100;
+      await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
+    }
+
+    // Immediately remove from active positions
+    const remainingPositions = positions.filter((p: any) => p.id !== posId);
+    await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
+
+    // Add to history
+    const histStr = await kv.get('btc_trade_history');
+    const history = histStr ? JSON.parse(histStr) : [];
+    const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || marginClosed || 10;
+    const historyItem = {
+      id: `history-manual-${Date.now()}`,
+      timestamp: Date.now(),
+      symbol: pos.symbol,
+      decision: pos.decision,
+      timeframe: '1h',
+      entryPrice: pos.entryPrice,
+      exitPrice: currentP,
+      tp1: pos.tp1,
+      tp2: pos.tp2,
+      tp3: pos.tp3,
+      stopLoss: pos.stopLoss,
+      status: totalTradePnl >= 0 ? 'TP_MANUAL' : 'SL_MANUAL',
+      profitPercent: Math.round(((totalTradePnl / initialMargin) * 100) * 100) / 100,
+      profitUsdt: Math.round(totalTradePnl * 100) / 100,
+      confidence: pos.confidence || 75,
+      strategyName: pos.strategyName,
+      pnlHistory: pos.pnlHistory,
+    };
+    await kv.set('btc_trade_history', JSON.stringify([historyItem, ...history].slice(0, 500)));
+
+    // Add to logs
+    const logsStr = await kv.get('btc_bot_logs');
+    const logs = logsStr ? JSON.parse(logsStr) : [];
+    const logItem = {
+      id: `log-manual-${Date.now()}`,
+      timestamp: Date.now(),
+      type: 'MANUAL_CLOSE',
+      symbol: pos.symbol,
+      side: isLong ? 'SELL' : 'BUY',
+      price: currentP,
+      amountUsdt: marginClosed * lev,
+      pnlUsdt: Math.round(tranchePnl * 100) / 100,
+      pnlPercent: Math.round(roePercent * 100) / 100,
+      reason,
+      mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+      marketType: pos.marketType,
+      leverage: lev,
+    };
+    await kv.set('btc_bot_logs', JSON.stringify([logItem, ...logs].slice(0, 500)));
+
+    try {
+      const riskEngine = RiskEngine.getInstance();
+      riskEngine.recordTradeClosed(totalTradePnl, 0, {
+        symbol: pos.symbol,
+        strategyName: pos.strategyName,
+        durationMs: Date.now() - (pos.openedAt || Date.now()),
+      });
+    } catch (err) {}
+
+    return { success: true, closedPosition: pos, remainingPositions };
+  } catch (err: any) {
+    console.error('[SERVER ENGINE] Close Position error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Panic close all active positions immediately
+ */
+export const panicCloseAllDirect = async () => {
+  try {
+    const posStr = await kv.get('btc_active_bot_positions');
+    const positions = posStr ? JSON.parse(posStr) : [];
+    if (!Array.isArray(positions) || positions.length === 0) {
+      return { success: true, closedCount: 0 };
+    }
+
+    for (const pos of positions) {
+      await closePositionDirect(pos.id, undefined, 'Panic emergency close all');
+    }
+
+    return { success: true, closedCount: positions.length };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
