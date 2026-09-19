@@ -374,14 +374,14 @@ async function processTradingSignal(
       return;
     }
 
-    // If RiskEngine adjusted quantity downward, adapt margin safely
-    if (riskEvaluation.approvedQuantity > 0 && riskEvaluation.approvedQuantity * currentPrice < margin * lev) {
+    // If sizingMode is explicitly RISK_BASED, adapt to RiskEngine recommended quantity:
+    if (config.sizingMode === 'RISK_BASED' && riskEvaluation.approvedQuantity > 0 && riskEvaluation.approvedQuantity * currentPrice < margin * lev) {
       margin = Math.max(10, Math.round((riskEvaluation.approvedQuantity * currentPrice / lev) * 100) / 100);
-      if (margin > wallet.balance) margin = wallet.balance;
     }
+    if (margin > wallet.balance) margin = wallet.balance;
 
     // We can proceed to execute
-    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED BY RISK ENGINE. ORDER SENT.`);
+    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. Margin: $${margin} (${config.tradeAllocationPercent || 25}%), Lev: ${lev}x, Notional: $${(margin * lev).toFixed(2)}`);
 
     const notional = margin * lev;
     const quantity = notional / currentPrice;
@@ -447,9 +447,11 @@ async function processTradingSignal(
       symbol: symbol,
       side: signal.decision === 'LONG' ? 'BUY' : 'SELL',
       price: currentPrice,
-      amountUsdt: margin,
+      amountUsdt: notional,
+      marginUsdt: margin,
+      leverage: lev,
       pnlUsdt: 0,
-      reason: `[${signal.strategyName}] Scanner executed ${signal.decision} (${signal.reason})`,
+      reason: `[${signal.strategyName}] الهامش: $${margin.toFixed(2)} (${config.tradeAllocationPercent || 25}%) | حجم العقد: $${notional.toFixed(2)} (${lev}x)`,
       mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
       strategyId: signal.strategyId,
       strategyName: signal.strategyName,

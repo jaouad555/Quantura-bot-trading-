@@ -544,6 +544,7 @@ export interface AutoTradeLog {
   side: 'BUY' | 'SELL';
   price: number;
   amountUsdt: number;
+  marginUsdt?: number;
   pnlUsdt?: number;
   pnlPercent?: number;
   reason: string;

@@ -2021,7 +2021,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 truncate">
-                      {isArabic ? `الحجم: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | ${log.reason}` : `Size: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | ${log.reason}`}
+                      {log.marginUsdt ? (
+                        <span className="text-emerald-400/90 font-mono font-semibold mr-1.5">
+                          {isArabic ? `الهامش: $${log.marginUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : `Margin: $${log.marginUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`}
+                        </span>
+                      ) : null}
+                      <span>{log.reason || (isArabic ? `الحجم: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Size: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}</span>
                     </div>
                   </div>
                 </div>

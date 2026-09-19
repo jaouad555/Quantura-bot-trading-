@@ -1294,9 +1294,11 @@ export const App: React.FC = () => {
           side: decision === 'LONG' ? 'BUY' : 'SELL',
           price: entryPrice,
           amountUsdt: positionSizeUsdt,
+          marginUsdt: tradeMargin,
+          strategyName: strategyName,
           reason: customReason || (isArabicLang 
-            ? `${isFutures ? 'عقد آجل ' + effectiveLeverage + 'x' : 'فوري'} | إشارة ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'تحجيم بالمخاطر' : 'حصة ثابتة'}]`
-            : `${isFutures ? 'Futures ' + effectiveLeverage + 'x' : 'Spot'} | Signal ${decision} (${signal?.confidence || 80}%) [${currentConfig.sizingMode === 'RISK_BASED' ? 'Risk-Sized' : 'Fixed %'}]`),
+            ? `${isFutures ? 'عقد آجل ' + effectiveLeverage + 'x' : 'فوري'} | الهامش: $${tradeMargin.toFixed(2)} (${currentConfig.tradeAllocationPercent}%) | العقد الإجمالي: $${positionSizeUsdt.toFixed(2)} | إشارة ${decision} (${signal?.confidence || 80}%)`
+            : `${isFutures ? 'Futures ' + effectiveLeverage + 'x' : 'Spot'} | Margin: $${tradeMargin.toFixed(2)} (${currentConfig.tradeAllocationPercent}%) | Notional: $${positionSizeUsdt.toFixed(2)} | Signal ${decision} (${signal?.confidence || 80}%)`),
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: isFutures ? 'FUTURES' : 'SPOT',
           leverage: effectiveLeverage,
