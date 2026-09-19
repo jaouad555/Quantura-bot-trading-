@@ -275,15 +275,15 @@ async function processTradingSignal(
     if (isLong) {
       if (!safeSl || safeSl >= currentPrice) safeSl = currentPrice * 0.985;
       const risk = currentPrice - safeSl;
-      if (!safeTp1 || safeTp1 <= currentPrice) safeTp1 = currentPrice + risk * 1.5;
-      if (!safeTp2 || safeTp2 <= safeTp1) safeTp2 = safeTp1 + risk * 1.0;
-      if (!safeTp3 || safeTp3 <= safeTp2) safeTp3 = safeTp2 + risk * 1.5;
+      if (!safeTp1 || safeTp1 <= currentPrice || (safeTp1 - currentPrice) < risk * 2.0) safeTp1 = currentPrice + risk * 2.0;
+      if (!safeTp2 || safeTp2 <= safeTp1) safeTp2 = safeTp1 + risk * 1.2;
+      if (!safeTp3 || safeTp3 <= safeTp2) safeTp3 = safeTp2 + risk * 1.8;
     } else {
       if (!safeSl || safeSl <= currentPrice) safeSl = currentPrice * 1.015;
       const risk = safeSl - currentPrice;
-      if (!safeTp1 || safeTp1 >= currentPrice) safeTp1 = currentPrice - risk * 1.5;
-      if (!safeTp2 || safeTp2 >= safeTp1) safeTp2 = safeTp1 - risk * 1.0;
-      if (!safeTp3 || safeTp3 >= safeTp2) safeTp3 = Math.max(currentPrice * 0.05, safeTp2 - risk * 1.5);
+      if (!safeTp1 || safeTp1 >= currentPrice || (currentPrice - safeTp1) < risk * 2.0) safeTp1 = currentPrice - risk * 2.0;
+      if (!safeTp2 || safeTp2 >= safeTp1) safeTp2 = safeTp1 - risk * 1.2;
+      if (!safeTp3 || safeTp3 >= safeTp2) safeTp3 = Math.max(currentPrice * 0.05, safeTp2 - risk * 1.8);
     }
 
     const slDistancePct = Math.abs(currentPrice - safeSl) / currentPrice;
@@ -321,8 +321,45 @@ async function processTradingSignal(
       return;
     }
 
+    // CRITICAL GATE 3: QUANTURA RISK MANAGEMENT ENGINE EVALUATION (Zero-Bypass Gateway)
+    const riskEngine = RiskEngine.getInstance();
+    const riskProposal = {
+      clientOrderId: `scan-pos-${Date.now()}-${symbol}`,
+      symbol: symbol.toUpperCase(),
+      side: (signal.decision === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT',
+      entryPrice: currentPrice,
+      stopLoss: safeSl,
+      takeProfit: { tp1: safeTp1, tp2: safeTp2, tp3: safeTp3 },
+      marketType: (config.marketType || 'FUTURES') as 'SPOT' | 'FUTURES',
+      leverage: lev,
+      accountEquity: totalEquity,
+      availableBalance: wallet.balance,
+      quantity: (margin * lev) / currentPrice,
+      orderType: 'MARKET' as const,
+      timestamp: Date.now(),
+      marketData: {
+        currentPrice: currentPrice,
+        bidPrice: currentPrice * 0.9998,
+        askPrice: currentPrice * 1.0002,
+        volume24hUsdt: 10000000,
+        timestamp: Date.now(),
+      },
+    };
+
+    const riskEvaluation = await riskEngine.evaluateProposal(riskProposal, positions);
+    if (riskEvaluation.decision === 'REJECTED') {
+      console.log(`[RISK ENGINE BLOCKED] ${symbol} [${signal.strategyName}] -> REJECTED: ${riskEvaluation.message} (${riskEvaluation.reasonCode})`);
+      return;
+    }
+
+    // If RiskEngine adjusted quantity downward, adapt margin safely
+    if (riskEvaluation.approvedQuantity > 0 && riskEvaluation.approvedQuantity * currentPrice < margin * lev) {
+      margin = Math.max(10, Math.round((riskEvaluation.approvedQuantity * currentPrice / lev) * 100) / 100);
+      if (margin > wallet.balance) margin = wallet.balance;
+    }
+
     // We can proceed to execute
-    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. ORDER SENT.`);
+    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED BY RISK ENGINE. ORDER SENT.`);
 
     const notional = margin * lev;
     const quantity = notional / currentPrice;

@@ -728,6 +728,7 @@ export const App: React.FC = () => {
 
   const lastClosedTimesBySymbolRef = useRef<Record<string, number>>({});
   const lastEmittedAlertKeyRef = useRef<Record<string, string>>({});
+  const lastEmittedAlertTimeRef = useRef<Record<string, number>>({});
   const lastTradedSignalKeyRef = useRef<string>('');
   const lastBotActionTimeRef = useRef<number>(0);
 
@@ -742,15 +743,25 @@ export const App: React.FC = () => {
       const sym = overrideSymbol || selectedSymbolRef.current;
       const pairName = formatPairName(sym);
 
-      // Deduplication key: decision + timeframe + approximate entry + stop loss
-      const alertKey = `${plan.decision}_${sym}_${tf}_${Math.round(plan.entryZone?.ideal || 0)}_${Math.round(plan.stopLoss || 0)}`;
+      // Deduplication key: decision + symbol + timeframe + strategy regime
+      // We normalize the key by symbol, direction and regime to avoid microscopic price ticks breaking deduplication
+      const alertKey = `${plan.decision}_${sym}_${tf}_${plan.marketRegime || 'DEFAULT'}`;
+      const now = Date.now();
+      const lastEmittedTime = lastEmittedAlertTimeRef.current[sym] || 0;
+      const MIN_ALERT_COOLDOWN_MS = 90 * 1000; // 90 seconds minimum cooldown between alerts for the same symbol
 
-      // If this is an automatic background refresh and the trade recommendation is identical, do NOT duplicate the notification
-      if (!isUserInitiated && lastEmittedAlertKeyRef.current[sym] === alertKey) {
-        return;
+      // If this is an automatic background refresh and the trade recommendation is identical or within cooldown, do NOT duplicate the notification
+      if (!isUserInitiated) {
+        if (lastEmittedAlertKeyRef.current[sym] === alertKey && now - lastEmittedTime < 300 * 1000) {
+          return;
+        }
+        if (now - lastEmittedTime < MIN_ALERT_COOLDOWN_MS) {
+          return;
+        }
       }
 
       lastEmittedAlertKeyRef.current[sym] = alertKey;
+      lastEmittedAlertTimeRef.current[sym] = now;
 
       let title = '';
       let body = '';

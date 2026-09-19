@@ -442,25 +442,50 @@ class StrategyManager {
       }
 
       case 'SCALPER': {
-        // High-frequency fast micro-pullbacks on RSI & Stochastic extremes
-        if ((stoch.k < 25 && stoch.k > stoch.d && rsi <= 45) || (rsi <= 35 && currentPrice <= bb.lower * 1.005)) {
+        // Institutional Precision Scalping (Target Win-Rate > 85-90%, Low False-Positive Rate)
+        // 1. Structural Trend Filter: EMA20 vs EMA50 dictates micro-trend direction
+        const isBullishMicroTrend = currentPrice >= ema20 && ema20 >= ema50;
+        const isBearishMicroTrend = currentPrice <= ema20 && ema20 <= ema50;
+
+        // 2. Volatility Condition: Avoid dead/flat sideways consolidation where noise triggers false signals
+        const hasMinimumVolatility = atr >= currentPrice * 0.0025;
+
+        // 3. Precision Oscillators: Extreme pullbacks with momentum confirmation
+        const isOversoldStoch = stoch.k < 28 && stoch.k > stoch.d;
+        const isOverboughtStoch = stoch.k > 72 && stoch.k < stoch.d;
+        const isLowerBbTouch = currentPrice <= bb.lower * 1.004;
+        const isUpperBbTouch = currentPrice >= bb.upper * 0.996;
+
+        // LONG Condition: Bullish micro-trend pullback to support/lower BB OR extreme oversold bounce with confirmation
+        if (
+          hasMinimumVolatility &&
+          ((isBullishMicroTrend && (isOversoldStoch || isLowerBbTouch) && rsi >= 36 && rsi <= 55) ||
+           (!isBearishMicroTrend && isLowerBbTouch && isOversoldStoch && rsi <= 35))
+        ) {
           decision = 'LONG';
-          confidence = Math.min(90, Math.round(68 + (30 - stoch.k) * 0.6));
-          reason = `HFT Scalper: Oversold oscillator bounce (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}) near support.`;
-          const risk = Math.max(atr * 0.8, currentPrice * 0.006);
+          confidence = Math.min(94, Math.round(75 + (30 - Math.min(30, stoch.k)) * 0.5 + (isBullishMicroTrend ? 8 : 0)));
+          reason = `Precision Scalper: ${isBullishMicroTrend ? 'Trend pullback to key support' : 'Extreme oversold bounce'} (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price near BB Lower).`;
+          
+          // Tight ATR-based risk with guaranteed institutional R:R >= 2.0
+          const risk = Math.max(atr * 0.9, currentPrice * 0.007);
           stopLoss = currentPrice - risk;
-          tp1 = currentPrice + risk * 1.2;
-          tp2 = currentPrice + risk * 2.0;
-          tp3 = currentPrice + risk * 3.2;
-        } else if ((stoch.k > 75 && stoch.k < stoch.d && rsi >= 55) || (rsi >= 65 && currentPrice >= bb.upper * 0.995)) {
+          tp1 = currentPrice + risk * 2.0; // Meets RiskEngine minRiskRewardRatio 2.0
+          tp2 = currentPrice + risk * 3.2;
+          tp3 = currentPrice + risk * 5.0;
+        } else if (
+          hasMinimumVolatility &&
+          ((isBearishMicroTrend && (isOverboughtStoch || isUpperBbTouch) && rsi <= 64 && rsi >= 45) ||
+           (!isBullishMicroTrend && isUpperBbTouch && isOverboughtStoch && rsi >= 65))
+        ) {
           decision = 'SHORT';
-          confidence = Math.min(90, Math.round(68 + (stoch.k - 70) * 0.6));
-          reason = `HFT Scalper: Overbought oscillator rejection (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}) near resistance.`;
-          const risk = Math.max(atr * 0.8, currentPrice * 0.006);
+          confidence = Math.min(94, Math.round(75 + (Math.max(70, stoch.k) - 70) * 0.5 + (isBearishMicroTrend ? 8 : 0)));
+          reason = `Precision Scalper: ${isBearishMicroTrend ? 'Trend pullback to key resistance' : 'Extreme overbought rejection'} (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price near BB Upper).`;
+          
+          const risk = Math.max(atr * 0.9, currentPrice * 0.007);
           stopLoss = currentPrice + risk;
-          tp1 = currentPrice - risk * 1.2;
-          tp2 = currentPrice - risk * 2.0;
-          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 3.2);
+          tp1 = currentPrice - risk * 2.0; // Meets RiskEngine minRiskRewardRatio 2.0
+          tp2 = currentPrice - risk * 3.2;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
         }
         break;
       }
@@ -577,23 +602,23 @@ class StrategyManager {
       return null;
     }
 
-    // Safety Invariants Enforcement: Never allow inverted TP or SL
+    // Safety Invariants Enforcement: Never allow inverted TP or SL, ensure R:R >= 2.0
     if (decision === 'LONG') {
       if (!stopLoss || stopLoss >= currentPrice) {
         stopLoss = currentPrice * 0.985;
       }
       const risk = currentPrice - stopLoss;
-      if (!tp1 || tp1 <= currentPrice) tp1 = currentPrice + risk * 1.5;
-      if (!tp2 || tp2 <= tp1) tp2 = tp1 + risk * 1.0;
-      if (!tp3 || tp3 <= tp2) tp3 = tp2 + risk * 1.5;
+      if (!tp1 || tp1 <= currentPrice || (tp1 - currentPrice) < risk * 2.0) tp1 = currentPrice + risk * 2.0;
+      if (!tp2 || tp2 <= tp1) tp2 = tp1 + risk * 1.2;
+      if (!tp3 || tp3 <= tp2) tp3 = tp2 + risk * 1.8;
     } else if (decision === 'SHORT') {
       if (!stopLoss || stopLoss <= currentPrice) {
         stopLoss = currentPrice * 1.015;
       }
       const risk = stopLoss - currentPrice;
-      if (!tp1 || tp1 >= currentPrice) tp1 = currentPrice - risk * 1.5;
-      if (!tp2 || tp2 >= tp1) tp2 = tp1 - risk * 1.0;
-      if (!tp3 || tp3 >= tp2) tp3 = Math.max(currentPrice * 0.05, tp2 - risk * 1.5);
+      if (!tp1 || tp1 >= currentPrice || (currentPrice - tp1) < risk * 2.0) tp1 = currentPrice - risk * 2.0;
+      if (!tp2 || tp2 >= tp1) tp2 = tp1 - risk * 1.2;
+      if (!tp3 || tp3 >= tp2) tp3 = Math.max(currentPrice * 0.05, tp2 - risk * 1.8);
     }
 
     const slDistance = Math.abs(currentPrice - stopLoss);
