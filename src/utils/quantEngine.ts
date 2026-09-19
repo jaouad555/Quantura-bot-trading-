@@ -454,22 +454,31 @@ export function generateQuantitativePlan(
     const maxEntry = roundPrice(ideal + 0.25 * atr);
     entryZone = { min: minEntry, max: maxEntry, ideal };
 
-    // SL: Under recent swing low or 1.5 * ATR
+    // SL: Under recent swing low or 1.8 * ATR
     const slDist = Math.max(1.8 * atr, ideal * 0.005);
     let rawSL = ideal - slDist;
     if (ms.swingLow && ms.swingLow < ideal && (ideal - ms.swingLow) <= 3.5 * atr) {
       rawSL = Math.min(rawSL, ms.swingLow - 0.2 * atr);
     }
-    stopLoss = roundPrice(rawSL);
+    let calculatedSL = roundPrice(rawSL);
+    // Strict invariant: LONG SL must be strictly lower than ideal
+    if (calculatedSL >= ideal) {
+      calculatedSL = roundPrice(ideal * 0.985);
+    }
+    stopLoss = calculatedSL;
     longInvalidBelow = stopLoss;
     invalidationReason = `Scénario LONG invalidé en cas de clôture ${timeframe} sous $${formatCoinPrice(stopLoss, symbol)} ou cassure du support structurel.`;
 
-    const risk = Math.max(0.00001, ideal - stopLoss);
-    const tp1 = roundPrice(ideal + risk * 1.5);
-    const tp2 = roundPrice(ideal + risk * 2.5);
-    const tp3 = roundPrice(ideal + risk * 4.0);
-    targets = { tp1, tp2, tp3 };
+    const risk = Math.max(ideal * 0.005, ideal - stopLoss);
+    let tp1 = roundPrice(ideal + risk * 1.5);
+    let tp2 = roundPrice(ideal + risk * 2.5);
+    let tp3 = roundPrice(ideal + risk * 4.0);
 
+    if (tp1 <= ideal) tp1 = roundPrice(ideal * 1.015);
+    if (tp2 <= tp1) tp2 = roundPrice(tp1 * 1.015);
+    if (tp3 <= tp2) tp3 = roundPrice(tp2 * 1.015);
+
+    targets = { tp1, tp2, tp3 };
     riskRewardRatio = Math.round(((tp1 - ideal) / risk) * 100) / 100;
   } else if (decision === 'SHORT') {
     const ideal = roundPrice(currentPrice);
@@ -482,16 +491,25 @@ export function generateQuantitativePlan(
     if (ms.swingHigh && ms.swingHigh > ideal && (ms.swingHigh - ideal) <= 3.5 * atr) {
       rawSL = Math.max(rawSL, ms.swingHigh + 0.2 * atr);
     }
-    stopLoss = roundPrice(rawSL);
+    let calculatedSL = roundPrice(rawSL);
+    // Strict invariant: SHORT SL must be strictly higher than ideal
+    if (calculatedSL <= ideal) {
+      calculatedSL = roundPrice(ideal * 1.015);
+    }
+    stopLoss = calculatedSL;
     shortInvalidAbove = stopLoss;
     invalidationReason = `Scénario SHORT invalidé en cas de clôture ${timeframe} au-dessus de $${formatCoinPrice(stopLoss, symbol)} ou rejet des vendeurs.`;
 
-    const risk = Math.max(0.00001, stopLoss - ideal);
-    const tp1 = roundPrice(ideal - risk * 1.5);
-    const tp2 = roundPrice(ideal - risk * 2.5);
-    const tp3 = roundPrice(ideal - risk * 4.0);
-    targets = { tp1, tp2, tp3 };
+    const risk = Math.max(ideal * 0.005, stopLoss - ideal);
+    let tp1 = roundPrice(ideal - risk * 1.5);
+    let tp2 = roundPrice(ideal - risk * 2.5);
+    let tp3 = roundPrice(ideal - risk * 4.0);
 
+    if (tp1 >= ideal) tp1 = roundPrice(ideal * 0.985);
+    if (tp2 >= tp1) tp2 = roundPrice(tp1 * 0.985);
+    if (tp3 >= tp2) tp3 = roundPrice(tp2 * 0.985);
+
+    targets = { tp1, tp2, tp3 };
     riskRewardRatio = Math.round(((ideal - tp1) / risk) * 100) / 100;
   } else {
     // WAIT or NO_TRADE

@@ -1158,33 +1158,44 @@ export const App: React.FC = () => {
             : (signal.targets.tp1 < entryPrice && signal.targets.tp2 < signal.targets.tp1 && signal.targets.tp3 < signal.targets.tp2 && (!signal.stopLoss || signal.stopLoss > entryPrice)))
         );
 
-        const tp1 = (isSignalValidForPair && signal?.targets?.tp1) ? signal.targets.tp1 : (decision === 'LONG' ? entryPrice * 1.015 : entryPrice * 0.985);
-        const tp2 = (isSignalValidForPair && signal?.targets?.tp2) ? signal.targets.tp2 : (decision === 'LONG' ? entryPrice * 1.03 : entryPrice * 0.97);
-        const tp3 = (isSignalValidForPair && signal?.targets?.tp3) ? signal.targets.tp3 : (decision === 'LONG' ? entryPrice * 1.05 : entryPrice * 0.95);
-        const stopLoss = (isSignalValidForPair && signal?.stopLoss) ? signal.stopLoss : (decision === 'LONG' ? entryPrice * 0.985 : entryPrice * 1.015);
+        let tp1 = (isSignalValidForPair && signal?.targets?.tp1) ? signal.targets.tp1 : (decision === 'LONG' ? entryPrice * 1.015 : entryPrice * 0.985);
+        let tp2 = (isSignalValidForPair && signal?.targets?.tp2) ? signal.targets.tp2 : (decision === 'LONG' ? entryPrice * 1.03 : entryPrice * 0.97);
+        let tp3 = (isSignalValidForPair && signal?.targets?.tp3) ? signal.targets.tp3 : (decision === 'LONG' ? entryPrice * 1.05 : entryPrice * 0.95);
+        let stopLoss = (isSignalValidForPair && signal?.stopLoss) ? signal.stopLoss : (decision === 'LONG' ? entryPrice * 0.985 : entryPrice * 1.015);
 
         // Position sizing logic: Calculate Margin allocated
         let tradeMargin = 0;
         let effectiveLeverage = leverage;
-        const slDistancePct = Math.abs(entryPrice - stopLoss) / entryPrice;
+        const slDistancePct = Math.max(0.003, Math.abs(entryPrice - stopLoss) / entryPrice);
+
+        // Clamping leverage to guarantee liquidation price can NEVER occur before Stop Loss
+        if (isFutures && effectiveLeverage > 1) {
+          const maxSafeLeverage = Math.max(1, Math.floor(1 / (slDistancePct + 0.008)));
+          if (effectiveLeverage > maxSafeLeverage) {
+            effectiveLeverage = Math.max(1, Math.min(effectiveLeverage, maxSafeLeverage));
+          }
+        }
+
+        const allocPercent = Math.max(5, Math.min(100, Number(currentConfig.tradeAllocationPercent) || 25));
 
         if (currentConfig.sizingMode === 'RISK_BASED') {
           const targetRiskUsdt = totalEquity * ((currentConfig.riskPerTradePercent || 2.0) / 100);
-          const notionalSize = targetRiskUsdt / Math.max(0.008, slDistancePct);
+          const notionalSize = targetRiskUsdt / slDistancePct;
           tradeMargin = notionalSize / effectiveLeverage;
           tradeMargin = Math.min(tradeMargin, totalEquity * 0.45); // Max 45% of portfolio per position
         } else {
-          tradeMargin = totalEquity * (currentConfig.tradeAllocationPercent / 100);
+          // Standard FIXED_PERCENT: Allocate exact percentage of total portfolio equity
+          tradeMargin = Math.round((totalEquity * (allocPercent / 100)) * 100) / 100;
         }
 
         // Cap at available balance if necessary
         if (tradeMargin > availableBalance) {
-          tradeMargin = availableBalance;
+          tradeMargin = Math.round(availableBalance * 100) / 100;
         }
 
         if (tradeMargin < 5) return;
 
-        const positionSizeUsdt = tradeMargin * effectiveLeverage;
+        const positionSizeUsdt = Math.round((tradeMargin * effectiveLeverage) * 100) / 100;
         const amountCrypto = positionSizeUsdt / entryPrice;
 
         // Liquidation Price calculation for Futures (Isolated Margin, ~0.5% MMR)
@@ -1193,8 +1204,16 @@ export const App: React.FC = () => {
           const mmr = 0.005; // 0.5% maintenance margin
           if (decision === 'LONG') {
             liquidationPrice = entryPrice * Math.max(0.001, (1 - (1 / effectiveLeverage) + mmr));
+            // Safety invariant: Ensure Stop Loss is strictly above Liquidation Price
+            if (stopLoss <= liquidationPrice) {
+              stopLoss = Math.round((liquidationPrice * 1.01) * 100) / 100;
+            }
           } else {
             liquidationPrice = entryPrice * (1 + (1 / effectiveLeverage) - mmr);
+            // Safety invariant: Ensure Stop Loss is strictly below Liquidation Price
+            if (stopLoss >= liquidationPrice) {
+              stopLoss = Math.round((liquidationPrice * 0.99) * 100) / 100;
+            }
           }
         }
 
@@ -2119,12 +2138,16 @@ export const App: React.FC = () => {
   // Run Quantitative Analysis
   const runAnalysis = useCallback(
     async (currentMarketData: MarketDataResponse | null, force: boolean = false) => {
-      if (!currentMarketData || !currentMarketData.ticker || !currentMarketData.indicators) {
+      let data = currentMarketData;
+      if (!data || !data.ticker || !data.indicators) {
+        if (force) {
+          fetchMarketData(timeframe, selectedSymbol, botConfig.marketType);
+        }
         return;
       }
 
       // Automatically determine optimal bot timeframe based on quantitative market regime
-      const optimalTf = determineOptimalBotTimeframe(currentMarketData.indicators, currentMarketData.ticker.price);
+      const optimalTf = determineOptimalBotTimeframe(data.indicators, data.ticker.price);
       setAutoBotTimeframeInfo({
         effectiveTimeframe: optimalTf.timeframe,
         reasonAr: optimalTf.reasonAr,
@@ -2134,14 +2157,14 @@ export const App: React.FC = () => {
       const now = Date.now();
       // Fast client-side pure mathematical plan for immediate UI responsiveness
       const fastPlan = generateQuantitativePlan(
-        currentMarketData.timeframe,
-        currentMarketData.ticker.price,
-        currentMarketData.indicators,
-        currentMarketData.orderBook,
-        currentMarketData.derivatives,
-        currentMarketData.mtfConfluence,
+        data.timeframe,
+        data.ticker.price,
+        data.indicators,
+        data.orderBook,
+        data.derivatives,
+        data.mtfConfluence,
         isDeveloperMode,
-        currentMarketData.ticker.symbol || selectedSymbol
+        data.ticker.symbol || selectedSymbol
       );
 
       // If called from background interval and analyzed recently, update the mathematical plan & check for fresh alerts
