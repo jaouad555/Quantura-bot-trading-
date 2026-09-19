@@ -180,7 +180,7 @@ async function analyzeSymbol(
         const minConfidence = config.minConfidence || 65;
         if (isBotTradingEnabled && stratSignal.confidence >= minConfidence && (stratSignal.decision === 'LONG' || stratSignal.decision === 'SHORT')) {
           if (isAllowedToTrade) {
-            await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive);
+            await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive, data.orderBook, data.ticker);
           }
         }
       }
@@ -197,7 +197,9 @@ async function processTradingSignal(
   signal: StrategySignal,
   currentPrice: number,
   config: any,
-  isLive: boolean
+  isLive: boolean,
+  orderBook?: any,
+  ticker?: any
 ) {
   try {
     // CRITICAL GATE 0: Re-check latest authoritative botConfig from KV
@@ -321,6 +323,13 @@ async function processTradingSignal(
       return;
     }
 
+    // Build real market depth and quote structure for MarketProtection validation
+    const topBids = orderBook?.topBids?.map((b: any) => ({ price: b.price, amount: b.qty || b.amount })) || [];
+    const topAsks = orderBook?.topAsks?.map((a: any) => ({ price: a.price, amount: a.qty || a.amount })) || [];
+    const bestBid = topBids[0]?.price || currentPrice * 0.9998;
+    const bestAsk = topAsks[0]?.price || currentPrice * 1.0002;
+    const volume24hUsdt = ticker?.quoteVolume24h || (ticker?.volume24h ? ticker.volume24h * currentPrice : 10000000);
+
     // CRITICAL GATE 3: QUANTURA RISK MANAGEMENT ENGINE EVALUATION (Zero-Bypass Gateway)
     const riskEngine = RiskEngine.getInstance();
     const riskProposal = {
@@ -339,10 +348,11 @@ async function processTradingSignal(
       timestamp: Date.now(),
       marketData: {
         currentPrice: currentPrice,
-        bidPrice: currentPrice * 0.9998,
-        askPrice: currentPrice * 1.0002,
-        volume24hUsdt: 10000000,
+        bidPrice: bestBid,
+        askPrice: bestAsk,
+        volume24hUsdt: volume24hUsdt,
         timestamp: Date.now(),
+        orderBook: topBids.length > 0 && topAsks.length > 0 ? { topBids, topAsks } : undefined,
       },
     };
 

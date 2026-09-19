@@ -6,6 +6,11 @@ export interface SentimentalBotAvatarProps {
   floatingPnlUsdt?: number;
   floatingPnlPercent?: number;
   realizedPnlUsdt?: number;
+  marketSentiment?: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'FEAR' | 'GREED' | 'EXTREME_GREED' | 'EXTREME_FEAR' | string;
+  marketRegime?: string;
+  activePositionsCount?: number;
+  signalDecision?: 'LONG' | 'SHORT' | 'WAIT' | 'NEUTRAL' | string;
+  confidence?: number;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showMoodBadge?: boolean;
   language?: Language;
@@ -14,13 +19,18 @@ export interface SentimentalBotAvatarProps {
   className?: string;
 }
 
-export type BotMood = 'HAPPY' | 'ANGRY' | 'SCANNING' | 'SLEEPING' | 'SURPRISED';
+export type BotMood = 'HAPPY' | 'ANGRY' | 'SCANNING' | 'SLEEPING' | 'SURPRISED' | 'BULLISH' | 'BEARISH';
 
 export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
   enabled,
   floatingPnlUsdt = 0,
   floatingPnlPercent = 0,
   realizedPnlUsdt = 0,
+  marketSentiment = 'NEUTRAL',
+  marketRegime,
+  activePositionsCount = 0,
+  signalDecision,
+  confidence = 50,
   size = 'md',
   showMoodBadge = false,
   language = 'fr',
@@ -35,7 +45,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
   const [isBlinking, setIsBlinking] = useState(false);
   const [pokeReaction, setPokeReaction] = useState<boolean>(false);
 
-  // Natural blink loop (every 3.2s, lasts 180ms)
+  // Natural blink loop (every 3.4s, lasts 200ms)
   useEffect(() => {
     const interval = setInterval(() => {
       setIsBlinking(true);
@@ -44,22 +54,37 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Determine current emotional state (Sentiment)
+  // Determine current emotional state (Sentiment & PnL & Market condition)
   const currentMood: BotMood = React.useMemo(() => {
     if (pokeReaction) return 'SURPRISED';
     if (!enabled) return 'SLEEPING';
     if (circuitBreakerTriggered) return 'ANGRY';
 
-    // Consider either floating PnL (open positions) or overall session profit
+    // 1. If active positions exist with positive or negative floating PnL
     const netPnl = floatingPnlUsdt !== 0 ? floatingPnlUsdt : (floatingPnlPercent !== 0 ? floatingPnlPercent : realizedPnlUsdt);
 
-    if (netPnl > 0.05) {
-      return 'HAPPY';
-    } else if (netPnl < -0.05) {
-      return 'ANGRY';
+    if (activePositionsCount > 0) {
+      if (netPnl > 0.05) return 'HAPPY';
+      if (netPnl < -0.05) return 'ANGRY';
     }
+
+    // 2. Market Sentiment & Active Signals reflection
+    const upperSentiment = String(marketSentiment).toUpperCase();
+    const upperDecision = String(signalDecision).toUpperCase();
+
+    if (upperDecision === 'LONG' || upperSentiment === 'BULLISH' || upperSentiment === 'GREED' || upperSentiment === 'EXTREME_GREED') {
+      if (confidence >= 65) return 'BULLISH';
+    }
+
+    if (upperDecision === 'SHORT' || upperSentiment === 'BEARISH' || upperSentiment === 'FEAR' || upperSentiment === 'EXTREME_FEAR') {
+      if (confidence >= 65) return 'BEARISH';
+    }
+
+    if (netPnl > 0.05) return 'HAPPY';
+    if (netPnl < -0.05) return 'ANGRY';
+
     return 'SCANNING';
-  }, [enabled, circuitBreakerTriggered, floatingPnlUsdt, floatingPnlPercent, realizedPnlUsdt, pokeReaction]);
+  }, [enabled, circuitBreakerTriggered, floatingPnlUsdt, floatingPnlPercent, realizedPnlUsdt, pokeReaction, activePositionsCount, marketSentiment, signalDecision, confidence]);
 
   const handleAvatarClick = () => {
     setPokeReaction(true);
@@ -87,6 +112,28 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
       title: isArabic ? 'نشط ورابح 🚀' : isEn ? 'Profitable & Hyped 🚀' : 'En Profit & Euphorique 🚀',
       desc: isArabic ? `أرباح إيجابية (+${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)` : `Trades en gains (+${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)`,
+    },
+    BULLISH: {
+      border: 'border-emerald-400/70 shadow-[0_0_20px_rgba(52,211,153,0.4)]',
+      bgGradient: 'from-emerald-950/90 via-teal-950/40 to-slate-950',
+      screenBg: '#064e3b',
+      ledColor: '#4ade80',
+      ledGlow: '#22c55e',
+      antennaColor: '#22c55e',
+      badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      title: isArabic ? 'زخم صاعد قوي 🐂' : isEn ? 'Bullish Momentum 🐂' : 'Momentum Haussier 🐂',
+      desc: isArabic ? 'رصد اتجاه صاعد وفرص شراء' : 'Détection de flux acheteur',
+    },
+    BEARISH: {
+      border: 'border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.35)]',
+      bgGradient: 'from-amber-950/80 via-slate-900 to-slate-950',
+      screenBg: '#451a03',
+      ledColor: '#fb923c',
+      ledGlow: '#f97316',
+      antennaColor: '#f97316',
+      badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      title: isArabic ? 'ضغط بيعي / هبوط 🐻' : isEn ? 'Bearish Market 🐻' : 'Pression Vendeuse 🐻',
+      desc: isArabic ? 'حذر ومراقبة مستويات الدعم والبيع' : 'Surveillance des supports & shorts',
     },
     ANGRY: {
       border: 'border-rose-500/70 shadow-[0_0_22px_rgba(244,63,94,0.4)] animate-pulse',
@@ -336,7 +383,60 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
             </g>
           )}
 
-          {/* 3. SCANNING / ANALYTICAL (◉ ◉ with laser beam sweep) */}
+          {/* 3. BULLISH / GREED MOOD (▲ ▲ or (☆▽☆)) */}
+          {currentMood === 'BULLISH' && (
+            <g filter={`url(#glow-${currentMood})`}>
+              {/* Green Bullish Diamond / Arrow Eyes */}
+              {isBlinking ? (
+                <>
+                  <line x1="28" y1="46" x2="44" y2="46" stroke={moodStyles.ledColor} strokeWidth="4" strokeLinecap="round" />
+                  <line x1="56" y1="46" x2="72" y2="46" stroke={moodStyles.ledColor} strokeWidth="4" strokeLinecap="round" />
+                </>
+              ) : (
+                <>
+                  {/* Left Upward Bull Eye */}
+                  <polygon points="36,38 43,49 29,49" fill={moodStyles.ledColor} />
+                  {/* Right Upward Bull Eye */}
+                  <polygon points="64,38 71,49 57,49" fill={moodStyles.ledColor} />
+                </>
+              )}
+
+              {/* Confident Uptrend Smile */}
+              <path
+                d="M 36 58 Q 50 68 64 58"
+                fill="none"
+                stroke={moodStyles.ledColor}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+              <circle cx="26" cy="54" r="2" fill="#4ade80" opacity="0.9" />
+              <circle cx="74" cy="54" r="2" fill="#4ade80" opacity="0.9" />
+            </g>
+          )}
+
+          {/* 4. BEARISH / FEAR MOOD (▼ ▼ or cautious watchful eyes) */}
+          {currentMood === 'BEARISH' && (
+            <g filter={`url(#glow-${currentMood})`}>
+              {isBlinking ? (
+                <>
+                  <line x1="28" y1="46" x2="44" y2="46" stroke={moodStyles.ledColor} strokeWidth="4" strokeLinecap="round" />
+                  <line x1="56" y1="46" x2="72" y2="46" stroke={moodStyles.ledColor} strokeWidth="4" strokeLinecap="round" />
+                </>
+              ) : (
+                <>
+                  {/* Left Downward Bear Eye */}
+                  <polygon points="36,50 43,39 29,39" fill={moodStyles.ledColor} />
+                  {/* Right Downward Bear Eye */}
+                  <polygon points="64,50 71,39 57,39" fill={moodStyles.ledColor} />
+                </>
+              )}
+
+              {/* Alert Neutral Flat Guard Mouth */}
+              <line x1="36" y1="62" x2="64" y2="62" stroke={moodStyles.ledColor} strokeWidth="3" strokeLinecap="round" />
+            </g>
+          )}
+
+          {/* 5. SCANNING / ANALYTICAL (◉ ◉ with laser beam sweep) */}
           {currentMood === 'SCANNING' && (
             <g filter={`url(#glow-${currentMood})`}>
               {isBlinking ? (

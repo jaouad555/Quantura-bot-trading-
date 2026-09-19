@@ -114,16 +114,71 @@ export class MarketProtection {
       };
     }
 
-    // 6. Slippage Calculation & Protection
+    // 6. Slippage & Liquidity Depth Calculation & Protection
     let estimatedSlippagePercent = 0.05;
+    let depthCoverageRatio = 5.0;
+
     if (input.orderBook && input.orderBook.topBids.length > 0 && input.orderBook.topAsks.length > 0) {
       const bestBid = input.orderBook.topBids[0].price;
       const bestAsk = input.orderBook.topAsks[0].price;
-      const bookSpread = ((bestAsk - bestBid) / bestBid) * 100;
-      // Volume impact estimation
+      const bookSpread = bestBid > 0 ? ((bestAsk - bestBid) / bestBid) * 100 : 0.05;
+
+      // Calculate total available liquidity depth in top of book
       const topAskVolume = input.orderBook.topAsks.reduce((sum, item) => sum + (item.price * item.amount), 0);
-      const impactRatio = topAskVolume > 0 ? notionalValueUsdt / topAskVolume : 0.01;
-      estimatedSlippagePercent = Math.max(0.02, bookSpread * (1 + impactRatio * 0.5));
+      const topBidVolume = input.orderBook.topBids.reduce((sum, item) => sum + (item.price * item.amount), 0);
+      const availableDepthUsdt = topAskVolume > 0 ? topAskVolume : topBidVolume;
+
+      depthCoverageRatio = notionalValueUsdt > 0 && availableDepthUsdt > 0
+        ? availableDepthUsdt / notionalValueUsdt
+        : 5.0;
+
+      // Realistic order book fill simulation (walk the book)
+      let remainingUsdt = notionalValueUsdt;
+      let filledUsdt = 0;
+      let weightedPriceSum = 0;
+      const levels = input.orderBook.topAsks;
+
+      for (const lvl of levels) {
+        const lvlUsd = lvl.price * lvl.amount;
+        if (remainingUsdt <= lvlUsd) {
+          weightedPriceSum += remainingUsdt;
+          filledUsdt += remainingUsdt;
+          remainingUsdt = 0;
+          break;
+        } else {
+          weightedPriceSum += lvlUsd;
+          filledUsdt += lvlUsd;
+          remainingUsdt -= lvlUsd;
+        }
+      }
+
+      let simulatedBookSlippage = 0.04;
+      if (filledUsdt > 0) {
+        const avgExecPrice = weightedPriceSum / (filledUsdt / input.currentPrice);
+        simulatedBookSlippage = Math.abs((avgExecPrice - input.currentPrice) / input.currentPrice) * 100;
+      }
+
+      // If the order size exceeds the entire visible order book depth
+      if (remainingUsdt > 0) {
+        const unmetRatio = remainingUsdt / Math.max(1, notionalValueUsdt);
+        simulatedBookSlippage += unmetRatio * 1.5; // Heavy slippage penalty for clearing book
+      }
+
+      estimatedSlippagePercent = Math.max(0.02, simulatedBookSlippage + (bookSpread * 0.5));
+
+      // Liquidity Depth Check: Reject if available depth cannot sustain position size (coverage < 0.6x)
+      if (depthCoverageRatio < 0.60 || remainingUsdt > 0) {
+        return {
+          isValid: false,
+          reasonCode: 'INSUFFICIENT_LIQUIDITY',
+          message: `Order book depth ($${availableDepthUsdt.toFixed(0)} USDT) is insufficient to sustain requested position size ($${notionalValueUsdt.toFixed(0)} USDT). Coverage: ${depthCoverageRatio.toFixed(2)}x. Trade blocked to prevent severe slippage.`,
+          spreadPercent,
+          estimatedSlippagePercent,
+          volatilityRegime,
+          marketRegime: input.marketRegime || 'TRENDING',
+          atrPercent,
+        };
+      }
     } else if (input.atr14) {
       // ATR proxy
       const atrRatio = (input.atr14 / input.currentPrice) * 100;
@@ -134,11 +189,11 @@ export class MarketProtection {
       return {
         isValid: false,
         reasonCode: 'EXCESSIVE_SLIPPAGE',
-        message: `Estimated market slippage (${estimatedSlippagePercent.toFixed(3)}%) exceeds configured maximum allowed (${config.maxSlippagePercent}%).`,
+        message: `Estimated market slippage (${estimatedSlippagePercent.toFixed(3)}%) exceeds configured maximum allowed (${config.maxSlippagePercent}%). Insufficient order book depth for execution.`,
         spreadPercent,
         estimatedSlippagePercent,
         volatilityRegime,
-        marketRegime: 'UNCERTAIN',
+        marketRegime: input.marketRegime || 'UNCERTAIN',
         atrPercent,
       };
     }

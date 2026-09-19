@@ -301,12 +301,31 @@ export interface TradeHistoryItem {
   reason?: string;
 }
 
+export interface LiquidityHealthAssessment {
+  symbol: string;
+  timestamp: number;
+  currentPrice: number;
+  calculatedPositionUsdt: number;
+  calculatedQuantity: number;
+  availableDepthUsdt: number;
+  depthRatio: number; // availableDepthUsdt / calculatedPositionUsdt
+  estimatedSlippagePercent: number;
+  spreadPercent: number;
+  tradeVolume24hUsdt: number;
+  volumeRatio: number; // calculatedPositionUsdt / (volume24hUsdt / 24)
+  status: 'EXCELLENT' | 'SUFFICIENT' | 'MODERATE' | 'INSUFFICIENT' | 'CRITICAL_ILLIQUID';
+  slippageRisk: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  recommendedMaxSizeUsdt: number;
+  warnings: string[];
+  suggestedAction: string;
+}
+
 export interface PushAlert {
   id: string;
   title: string;
   body: string;
   timestamp: number;
-  type: 'SIGNAL' | 'PRICE' | 'TARGET_HIT' | 'STOP_LOSS_HIT' | 'SYSTEM' | 'REGIME_CHANGE';
+  type: 'SIGNAL' | 'PRICE' | 'TARGET_HIT' | 'STOP_LOSS_HIT' | 'SYSTEM' | 'REGIME_CHANGE' | 'LIQUIDITY_WARNING';
   decision?: DecisionType;
   symbol?: string;
   price?: number;

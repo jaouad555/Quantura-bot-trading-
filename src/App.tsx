@@ -47,6 +47,7 @@ import { binanceWsManager } from './utils/binanceWs';
 import { generateQuantitativePlan, determineOptimalBotTimeframe } from './utils/quantEngine';
 import { calculateTechnicalIndicators } from './utils/indicators';
 import { TradingPair, RESPECTED_TRADING_PAIRS } from './utils/tradingPairs';
+import { LiquidityMonitor } from './utils/liquidityMonitor';
 import { sendTelegramMessage } from './utils/telegram';
 import {
   LayoutDashboard,
@@ -558,6 +559,18 @@ export const App: React.FC = () => {
       };
     }
   });
+
+  // Real-Time Liquidity Assessment for Active Pair & Signal
+  const liquidityAssessment = React.useMemo(() => {
+    return LiquidityMonitor.evaluateLiquidity({
+      symbol: selectedSymbol,
+      orderBook: marketData?.orderBook || null,
+      ticker: ticker,
+      activeSignal: activeSignal,
+      botConfig: botConfig,
+      accountEquity: paperWallet.balance + activeBotPositions.reduce((acc, p) => acc + (p.marginUsdt || 0), 0),
+    });
+  }, [selectedSymbol, marketData?.orderBook, ticker, activeSignal, botConfig, paperWallet.balance, activeBotPositions]);
 
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
@@ -3046,6 +3059,8 @@ export const App: React.FC = () => {
                 }}
                 onNotifyRecommendation={(plan) => pushNewAlert(plan, true)}
                 onOpenNotifications={() => setIsNotificationsOpen(true)}
+                liquidityAssessment={liquidityAssessment}
+                onOpenDepthDetails={() => setActiveTab('market')}
               />
 
               <div className="flex-1 min-h-0" style={{ visibility: isSettingsOpen || isBinanceModalOpen ? 'hidden' : 'visible' }}>

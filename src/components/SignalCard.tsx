@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { AIAnalysisResult, Language, Timeframe, AutoBotConfig } from '../types';
+import { AIAnalysisResult, Language, Timeframe, AutoBotConfig, LiquidityHealthAssessment } from '../types';
 import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
+import { LiquidityMonitorBadge } from './LiquidityMonitorBadge';
 import {
   TrendingUp,
   TrendingDown,
@@ -31,6 +32,8 @@ interface SignalCardProps {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   botConfig?: AutoBotConfig;
+  liquidityAssessment?: LiquidityHealthAssessment | null;
+  onOpenDepthDetails?: () => void;
   onUpdateBotConfig?: (partial: Partial<AutoBotConfig>) => void;
   onNotifyRecommendation?: (plan: AIAnalysisResult) => void;
   onOpenNotifications?: () => void;
@@ -43,6 +46,8 @@ export const SignalCard: React.FC<SignalCardProps> = ({
   onAnalyze,
   isAnalyzing,
   botConfig,
+  liquidityAssessment,
+  onOpenDepthDetails,
   onUpdateBotConfig,
   onNotifyRecommendation,
   onOpenNotifications,
@@ -227,6 +232,16 @@ export const SignalCard: React.FC<SignalCardProps> = ({
                 : (isArabic ? 'إشعار التوصية 🔔' : 'Notification Signal 🔔')}
             </span>
           </button>
+
+          {/* Compact Liquidity & Slippage Monitor Badge */}
+          {liquidityAssessment && (
+            <LiquidityMonitorBadge
+              assessment={liquidityAssessment}
+              language={language}
+              onOpenDepthDetails={onOpenDepthDetails}
+              compact={true}
+            />
+          )}
         </div>
 
         {/* Signal Strength Meter */}
@@ -384,6 +399,15 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Liquidity Monitor & Slippage Assessment */}
+      {liquidityAssessment && (
+        <LiquidityMonitorBadge
+          assessment={liquidityAssessment}
+          language={language}
+          onOpenDepthDetails={onOpenDepthDetails}
+        />
+      )}
 
       {/* Trade Execution Plan Grid (Entry, TP1, TP2, TP3, SL, R:R) */}
       {(decision === 'LONG' || decision === 'SHORT') && entryZone && targets && stopLoss && (
