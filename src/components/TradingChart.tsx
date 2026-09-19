@@ -49,6 +49,10 @@ import {
   Gauge,
   Sliders,
   Sparkles,
+  CandlestickChart,
+  BarChart3,
+  AreaChart,
+  LineChart,
 } from 'lucide-react';
 
 export type ChartType = 'candlestick' | 'heikin-ashi' | 'area' | 'line';
@@ -533,7 +537,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `🎯 SIGNAL ENTRÉE: $${formatCoinPrice(entryPrice, symbol)}`,
+          title: `SIGNAL ENTRÉE: $${formatCoinPrice(entryPrice, symbol)}`,
         });
 
         const p2 = (mainSeriesRef.current as any).createPriceLine({
@@ -586,7 +590,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `⚡ BOT ${activePosition.decision} @ $${formatCoinPrice(activePosition.entryPrice, symbol)}`,
+          title: `BOT ${activePosition.decision} @ $${formatCoinPrice(activePosition.entryPrice, symbol)}`,
         });
 
         const posLines = [posLine];
@@ -598,7 +602,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lineWidth: 2,
             lineStyle: LineStyle.Dotted,
             axisLabelVisible: true,
-            title: `🛡️ BOT SL @ $${formatCoinPrice(activePosition.stopLoss, symbol)}`,
+            title: `BOT SL @ $${formatCoinPrice(activePosition.stopLoss, symbol)}`,
           });
           posLines.push(slLine);
         }
@@ -610,7 +614,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `🎯 BOT TP1 @ $${formatCoinPrice(activePosition.tp1, symbol)}`,
+            title: `BOT TP1 @ $${formatCoinPrice(activePosition.tp1, symbol)}`,
           });
           posLines.push(tp1Line);
         }
@@ -688,14 +692,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     chartApiRef.current?.timeScale().fitContent();
   }, []);
 
-  const timeframes: { tf: Timeframe; label: string }[] = [
-    { tf: '5m', label: isArabic ? '5د Scalp' : '5M Scalp' },
-    { tf: '15m', label: isArabic ? '15د Fast' : '15M Fast' },
-    { tf: '30m', label: isArabic ? '30د Mid' : '30M Mid' },
-    { tf: '1h', label: isArabic ? '1س Intraday' : '1H Intraday' },
-    { tf: '4h', label: isArabic ? '4س Swing' : '4H Swing' },
-    { tf: '1d', label: isArabic ? '1ي Daily' : isEn ? '1D Daily' : '1J Jour' },
-    { tf: '1w', label: isArabic ? '1أ Weekly' : isEn ? '1W Weekly' : '1S Hebdo' },
+  const timeframes: { tf: Timeframe; label: string; tooltip: string }[] = [
+    { tf: '5m', label: '5m', tooltip: isArabic ? '5د Scalp' : '5M Scalp' },
+    { tf: '15m', label: '15m', tooltip: isArabic ? '15د Fast' : '15M Fast' },
+    { tf: '30m', label: '30m', tooltip: isArabic ? '30د Mid' : '30M Mid' },
+    { tf: '1h', label: '1h', tooltip: isArabic ? '1س Intraday' : '1H Intraday' },
+    { tf: '4h', label: '4h', tooltip: isArabic ? '4س Swing' : '4H Swing' },
+    { tf: '1d', label: '1D', tooltip: isArabic ? '1ي Daily' : isEn ? '1D Daily' : '1J Jour' },
+    { tf: '1w', label: '1W', tooltip: isArabic ? '1أ Weekly' : isEn ? '1W Weekly' : '1S Hebdo' },
   ];
 
   // Active position live PnL calculations
@@ -722,141 +726,72 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         isFullscreen ? 'fixed inset-2 z-50 bg-slate-950/95 backdrop-blur-xl border-cyan-500/40' : 'h-full min-h-[620px]'
       }`}
     >
-      {/* 1. TOP PRO TRADING HEADER (Live Symbol, Real-Time Price, 24h Stats, Momentum Gauge) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 sm:px-4 sm:py-3 shadow-lg">
-        {/* Left: Symbol & Price Flash */}
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 text-cyan-400">
-              <BarChart2 className="w-5 h-5" />
+      {/* 1. TOP SMART TRADING CARD (Asset Identity, Live Telemetry, Unified Lucide Controls) */}
+      <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 sm:px-4 sm:py-3.5 shadow-xl flex flex-col gap-2.5">
+        {/* Row 1: Asset Identity, Status & Quick Action Buttons */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Left: Symbol & Badges */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 shrink-0">
+              <BarChart2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="text-base sm:text-lg font-black font-mono tracking-tight text-white">
                   {symbol}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 font-mono">
                   {marketType}
                 </span>
                 {trendStatus.includes('BULLISH') && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 font-mono">
                     <TrendingUp className="w-3 h-3" />
-                    {isArabic ? 'صاعد' : 'BULL'}
+                    <span>{isArabic ? 'صاعد' : 'BULL'}</span>
                   </span>
                 )}
                 {trendStatus.includes('BEARISH') && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/25 flex items-center gap-1 font-mono">
                     <TrendingDown className="w-3 h-3" />
-                    {isArabic ? 'هابط' : 'BEAR'}
+                    <span>{isArabic ? 'هابط' : 'BEAR'}</span>
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+              <p className="text-[10px] text-slate-400 flex items-center gap-1.5 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Binance Futures Stream
               </p>
             </div>
           </div>
 
-          <div className="h-8 w-px bg-slate-800 hidden sm:block" />
-
-          {/* Current Live Price */}
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
-                priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}>
-                ${formatCoinPrice(currentPrice, symbol)}
-              </span>
-              <span className={`text-xs sm:text-sm font-bold font-mono px-2 py-0.5 rounded-lg flex items-center gap-0.5 ${
-                priceChange24h >= 0
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-              }`}>
-                {priceChange24h >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                {priceChange24h >= 0 ? '+' : ''}{priceChange24h.toFixed(2)}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: 24h Metrics & Momentum HUD */}
-        <div className="flex items-center gap-3 sm:gap-6 flex-wrap text-xs font-mono">
-          {/* 24h High/Low with Mini Range Slider */}
-          <div className="hidden md:flex flex-col gap-1 min-w-[140px]">
-            <div className="flex justify-between text-[11px] text-slate-400">
-              <span>L: ${formatCoinPrice(low24h, symbol)}</span>
-              <span>H: ${formatCoinPrice(high24h, symbol)}</span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
-              <div
-                className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 rounded-full"
-                style={{ width: `${priceRangePct}%` }}
-              />
-            </div>
-          </div>
-
-          {/* RSI Momentum Gauge */}
-          <div className="flex items-center gap-2 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800/80">
-            <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-            <div>
-              <span className="text-[10px] text-slate-400 block leading-none">RSI (14)</span>
-              <span className={`font-bold ${
-                rsiValue >= 70 ? 'text-rose-400' : rsiValue <= 30 ? 'text-emerald-400' : 'text-cyan-300'
-              }`}>
-                {rsiValue}{' '}
-                <span className="text-[10px] text-slate-400 font-normal">
-                  {rsiValue >= 70 ? (isArabic ? 'تشبع شراء' : 'Suracheté') : rsiValue <= 30 ? (isArabic ? 'تشبع بيع' : 'Survendu') : (isArabic ? 'معتدل' : 'Neutre')}
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {/* Order Pressure Bar (Buyers vs Sellers) */}
-          <div className="hidden lg:flex flex-col gap-1 min-w-[110px]">
-            <div className="flex justify-between text-[10px]">
-              <span className="text-emerald-400 font-bold">{volumePressure.buyersPct}% B</span>
-              <span className="text-rose-400 font-bold">{volumePressure.sellersPct}% S</span>
-            </div>
-            <div className="w-full h-1.5 bg-rose-500/40 rounded-full overflow-hidden flex">
-              <div
-                className="h-full bg-emerald-500 transition-all duration-300"
-                style={{ width: `${volumePressure.buyersPct}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Action Tools (Reset Zoom, Indicators, Fullscreen) */}
-          <div className="flex items-center gap-1.5">
+          {/* Right: Quick Action Tools (Unified Lucide Family) */}
+          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90">
             <button
               id="btn-chart-reset-zoom"
               onClick={handleResetZoom}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-300 hover:text-white transition cursor-pointer active:scale-95"
+              className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer active:scale-95"
               title={isArabic ? 'إعادة ضبط العرض' : 'Recentrer le graphique'}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
-
             <button
               id="btn-chart-toggle-indicators-bar"
               onClick={() => setShowIndicatorsBar(!showIndicatorsBar)}
-              className={`p-2 rounded-xl border transition cursor-pointer active:scale-95 ${
+              className={`p-1.5 rounded-lg transition cursor-pointer active:scale-95 ${
                 showIndicatorsBar
-                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 shadow-sm'
-                  : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/80 text-slate-400'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400'
               }`}
               title={isArabic ? 'لوحة المؤشرات الفنية' : 'Barre des indicateurs'}
             >
               <Sliders className="w-3.5 h-3.5" />
             </button>
-
             <button
               id="btn-chart-fullscreen"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className={`p-2 rounded-xl border transition cursor-pointer active:scale-95 ${
+              className={`p-1.5 rounded-lg transition cursor-pointer active:scale-95 ${
                 isFullscreen
-                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                  : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/80 text-slate-300'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white'
               }`}
               title={isFullscreen ? (isArabic ? 'تصغير' : 'Réduire') : (isArabic ? 'ملء الشاشة' : 'Plein écran')}
             >
@@ -864,82 +799,118 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             </button>
           </div>
         </div>
-      </div>
 
-      {/* 2. TIMEFRAME & CHART STYLE TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-2xl border border-slate-800/60">
-        {/* Timeframe selector pills */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-          {timeframes.map(({ tf, label }) => (
+        {/* Row 2: Live Price, Telemetry, and Lucide Chart Type Switcher */}
+        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-800/70 flex-wrap">
+          {/* Price & Sentiment Metrics */}
+          <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
+            {/* Real-Time Price */}
+            <div className="flex items-baseline gap-2">
+              <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
+                priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}>
+                ${formatCoinPrice(currentPrice, symbol)}
+              </span>
+              <span className={`text-[11px] sm:text-xs font-bold font-mono px-2 py-0.5 rounded-lg flex items-center gap-0.5 ${
+                priceChange24h >= 0
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
+              }`}>
+                {priceChange24h >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                {priceChange24h >= 0 ? '+' : ''}{priceChange24h.toFixed(2)}%
+              </span>
+            </div>
+
+            {/* Smart RSI Pill */}
+            <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800/80 font-mono">
+              <Gauge className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10px] text-slate-400">RSI:</span>
+                <span className={`font-bold text-[11px] ${
+                  rsiValue >= 70 ? 'text-rose-400' : rsiValue <= 30 ? 'text-emerald-400' : 'text-cyan-300'
+                }`}>
+                  {rsiValue}
+                </span>
+                <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">
+                  {rsiValue >= 70 ? (isArabic ? 'تشبع شراء' : 'Suracheté') : rsiValue <= 30 ? (isArabic ? 'تشبع بيع' : 'Survendu') : (isArabic ? 'معتدل' : 'Neutre')}
+                </span>
+              </div>
+            </div>
+
+            {/* 24h High/Low Mini Slider (Desktop & Tablet) */}
+            <div className="hidden lg:flex flex-col gap-1 min-w-[120px] font-mono">
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>L: ${formatCoinPrice(low24h, symbol)}</span>
+                <span>H: ${formatCoinPrice(high24h, symbol)}</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
+                <div
+                  className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 rounded-full"
+                  style={{ width: `${priceRangePct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Chart Style Switcher (Unified Lucide Family - No emojis) */}
+          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90 font-mono">
             <button
-              id={`btn-chart-tf-${tf}`}
-              key={tf}
-              onClick={() => onTimeframeChange(tf)}
-              className={`px-3 py-1.5 text-xs font-bold font-mono rounded-xl transition-all cursor-pointer active:scale-95 shrink-0 ${
-                activeTimeframe === tf
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black shadow-md shadow-cyan-500/25 ring-1 ring-cyan-400'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 border border-transparent'
+              id="btn-style-candle"
+              onClick={() => setChartType('candlestick')}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+                chartType === 'candlestick'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
+              title={isArabic ? 'شموع يابانية' : 'Bougies'}
             >
-              {label}
+              <CandlestickChart className="w-3.5 h-3.5 text-current" />
+              <span className="hidden sm:inline">{isArabic ? 'شموع' : 'Bougies'}</span>
             </button>
-          ))}
-        </div>
-
-        {/* Chart Style Switcher (Candles, Heikin-Ashi, Area, Line) */}
-        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90">
-          <button
-            id="btn-style-candle"
-            onClick={() => setChartType('candlestick')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              chartType === 'candlestick'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Candlestick (Bougies classiques)"
-          >
-            🕯️ {isArabic ? 'شموع' : 'Bougies'}
-          </button>
-          <button
-            id="btn-style-heikin"
-            onClick={() => setChartType('heikin-ashi')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              chartType === 'heikin-ashi'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Heikin-Ashi (Bougies lissées)"
-          >
-            📊 Heikin-Ashi
-          </button>
-          <button
-            id="btn-style-area"
-            onClick={() => setChartType('area')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              chartType === 'area'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Area (Zone de gradient)"
-          >
-            🌊 {isArabic ? 'مساحة' : 'Zone'}
-          </button>
-          <button
-            id="btn-style-line"
-            onClick={() => setChartType('line')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              chartType === 'line'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Line (Ligne continue)"
-          >
-            📈 {isArabic ? 'خط' : 'Ligne'}
-          </button>
+            <button
+              id="btn-style-heikin"
+              onClick={() => setChartType('heikin-ashi')}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+                chartType === 'heikin-ashi'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Heikin-Ashi"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-current" />
+              <span className="hidden sm:inline">Heikin</span>
+            </button>
+            <button
+              id="btn-style-area"
+              onClick={() => setChartType('area')}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+                chartType === 'area'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title={isArabic ? 'مساحة' : 'Zone'}
+            >
+              <AreaChart className="w-3.5 h-3.5 text-current" />
+              <span className="hidden sm:inline">{isArabic ? 'مساحة' : 'Zone'}</span>
+            </button>
+            <button
+              id="btn-style-line"
+              onClick={() => setChartType('line')}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+                chartType === 'line'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title={isArabic ? 'خط' : 'Ligne'}
+            >
+              <LineChart className="w-3.5 h-3.5 text-current" />
+              <span className="hidden sm:inline">{isArabic ? 'خط' : 'Ligne'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 3. TECHNICAL INDICATORS CONTROL BAR (Collapsible Pills) */}
+      {/* 2. TECHNICAL INDICATORS CONTROL BAR (Collapsible Pills) */}
       {showIndicatorsBar && (
         <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-900/70 border border-slate-800/80 rounded-2xl animate-in fade-in duration-200">
           <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
@@ -1065,11 +1036,31 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </div>
       )}
 
-      {/* 4. REAL-TIME CANDLE INSPECTION BAR (Crosshair HUD) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/80 border border-slate-800/80 rounded-xl text-xs font-mono text-slate-300">
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          <span className="text-slate-400">
-            {hoveredCandle ? (isArabic ? 'الشمعة المحددة:' : 'Curseur:') : (isArabic ? 'الشمعة الحالية:' : 'Dernier bar:')}
+      {/* 3. COMPACT TOOLBAR DIRECTLY ABOVE THE CHART CANVAS (All Timeframes Visible + Small Buttons + Live OHLCV HUD) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-900/90 border border-slate-800/90 rounded-xl">
+        {/* All Timeframes as Compact Visible Small Buttons */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+          {timeframes.map(({ tf, label, tooltip }) => (
+            <button
+              id={`btn-chart-tf-${tf}`}
+              key={tf}
+              onClick={() => onTimeframeChange(tf)}
+              title={tooltip}
+              className={`px-2 sm:px-2.5 py-1 text-[11px] font-bold font-mono rounded-lg transition-all cursor-pointer active:scale-95 shrink-0 ${
+                activeTimeframe === tf
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black shadow-md shadow-cyan-500/30 ring-1 ring-cyan-400'
+                  : 'bg-slate-950/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800/90'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Real-Time Candle Inspection Bar (Crosshair HUD) */}
+        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap text-xs font-mono text-slate-300">
+          <span className="text-slate-400 text-[11px]">
+            {hoveredCandle ? (isArabic ? 'المحددة:' : 'Curseur:') : (isArabic ? 'الحالية:' : 'Dernier:')}
           </span>
           <span>
             <strong className="text-slate-400">O:</strong>{' '}
@@ -1100,14 +1091,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               {(hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0).toFixed(2)}%
             </span>
           </span>
-          <span>
+          <span className="hidden sm:inline">
             <strong className="text-slate-400">Vol:</strong>{' '}
             <span className="text-cyan-300">{(hoveredCandle?.volume ?? latestCandle?.volume ?? 0).toFixed(2)}</span>
           </span>
         </div>
 
         {/* Indicators values on crosshair */}
-        <div className="hidden xl:flex items-center gap-3 text-[11px]">
+        <div className="hidden xl:flex items-center gap-2.5 text-[11px] font-mono">
           {showEma20 && hoveredCandle?.ema20 && (
             <span className="text-amber-400">EMA20: ${formatCoinPrice(hoveredCandle.ema20, symbol)}</span>
           )}
