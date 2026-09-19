@@ -489,6 +489,7 @@ export interface AutoBotConfig {
   cooldownMinutes?: number; // Minimum wait after closing before re-entering same symbol
   allowedSymbols?: string[]; // Whitelist of symbols to monitor and trade
   multiPairScanning?: boolean; // Autonomous scanning across top watchlist symbols
+  autoAdaptiveStrategy?: boolean; // AI reads market regime in real-time and auto-matches optimal strategy
   activePresets?: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[]; // Currently selected presets in UI
 }
 

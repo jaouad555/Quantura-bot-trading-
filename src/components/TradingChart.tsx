@@ -1120,108 +1120,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </div>
       </div>
 
-      {/* 5. MAIN INTERACTIVE CANVAS WITH FLOATING HUD OVERLAYS */}
+      {/* 5. MAIN INTERACTIVE CANVAS */}
       <div className="relative w-full flex-1 overflow-hidden rounded-2xl bg-slate-950 border border-slate-800/90 min-h-[420px]">
         {/* Canvas DOM container */}
         <div ref={chartContainerRef} className="w-full h-full min-h-[420px]" />
-
-        {/* Active Floating Position HUD (When an open trade exists) */}
-        {activePosition && positionPnl && (
-          <div className="absolute bottom-3 left-3 z-20 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3 sm:p-4 shadow-2xl flex flex-col gap-2 max-w-[340px] animate-in slide-in-from-bottom duration-300 ring-1 ring-slate-700/50">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`px-2 py-0.5 rounded-lg text-xs font-black font-mono tracking-wider ${
-                    activePosition.decision === 'LONG'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                  }`}
-                >
-                  {activePosition.decision} {activePosition.leverage ? `${activePosition.leverage}x` : ''}
-                </span>
-                <span className="text-xs font-bold text-white font-mono">{symbol}</span>
-              </div>
-              <div
-                className={`text-sm font-black font-mono px-2 py-0.5 rounded-lg ${
-                  positionPnl.isProfit
-                    ? 'bg-emerald-500/15 text-emerald-400'
-                    : 'bg-rose-500/15 text-rose-400'
-                }`}
-              >
-                {positionPnl.isProfit ? '+' : ''}${positionPnl.unrealizedUsdt} ({positionPnl.isProfit ? '+' : ''}
-                {positionPnl.roePercent}%)
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950/80 p-2 rounded-xl border border-slate-800/80 text-slate-300">
-              <div>
-                <span className="text-slate-500 block text-[10px]">
-                  {isArabic ? 'سعر الدخول' : 'Prix Entrée'}
-                </span>
-                <span className="font-bold text-white">${formatCoinPrice(activePosition.entryPrice, symbol)}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">
-                  {isArabic ? 'وقف الخسارة (SL)' : 'Stop Loss'}
-                </span>
-                <span className="font-bold text-rose-400">
-                  {activePosition.stopLoss > 0 ? `$${formatCoinPrice(activePosition.stopLoss, symbol)}` : 'N/A'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">TP1 Target</span>
-                <span className={`font-bold ${activePosition.tp1Hit ? 'text-emerald-400 line-through' : 'text-emerald-300'}`}>
-                  ${formatCoinPrice(activePosition.tp1, symbol)} {activePosition.tp1Hit && '✓'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">TP2 Target</span>
-                <span className={`font-bold ${activePosition.tp2Hit ? 'text-emerald-400 line-through' : 'text-emerald-300'}`}>
-                  ${formatCoinPrice(activePosition.tp2, symbol)} {activePosition.tp2Hit && '✓'}
-                </span>
-              </div>
-            </div>
-
-            {onManualClosePosition && (
-              <button
-                id="btn-chart-close-pos"
-                onClick={() => onManualClosePosition(activePosition.id)}
-                className="w-full py-1.5 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>{isArabic ? 'إغلاق الصفقة فوراً بالسعر الحالي' : 'Clôturer la position au marché'}</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Floating AI Signal Badge in Top Left */}
-        {activeSignal && showSignalLevels && (
-          <div className="absolute top-2.5 left-2.5 z-10 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-1.5 text-[11px] font-mono text-slate-300 flex items-center gap-2.5 shadow-lg">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                activeSignal.decision === 'LONG'
-                  ? 'bg-emerald-400 animate-pulse'
-                  : activeSignal.decision === 'SHORT'
-                  ? 'bg-rose-400 animate-pulse'
-                  : 'bg-amber-400'
-              }`}
-            />
-            <span className="font-bold text-white">
-              {activeSignal.decision} ({activeSignal.confidence}%)
-            </span>
-            <span className="text-slate-500">|</span>
-            <span className="text-blue-400">
-              Entry: ${formatCoinPrice(activeSignal.entryZone?.ideal || 0, symbol)}
-            </span>
-            <span className="text-emerald-400">
-              TP1: ${formatCoinPrice(activeSignal.targets?.tp1 || 0, symbol)}
-            </span>
-            <span className="text-rose-400">
-              SL: ${formatCoinPrice(activeSignal.stopLoss || 0, symbol)}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* 6. BOTTOM PIVOT POINTS & TECHNICAL SUPPORT/RESISTANCE TARGETS FOOTER */}

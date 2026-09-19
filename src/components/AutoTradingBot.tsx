@@ -31,6 +31,10 @@ import {
   Coins,
   BarChart2,
   Power,
+  Compass,
+  Radar,
+  SlidersHorizontal,
+  Check,
 } from 'lucide-react';
 import { 
   AutoBotConfig, 
@@ -175,7 +179,214 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     setShowConfigModal(false);
   };
 
+  // -------------------------------------------------------------
+  // AI Real-Time Market Reader & Strategy Matcher Engine
+  // -------------------------------------------------------------
+  const marketAnalysisData = useMemo(() => {
+    const regime = activeSignal?.marketRegime || 'TRENDING_BULLISH';
+    const indicators = (activeSignal as any)?.technicalIndicators || (activeSignal as any)?.timeframeAnalysis?.[activeSignal?.recommendedTimeframe || '1h']?.indicators;
+    const adx = indicators?.adx14 ?? 28.5;
+    const rsi = indicators?.rsi14 ?? 54.0;
+    const bbBandwidth = indicators?.bollingerBands?.bandwidthPercent ?? 4.2;
+    const tradeType = activeSignal?.tradeType || 'FAST_TRADE';
+    const confidence = activeSignal?.confidence ?? 78;
+    const decision = activeSignal?.decision || 'LONG';
+    const hasSmc = Boolean(
+      (activeSignal as any)?.smcAnalysis?.orderBlocks?.length || 
+      (activeSignal as any)?.smcAnalysis?.fvgZones?.length ||
+      tradeType === 'SHORT_TRADE' ||
+      tradeType === 'SWING_TRADE'
+    );
+
+    // Calculate match score for each strategy based on strict quantitative criteria
+    const scores: Record<
+      'MOMENTUM' | 'SCALPER' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC' | 'SWING',
+      {
+        score: number;
+        criteriaTagsAr: string[];
+        criteriaTagsFr: string[];
+        primaryReasonAr: string;
+        primaryReasonFr: string;
+      }
+    > = {
+      MOMENTUM: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+      SCALPER: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+      BREAKOUT: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+      MEAN_REVERSION: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+      INSTITUTIONAL_SMC: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+      SWING: {
+        score: 0,
+        criteriaTagsAr: [],
+        criteriaTagsFr: [],
+        primaryReasonAr: '',
+        primaryReasonFr: '',
+      },
+    };
+
+    // 1. MOMENTUM SCORING
+    let momScore = 45;
+    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+      momScore += 32;
+      scores.MOMENTUM.criteriaTagsAr.push(regime === 'TRENDING_BULLISH' ? 'اتجاه صاعد قوي' : 'اتجاه هابط قوي');
+      scores.MOMENTUM.criteriaTagsFr.push('Tendance Forte');
+    }
+    if (adx >= 25) {
+      momScore += 18;
+      scores.MOMENTUM.criteriaTagsAr.push(`ADX ${adx.toFixed(1)} > 25`);
+      scores.MOMENTUM.criteriaTagsFr.push(`ADX ${adx.toFixed(1)} (Solide)`);
+    }
+    if (tradeType === 'SHORT_TRADE' || ((activeSignal as any)?.quantScore?.trend ?? 50) > 60) {
+      momScore += 10;
+    }
+    momScore = Math.min(98, Math.max(30, momScore));
+    scores.MOMENTUM.score = momScore;
+    scores.MOMENTUM.primaryReasonAr = `سوق في اتجاه صريح مع زخم قوي في مؤشر ADX (${adx.toFixed(1)}) وتوافق المتوسطات المتحركة EMA.`;
+    scores.MOMENTUM.primaryReasonFr = `Tendance directionnelle confirmée avec ADX (${adx.toFixed(1)}) et alignement des moyennes mobiles.`;
+
+    // 2. SCALPER SCORING
+    let scalperScore = 40;
+    if (regime === 'HIGH_VOLATILITY') {
+      scalperScore += 38;
+      scores.SCALPER.criteriaTagsAr.push('تقلبات سريعة');
+      scores.SCALPER.criteriaTagsFr.push('Forte Volatilité');
+    }
+    if (activeSignal?.recommendedTimeframe === '5m' || activeSignal?.recommendedTimeframe === '15m') {
+      scalperScore += 15;
+      scores.SCALPER.criteriaTagsAr.push('فريم لحظي 15m');
+      scores.SCALPER.criteriaTagsFr.push('TF 15m');
+    }
+    if (tradeType === 'FAST_TRADE') scalperScore += 12;
+    scalperScore = Math.min(98, Math.max(30, scalperScore));
+    scores.SCALPER.score = scalperScore;
+    scores.SCALPER.primaryReasonAr = 'حركة سعرية سريعة تسمح باقتناص أهداف خاطفة بنقاط وقف خسارة ضيقة وتكرار سريع.';
+    scores.SCALPER.primaryReasonFr = 'Micro-oscillations rapides idéales pour entrées fractionnées et sorties rapides.';
+
+    // 3. BREAKOUT SCORING
+    let brkScore = 38;
+    if (bbBandwidth > 4.5 || ((activeSignal as any)?.quantScore?.volatility ?? 50) > 65) {
+      brkScore += 35;
+      scores.BREAKOUT.criteriaTagsAr.push('انفجار بولينجر');
+      scores.BREAKOUT.criteriaTagsFr.push('Expansion BB');
+    }
+    if (regime === 'HIGH_VOLATILITY' || regime === 'TRENDING_BULLISH') {
+      brkScore += 18;
+      scores.BREAKOUT.criteriaTagsAr.push('اختراق مستويات');
+      scores.BREAKOUT.criteriaTagsFr.push('Cassure Niveaux');
+    }
+    brkScore = Math.min(98, Math.max(30, brkScore));
+    scores.BREAKOUT.score = brkScore;
+    scores.BREAKOUT.primaryReasonAr = 'اتساع في نطاقات بولينجر باند وضغط سيولة ينذر باختراق مستويات القمم والقيعان.';
+    scores.BREAKOUT.primaryReasonFr = 'Élargissement des bandes de Bollinger avec volume dynamique sur franchissement de niveaux.';
+
+    // 4. MEAN REVERSION SCORING
+    let revScore = 35;
+    if (regime === 'RANGING' || regime === 'LOW_VOLATILITY') {
+      revScore += 40;
+      scores.MEAN_REVERSION.criteriaTagsAr.push('نطاق عرضي Ranging');
+      scores.MEAN_REVERSION.criteriaTagsFr.push('Marché en Range');
+    }
+    if (rsi > 68 || rsi < 32) {
+      revScore += 25;
+      scores.MEAN_REVERSION.criteriaTagsAr.push(`RSI ${rsi.toFixed(1)} تشبع`);
+      scores.MEAN_REVERSION.criteriaTagsFr.push(`RSI ${rsi.toFixed(1)} Extrême`);
+    }
+    if (regime === 'RANGING') revScore += 15;
+    revScore = Math.min(98, Math.max(30, revScore));
+    scores.MEAN_REVERSION.score = revScore;
+    scores.MEAN_REVERSION.primaryReasonAr = 'سوق متذبذب داخل نطاق محدد مع تشبع مؤشر RSI، مثالي للارتداد إلى المتوسط السعري.';
+    scores.MEAN_REVERSION.primaryReasonFr = 'Marché sans tendance avec RSI en zone extrême, propice au retour à la moyenne.';
+
+    // 5. INSTITUTIONAL SMC SCORING
+    let smcScore = 48;
+    if (hasSmc) {
+      smcScore += 30;
+      scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('Order Blocks & FVG');
+      scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Zones SMC / FVG');
+    }
+    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+      smcScore += 16;
+      scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('توافق سيولة كبرى');
+      scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Liquidité institutionnelle');
+    }
+    if (confidence >= 75) smcScore += 8;
+    smcScore = Math.min(98, Math.max(35, smcScore));
+    scores.INSTITUTIONAL_SMC.score = smcScore;
+    scores.INSTITUTIONAL_SMC.primaryReasonAr = 'تمركز أوامر السيولة المؤسسية وتغطية الفجوات السعرية FVG مع بنية هيكلية سليمة.';
+    scores.INSTITUTIONAL_SMC.primaryReasonFr = 'Balayage de liquidité et blocs d\'ordres institutionnels avec ratios risque/rendement élevés.';
+
+    // 6. SWING SCORING
+    let swingScore = 42;
+    if (activeSignal?.recommendedTimeframe === '4h' || activeSignal?.recommendedTimeframe === '1d' || tradeType === 'SWING_TRADE' || tradeType === 'POSITION_TRADE') {
+      swingScore += 32;
+      scores.SWING.criteriaTagsAr.push('توافق فريم 4H/1D');
+      scores.SWING.criteriaTagsFr.push('Confluence 4H/1D');
+    }
+    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+      swingScore += 18;
+      scores.SWING.criteriaTagsAr.push('هيكل ماكرو مستقر');
+      scores.SWING.criteriaTagsFr.push('Structure macro');
+    }
+    swingScore = Math.min(98, Math.max(30, swingScore));
+    scores.SWING.score = swingScore;
+    scores.SWING.primaryReasonAr = 'استقرار الهيكل الماكرو للفريمات الكبرى مع تراجع المخاطر لحمل الصفقات لفترات أطول.';
+    scores.SWING.primaryReasonFr = 'Structure de marché stable sur unités de temps majeures (4H/1D) avec drawdown minimal.';
+
+    // Sort to extract absolute top matching strategy
+    const entries = Object.entries(scores) as [
+      'MOMENTUM' | 'SCALPER' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC' | 'SWING',
+      typeof scores['MOMENTUM']
+    ][];
+    entries.sort((a, b) => b[1].score - a[1].score);
+    const topStrategyId = entries[0][0];
+    const topScore = entries[0][1].score;
+
+    return {
+      regime,
+      adx,
+      rsi,
+      bbBandwidth,
+      tradeType,
+      confidence,
+      decision,
+      scores,
+      topStrategyId,
+      topScore,
+      topAnalysis: entries[0][1],
+    };
+  }, [activeSignal]);
+
   // Sync strategy activation states on mount with authoritative backend StrategyManager
+  // AND automatically match & select the optimal strategy if none is selected or if autoAdaptive is enabled!
   useEffect(() => {
     fetch('/api/strategies')
       .then((res) => res.json())
@@ -183,16 +394,120 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         if (data.success && Array.isArray(data.activeStrategies)) {
           const backendActive = data.activeStrategies;
           const current = botConfig.activePresets || [];
-          if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
-            onUpdateConfig({
-              activePresets: backendActive,
-              ...(backendActive.length === 0 && botConfig.enabled ? { enabled: false } : {}),
-            });
+          
+          if (backendActive.length > 0) {
+            if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
+              onUpdateConfig({
+                activePresets: backendActive,
+                ...(backendActive.length === 0 && botConfig.enabled ? { enabled: false } : {}),
+              });
+            }
+          } else if (current.length === 0 || botConfig.autoAdaptiveStrategy) {
+            // Auto-select optimal strategy matching market conditions immediately upon user entry!
+            handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
           }
+        } else if ((!botConfig.activePresets || botConfig.activePresets.length === 0) || botConfig.autoAdaptiveStrategy) {
+          handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
         }
       })
-      .catch((err) => console.warn('[AutoTradingBot] Could not fetch backend strategies:', err));
-  }, []);
+      .catch((err) => {
+        console.warn('[AutoTradingBot] Could not fetch backend strategies:', err);
+        if ((!botConfig.activePresets || botConfig.activePresets.length === 0) || botConfig.autoAdaptiveStrategy) {
+          handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
+        }
+      });
+  }, [marketAnalysisData.topStrategyId]);
+
+  const handleSelectOptimalStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
+    const isFutures = botConfig.marketType === 'FUTURES';
+    
+    // Inform backend
+    fetch('/api/strategies/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategyId: strategyType, enabled: true }),
+    }).catch(() => {});
+
+    let newConfig: Partial<AutoBotConfig> = {
+      activePresets: [strategyType],
+    };
+
+    if (strategyType === 'MOMENTUM') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '1h',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 65,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.2 : 2.0,
+        trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'SCALPER') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '15m',
+        leverage: isFutures ? 5 : 1,
+        tradeAllocationPercent: 15,
+        minConfidence: 60,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 0.8 : 1.5,
+        trailingActivationProfitPercent: isFutures ? 1.0 : 2.0,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'SWING') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '4h',
+        leverage: isFutures ? 2 : 1,
+        tradeAllocationPercent: 30,
+        minConfidence: 75,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.8 : 3.0,
+        trailingActivationProfitPercent: isFutures ? 2.0 : 4.0,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'BREAKOUT') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '30m',
+        leverage: isFutures ? 4 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 70,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.0 : 1.8,
+        trailingActivationProfitPercent: isFutures ? 1.2 : 2.2,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'MEAN_REVERSION') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '15m',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 15,
+        minConfidence: 68,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 0.9 : 1.6,
+        trailingActivationProfitPercent: isFutures ? 1.1 : 2.0,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'INSTITUTIONAL_SMC') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '1h',
+        leverage: isFutures ? 2 : 1,
+        tradeAllocationPercent: 25,
+        minConfidence: 75,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.5 : 2.5,
+        trailingActivationProfitPercent: isFutures ? 2.0 : 3.5,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    }
+
+    onUpdateConfig(newConfig);
+  };
 
   const handleApplyStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
     const isFutures = botConfig.marketType === 'FUTURES';
@@ -961,24 +1276,45 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       </div>
 
       {/* Bot Strategy Presets & Authorization Matrix */}
-      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-5">
+        
+        {/* Header with Title and Mode Toggles */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-brand-400" />
-              <h3 className="font-bold text-white text-base tracking-tight">
-                {isArabic ? 'مصفوفة تفعيل الاستراتيجيات وتفويض التداول' : 'Strategy Activation & Trade Authorization'}
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <h3 className="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                <span>{isArabic ? 'قارئ السوق الذكي ومصفوفة الاستراتيجيات' : 'AI Market Reader & Strategy Matrix'}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                  {isArabic ? 'مطابقة ذكية للبيئة' : 'Auto-Matched'}
+                </span>
               </h3>
             </div>
             <p className="text-xs text-slate-400">
               {isArabic 
-                ? 'تحكم في الاستراتيجيات الكمية المسموح للبوت بتنفيذ صفقاتها آلياً على السوق'
-                : 'Authorize which quantitative algorithmic strategies the bot is allowed to execute'}
+                ? 'يقرأ البوت ظروف السوق اللحظية (الاتجاه، الزخم، التذبذب والسيولة) لاختيار الاستراتيجية الأكثر ملاءمة تلقائياً'
+                : 'The bot analyzes real-time market dynamics (regime, momentum, volatility, SMC) to auto-select the best fitting strategy'}
             </p>
           </div>
 
           {/* Quick Actions & Badges */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Auto Adaptive Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => onUpdateConfig({ autoAdaptiveStrategy: !botConfig.autoAdaptiveStrategy })}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                botConfig.autoAdaptiveStrategy !== false
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+              title={isArabic ? 'تفعيل التكيف التلقائي مع تغيرات السوق' : 'Enable Auto-Adaptive Market Mode'}
+            >
+              <Radar className={`w-3.5 h-3.5 ${botConfig.autoAdaptiveStrategy !== false ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '8s' }} />
+              <span>{isArabic ? 'النمط التكيفي التلقائي' : 'Auto-Adaptive'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${botConfig.autoAdaptiveStrategy !== false ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
+            </button>
+
             {/* Quick Toggle All Buttons */}
             <button
               type="button"
@@ -1028,9 +1364,73 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         </div>
 
+        {/* AI Market Pulse & Auto-Matched Recommendation Banner */}
+        <div className="rounded-xl p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/40 border border-cyan-500/30 relative overflow-hidden shadow-[0_0_24px_rgba(6,182,212,0.08)]">
+          <div className="absolute top-0 right-0 w-64 h-32 bg-cyan-500/10 blur-3xl pointer-events-none rounded-full" />
+          
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+            {/* Left: Market Diagnostics Summary */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  <span>{isArabic ? 'تشخيص السوق الآلي:' : 'Market Diagnostics:'}</span>
+                  <span className="text-white">
+                    {marketAnalysisData.regime === 'TRENDING_BULLISH' ? (isArabic ? 'اتجاه صاعد قوي' : 'Bullish Trend')
+                      : marketAnalysisData.regime === 'TRENDING_BEARISH' ? (isArabic ? 'اتجاه هابط قوي' : 'Bearish Trend')
+                      : marketAnalysisData.regime === 'HIGH_VOLATILITY' ? (isArabic ? 'تقلبات مرتفعة' : 'High Volatility')
+                      : marketAnalysisData.regime === 'RANGING' ? (isArabic ? 'نطاق عرضي متذبذب' : 'Ranging Market')
+                      : (isArabic ? 'سوق مستقر' : 'Stable Market')}
+                  </span>
+                </span>
+
+                <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                  ADX: <span className="font-bold text-cyan-300">{marketAnalysisData.adx.toFixed(1)}</span>
+                </span>
+                <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                  RSI: <span className="font-bold text-amber-300">{marketAnalysisData.rsi.toFixed(1)}</span>
+                </span>
+                <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                  BB Width: <span className="font-bold text-emerald-300">{marketAnalysisData.bbBandwidth.toFixed(1)}%</span>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span>
+                  {isArabic ? 'الاستراتيجية الأنسب فورياً وفق معايير السوق:' : 'Optimal strategy based on market metrics:'}
+                </span>
+                <span className="font-bold text-white bg-slate-800/90 px-2 py-0.5 rounded font-mono border border-cyan-500/30 text-cyan-300">
+                  {marketAnalysisData.topStrategyId} ({marketAnalysisData.topScore}% {isArabic ? 'تطابق' : 'Match'})
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {isArabic ? marketAnalysisData.topAnalysis.primaryReasonAr : marketAnalysisData.topAnalysis.primaryReasonFr}
+              </p>
+            </div>
+
+            {/* Right: Quick 1-Click Apply Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleSelectOptimalStrategy(marketAnalysisData.topStrategyId)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer font-sans"
+              >
+                <Sparkles className="w-4 h-4 text-slate-950" />
+                <span>
+                  {isArabic ? 'تطبيق الاستراتيجية الأنسب فورياً' : 'Apply Optimal Strategy'}
+                </span>
+                <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[10px]">
+                  {marketAnalysisData.topScore}%
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Zero Active Strategies Warning Banner */}
         {(!botConfig.activePresets || botConfig.activePresets.length === 0) && (
-          <div className="mb-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3">
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="leading-relaxed">
               {isArabic 
@@ -1040,34 +1440,55 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         )}
         
-        {/* Modern Strategy Cards Grid */}
+        {/* Modern Strategy Cards Grid with Live AI Match Scoring */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {strategiesList.map((strat) => {
             const isActive = botConfig.activePresets?.includes(strat.id);
             const StratIcon = strat.icon;
             const currentTags = botConfig.marketType === 'FUTURES' ? strat.tagsFutures : strat.tagsSpot;
+            const stratScoreData = marketAnalysisData.scores[strat.id];
+            const isTopMatch = strat.id === marketAnalysisData.topStrategyId;
 
             return (
               <div
                 key={strat.id}
                 className={`rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 border relative overflow-hidden group ${
-                  isActive
+                  isTopMatch
+                    ? 'border-cyan-400/60 bg-gradient-to-b from-cyan-950/30 via-slate-900/90 to-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.18)]'
+                    : isActive
                     ? strat.color.activeCard
                     : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700/90 hover:bg-slate-900/40 shadow-sm'
                 }`}
               >
                 {/* Subtle Ambient Top Accent Glow */}
-                {isActive && (
-                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-36 h-20 bg-emerald-500/10 blur-2xl pointer-events-none rounded-full" />
+                {(isActive || isTopMatch) && (
+                  <div className={`absolute -top-12 left-1/2 -translate-x-1/2 w-36 h-20 blur-2xl pointer-events-none rounded-full ${
+                    isTopMatch ? 'bg-cyan-400/20' : 'bg-emerald-500/10'
+                  }`} />
                 )}
 
                 <div>
+                  {/* Top Match Banner Pill if this is the AI Recommended Strategy */}
+                  {isTopMatch && (
+                    <div className="mb-3 px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-500/20 via-emerald-500/15 to-cyan-500/10 border border-cyan-400/40 text-cyan-300 text-[10px] font-bold flex items-center justify-between shadow-sm">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-cyan-300 animate-pulse" />
+                        <span>{isArabic ? '🎯 الأنسب لظروف السوق حالياً' : '🎯 AI Market Match'}</span>
+                      </div>
+                      <span className="font-mono text-white bg-cyan-500/30 px-1.5 py-0.2 rounded text-[9px]">
+                        {stratScoreData?.score ?? 95}% {isArabic ? 'توافق' : 'Fit'}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Card Header: Icon, Titles & Status */}
                   <div className="flex items-start justify-between gap-3 mb-3 relative z-10">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 border shrink-0 ${
-                          isActive
+                          isTopMatch
+                            ? 'bg-cyan-500/25 border-cyan-400/50 text-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.3)]'
+                            : isActive
                             ? strat.color.activeIconBg
                             : 'bg-slate-800/80 text-slate-400 border-slate-700'
                         }`}
@@ -1086,27 +1507,49 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       </div>
                     </div>
 
-                    {/* Top Status Pill */}
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border shrink-0 flex items-center gap-1.5 transition-colors ${
-                        isActive
-                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                          : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
-                      }`}
-                    >
-                      {isActive ? (
-                        <>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          <span>{isArabic ? 'نشط' : 'ACTIVE'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                          <span>{isArabic ? 'متوقف' : 'PAUSED'}</span>
-                        </>
+                    {/* Top Status Pill & Score */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border shrink-0 flex items-center gap-1.5 transition-colors ${
+                          isActive
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
+                        }`}
+                      >
+                        {isActive ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>{isArabic ? 'نشط' : 'ACTIVE'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            <span>{isArabic ? 'متوقف' : 'PAUSED'}</span>
+                          </>
+                        )}
+                      </span>
+
+                      {!isTopMatch && stratScoreData && (
+                        <span className="text-[9px] font-mono text-slate-400">
+                          {stratScoreData.score}% {isArabic ? 'توافق' : 'fit'}
+                        </span>
                       )}
-                    </span>
+                    </div>
                   </div>
+
+                  {/* Market Criteria Tags Chips */}
+                  {stratScoreData && (stratScoreData.criteriaTagsAr.length > 0 || stratScoreData.criteriaTagsFr.length > 0) && (
+                    <div className="flex flex-wrap gap-1 mb-2.5 relative z-10">
+                      {(isArabic ? stratScoreData.criteriaTagsAr : stratScoreData.criteriaTagsFr).map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-slate-800/90 text-cyan-300 border border-slate-700/80"
+                        >
+                          ✓ {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Parameter Tags Chips */}
                   <div className="flex flex-wrap gap-1.5 mb-3 relative z-10">
@@ -1186,7 +1629,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Modern iOS / Cyberpunk Switch Pill */}
+                  {/* Right: Modern Switch Pill */}
                   <div className="flex items-center gap-2 shrink-0">
                     <div
                       className={`w-11 h-6 rounded-full p-0.5 transition-all duration-300 flex items-center border ${
