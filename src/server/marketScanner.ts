@@ -316,7 +316,7 @@ async function processTradingSignal(
         margin = notionalSize / lev;
         margin = Math.min(margin, totalEquity * 0.45); // Max 45% of portfolio per position
     } else {
-        const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 10) / 100));
+        const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 25) / 100));
         margin = totalEquity * allocationPct;
     }
 
