@@ -118,6 +118,36 @@ app.post('/api/config', async (req, res) => {
       await kv.delete(key);
     } else {
       await kv.set(key, String(value));
+
+      // Auto-synchronize strategyManager if botConfig or active_strategies changed
+      if (key === 'btc_bot_config') {
+        try {
+          const parsed = JSON.parse(String(value));
+          if (Array.isArray(parsed.activePresets)) {
+            const activeSet = new Set(parsed.activePresets);
+            for (const strat of strategyManager.getAllStrategies()) {
+              const shouldEnable = !!parsed.enabled && activeSet.has(strat.id);
+              if (strat.enabled !== shouldEnable) {
+                strat.enabled = shouldEnable;
+                strat.activatedAt = shouldEnable ? (strat.activatedAt || Date.now()) : undefined;
+              }
+            }
+          }
+        } catch (e) {}
+      } else if (key === 'quantura_active_strategies') {
+        try {
+          const parsed = JSON.parse(String(value));
+          if (parsed && typeof parsed === 'object') {
+            for (const [id, enabled] of Object.entries(parsed)) {
+              const strat = strategyManager.getStrategy(id);
+              if (strat && typeof enabled === 'boolean') {
+                strat.enabled = enabled;
+                strat.activatedAt = enabled ? (strat.activatedAt || Date.now()) : undefined;
+              }
+            }
+          }
+        } catch (e) {}
+      }
     }
     res.json({ success: true });
   } catch (error) {

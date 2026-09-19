@@ -6,7 +6,78 @@
   --color-brand-500: #00ffff;
   --font-syncopate: 'Syncopate', sans-serif;
   --font-michroma: 'Michroma', sans-serif;
+  --font-orbitron: 'Orbitron', 'Michroma', sans-serif;
+  --font-rajdhani: 'Rajdhani', sans-serif;
+  --font-sharetech: 'Share Tech Mono', monospace;
 }
+
+/* Emotion / Market Sentiment Dynamic Backgrounds */
+@keyframes emotion-aura-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.08) translateY(-4px);
+  }
+}
+
+@keyframes emotion-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+.animate-emotion-aura {
+  animation: emotion-aura-pulse 6s ease-in-out infinite;
+}
+
+.animate-emotion-float {
+  animation: emotion-float 8s ease-in-out infinite;
+}
+
+.scifi-scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 255, 255, 0.02) 50%,
+    rgba(0, 255, 255, 0.02)
+  );
+  background-size: 100% 4px;
+}
+
+/* Cyber corner bracket accents */
+.scifi-box {
+  position: relative;
+}
+.scifi-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid rgba(6, 182, 212, 0.7);
+  border-left: 2px solid rgba(6, 182, 212, 0.7);
+  pointer-events: none;
+}
+.scifi-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid rgba(6, 182, 212, 0.7);
+  border-right: 2px solid rgba(6, 182, 212, 0.7);
+  pointer-events: none;
+}
+
 
 /* Heavy, slow-paced cinematic light sweep across text from J to I */
 @keyframes text-shine-sweep {

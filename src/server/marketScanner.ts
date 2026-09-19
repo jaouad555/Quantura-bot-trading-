@@ -67,6 +67,18 @@ export async function scanAllPairs() {
     const configStr = await kv.get('btc_bot_config');
     const config = configStr ? JSON.parse(configStr) : {};
     
+    // Auto-sync strategyManager if activePresets are specified in bot config
+    if (Array.isArray(config.activePresets) && config.activePresets.length > 0) {
+      const activeSet = new Set(config.activePresets);
+      for (const strat of strategyManager.getAllStrategies()) {
+        const shouldEnable = !!config.enabled && activeSet.has(strat.id);
+        if (strat.enabled !== shouldEnable) {
+          strat.enabled = shouldEnable;
+          strat.activatedAt = shouldEnable ? (strat.activatedAt || Date.now()) : undefined;
+        }
+      }
+    }
+
     // Check Active Strategies
     const activeStrategies = strategyManager.getActiveStrategies();
     scannerState.activeStrategiesCount = activeStrategies.length;

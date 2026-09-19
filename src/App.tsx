@@ -3042,28 +3042,34 @@ export const App: React.FC = () => {
             <main className={`w-full ${isAndroidView ? 'px-3 py-3' : 'max-w-7xl mx-auto px-3 sm:px-6 py-4'} space-y-4 pb-6 flex-1`}>
           {/* Tab 1: Terminal & Main Signal */}
           {activeTab === 'signal' && (
-            <div className="space-y-4 md:space-y-6 flex flex-col h-full">
-              <SignalCard
-                symbol={selectedSymbol}
-                signal={activeSignal}
-                language={language}
-                onAnalyze={() => runAnalysis(marketData, true)}
-                isAnalyzing={isAnalyzing}
-                botConfig={botConfig}
-                onUpdateBotConfig={(partial) => {
-                  if (partial.marketType && partial.marketType !== botConfig.marketType) {
-                    handleToggleMarketType(partial.marketType);
-                  } else {
-                    setBotConfig((prev) => ({ ...prev, ...partial }));
-                  }
-                }}
-                onNotifyRecommendation={(plan) => pushNewAlert(plan, true)}
-                onOpenNotifications={() => setIsNotificationsOpen(true)}
-                liquidityAssessment={liquidityAssessment}
-                onOpenDepthDetails={() => setActiveTab('market')}
-              />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+              {/* Left Column: Quantitative Signal Card */}
+              <div className="w-full lg:col-span-5 xl:col-span-5">
+                <SignalCard
+                  symbol={selectedSymbol}
+                  signal={activeSignal}
+                  language={language}
+                  onAnalyze={() => runAnalysis(marketData, true)}
+                  isAnalyzing={isAnalyzing}
+                  botConfig={botConfig}
+                  marketData={marketData}
+                  ticker={ticker}
+                  onUpdateBotConfig={(partial) => {
+                    if (partial.marketType && partial.marketType !== botConfig.marketType) {
+                      handleToggleMarketType(partial.marketType);
+                    } else {
+                      setBotConfig((prev) => ({ ...prev, ...partial }));
+                    }
+                  }}
+                  onNotifyRecommendation={(plan) => pushNewAlert(plan, true)}
+                  onOpenNotifications={() => setIsNotificationsOpen(true)}
+                  liquidityAssessment={liquidityAssessment}
+                  onOpenDepthDetails={() => setActiveTab('market')}
+                />
+              </div>
 
-              <div className="flex-1 min-h-0" style={{ visibility: isSettingsOpen || isBinanceModalOpen ? 'hidden' : 'visible' }}>
+              {/* Right Column: Interactive Live Chart */}
+              <div className="w-full lg:col-span-7 xl:col-span-7 min-h-[480px] lg:min-h-[640px]" style={{ visibility: isSettingsOpen || isBinanceModalOpen ? 'hidden' : 'visible' }}>
                 <TradingChart
                   symbol={selectedSymbol}
                   klines={klines}
@@ -3071,6 +3077,9 @@ export const App: React.FC = () => {
                   onTimeframeChange={handleTimeframeChange}
                   activeSignal={activeSignal}
                   language={language}
+                  ticker={ticker}
+                  activeBotPositions={activeBotPositions}
+                  marketType={botConfig.marketType}
                 />
               </div>
             </div>
