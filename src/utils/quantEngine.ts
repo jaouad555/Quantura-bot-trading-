@@ -618,6 +618,7 @@ export function generateQuantitativePlan(
   };
 
   return {
+    symbol,
     timestamp: Date.now(),
     decision,
     bias,

@@ -33,7 +33,8 @@ import {
   ExternalLink,
   Flame,
   Activity,
-  Cpu
+  Cpu,
+  FlaskConical
 } from 'lucide-react';
 import { Language, APP_VERSION_TAG } from '../types';
 

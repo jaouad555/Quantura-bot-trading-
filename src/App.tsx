@@ -2155,6 +2155,10 @@ export const App: React.FC = () => {
       });
 
       const now = Date.now();
+      const incomingSym = (data.ticker?.symbol || selectedSymbolRef.current || selectedSymbol || '').toUpperCase();
+      const currentActiveSym = (activeSignalRef.current?.symbol || '').toUpperCase();
+      const isSymbolChanged = !currentActiveSym || currentActiveSym !== incomingSym;
+
       // Fast client-side pure mathematical plan for immediate UI responsiveness
       const fastPlan = generateQuantitativePlan(
         data.timeframe,
@@ -2164,11 +2168,11 @@ export const App: React.FC = () => {
         data.derivatives,
         data.mtfConfluence,
         isDeveloperMode,
-        data.ticker.symbol || selectedSymbol
+        incomingSym
       );
 
-      // If called from background interval and analyzed recently, update the mathematical plan & check for fresh alerts
-      if (!force && now - lastAnalysisCallRef.current < 60000 && activeSignalRef.current) {
+      // If called from background interval and analyzed recently on the SAME symbol, update the mathematical plan & check for fresh alerts
+      if (!force && !isSymbolChanged && now - lastAnalysisCallRef.current < 60000 && activeSignalRef.current) {
         setActiveSignal((prev) => (prev ? { ...fastPlan, detailedAnalysis: prev.detailedAnalysis } : fastPlan));
         if (fastPlan.confidence >= minConfidenceThreshold && (fastPlan.decision === 'LONG' || fastPlan.decision === 'SHORT')) {
           pushNewAlert(fastPlan);
@@ -2190,6 +2194,8 @@ export const App: React.FC = () => {
 
         if (res.ok) {
           const plan: AIAnalysisResult = await res.json();
+          // Guarantee symbol is stamped on returned plan
+          plan.symbol = incomingSym;
           setActiveSignal(plan);
 
           if (plan.confidence >= minConfidenceThreshold && (plan.decision === 'LONG' || plan.decision === 'SHORT')) {
@@ -2214,7 +2220,7 @@ export const App: React.FC = () => {
         setIsAnalyzing(false);
       }
     },
-    [isDeveloperMode, minConfidenceThreshold, playAudioChime, pushNewAlert]
+    [isDeveloperMode, minConfidenceThreshold, playAudioChime, pushNewAlert, selectedSymbol]
   );
 
   const fetchRequestIdRef = useRef<number>(0);
@@ -2236,10 +2242,11 @@ export const App: React.FC = () => {
         fetch(klinesUrl, { cache: 'no-cache' }).then((r) => r.json()),
       ]);
 
+      let freshTicker: BinanceTicker | null = null;
       if (tRes.status === 'fulfilled' && tRes.value && tRes.value.lastPrice) {
         const data = tRes.value;
         if (normSym === selectedSymbolRef.current.toUpperCase()) {
-          setTicker({
+          freshTicker = {
             symbol: data.symbol,
             price: parseFloat(data.lastPrice),
             priceChange24h: parseFloat(data.priceChange || '0'),
@@ -2249,7 +2256,8 @@ export const App: React.FC = () => {
             high24h: parseFloat(data.highPrice || data.lastPrice),
             low24h: parseFloat(data.lowPrice || data.lastPrice),
             updatedAt: Date.now(),
-          });
+          };
+          setTicker(freshTicker);
           setConnectionState('CONNECTED');
         }
       }
@@ -2265,6 +2273,56 @@ export const App: React.FC = () => {
             volume: parseFloat(item[5]),
           }));
           setKlines(freshKlines);
+
+          // INSTANT INDICATORS & QUANT REPORT COMPUTATION (sub-80ms)
+          // Guarantees that the Report, Targets, Bias, and Indicators change IMMEDIATELY on coin switch
+          const freshIndicators = calculateTechnicalIndicators(freshKlines);
+          const currentPrice = freshTicker ? freshTicker.price : freshKlines[freshKlines.length - 1].close;
+
+          const fastMarketData: MarketDataResponse = {
+            status: 'ONLINE',
+            ticker: freshTicker || {
+              symbol: normSym,
+              price: currentPrice,
+              priceChange24h: 0,
+              priceChangePercent24h: 0,
+              volume24h: 0,
+              quoteVolume24h: 0,
+              high24h: currentPrice,
+              low24h: currentPrice,
+              updatedAt: Date.now(),
+            },
+            timeframe: tf,
+            klines: freshKlines,
+            indicators: freshIndicators,
+            orderBook: marketDataRef.current?.orderBook || null,
+            derivatives: marketDataRef.current?.derivatives || null,
+            marketRegime: freshIndicators.marketStructure?.trend === 'UPTREND'
+              ? 'TRENDING_BULLISH'
+              : freshIndicators.marketStructure?.trend === 'DOWNTREND'
+              ? 'TRENDING_BEARISH'
+              : 'RANGING',
+            mtfConfluence: marketDataRef.current?.mtfConfluence || null,
+            updatedAt: Date.now(),
+            isDeveloperMode: isDeveloperModeRef.current,
+          };
+
+          setMarketData(fastMarketData);
+          marketDataRef.current = fastMarketData;
+
+          // Compute instant quantitative report with all SMC & indicator metrics
+          const instantPlan = generateQuantitativePlan(
+            tf,
+            currentPrice,
+            freshIndicators,
+            fastMarketData.orderBook,
+            fastMarketData.derivatives,
+            fastMarketData.mtfConfluence,
+            isDeveloperModeRef.current,
+            normSym
+          );
+          setActiveSignal(instantPlan);
+          activeSignalRef.current = instantPlan;
         }
       }
     } catch (e) {
@@ -2277,7 +2335,8 @@ export const App: React.FC = () => {
     async (
       tf: Timeframe = timeframeRef.current,
       sym: string = selectedSymbolRef.current,
-      mt: MarketType = botConfigRef.current?.marketType || 'FUTURES'
+      mt: MarketType = botConfigRef.current?.marketType || 'FUTURES',
+      forceAnalysis: boolean = false
     ) => {
       const currentReqId = ++fetchRequestIdRef.current;
       setIsRefreshing(true);
@@ -2304,8 +2363,10 @@ export const App: React.FC = () => {
           setKlines(data.klines);
         }
 
-        // Run quantitative analysis on fresh data
-        runAnalysis(data);
+        // Run quantitative analysis on fresh data (force if symbol changed or requested)
+        const currentActiveSym = (activeSignalRef.current?.symbol || '').toUpperCase();
+        const isSymbolChanged = !currentActiveSym || currentActiveSym !== sym.toUpperCase();
+        runAnalysis(data, forceAnalysis || isSymbolChanged);
       } catch (err) {
         console.warn('Error fetching market data from server:', err);
       } finally {
@@ -2547,14 +2608,17 @@ export const App: React.FC = () => {
       // ignore storage error
     }
     
-    // 1. INSTANT DIRECT REST FETCH (sub-80ms) for immediate chart & price update
+    // Reset last analysis throttle so new coin receives immediate fresh analysis
+    lastAnalysisCallRef.current = 0;
+    
+    // 1. INSTANT DIRECT REST FETCH (sub-80ms) for immediate chart, price & report update
     instantFetchMarketData(sym, timeframeRef.current, activeMT);
 
     // 2. Point WebSocket to new symbol
     binanceWsManager.setSymbol(sym);
 
     // 3. Fetch comprehensive AI & MTF data in background
-    fetchMarketData(timeframeRef.current, sym, activeMT);
+    fetchMarketData(timeframeRef.current, sym, activeMT, true);
   };
 
   const handleTimeframeChange = (tf: Timeframe) => {
@@ -3290,6 +3354,10 @@ export const App: React.FC = () => {
               analysis={activeSignal}
               marketData={marketData}
               language={language}
+              onRefresh={() => runAnalysis(marketData, true)}
+              isRefreshing={isRefreshing || isAnalyzing}
+              onSelectSymbol={handlePairChange}
+              selectedSymbol={selectedSymbol}
             />
           )}
 

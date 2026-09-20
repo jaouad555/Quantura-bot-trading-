@@ -34,12 +34,20 @@ interface QwenAnalysisViewProps {
   analysis: AIAnalysisResult | null;
   marketData: MarketDataResponse | null;
   language: Language;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  onSelectSymbol?: (symbol: string) => void;
+  selectedSymbol?: string;
 }
 
 export const QwenAnalysisView: React.FC<QwenAnalysisViewProps> = ({
   analysis,
   marketData,
   language,
+  onRefresh,
+  isRefreshing,
+  onSelectSymbol,
+  selectedSymbol,
 }) => {
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
@@ -64,7 +72,7 @@ export const QwenAnalysisView: React.FC<QwenAnalysisViewProps> = ({
   }
 
   const { indicators, orderBook, mtfConfluence, marketRegime, ticker } = marketData;
-  const currentSymbol = ticker?.symbol || 'BTCUSDT';
+  const currentSymbol = analysis.symbol || ticker?.symbol || selectedSymbol || 'BTCUSDT';
   const currentPrice = analysis.currentPrice || ticker?.price || 0;
 
   // Selected language text with fallbacks
@@ -186,6 +194,19 @@ ${detailedText}
                 </button>
               ))}
             </div>
+
+            {/* Refresh Button */}
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 hover:border-cyan-500/40 text-xs font-semibold transition-all shadow-sm disabled:opacity-50"
+                title={isArabic ? 'تحديث فوري للتقرير' : 'Actualiser le rapport'}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>{isRefreshing ? (isArabic ? 'تحليل...' : 'Analyse...') : (isArabic ? 'تحديث' : 'Actualiser')}</span>
+              </button>
+            )}
 
             {/* Copy Button */}
             <button

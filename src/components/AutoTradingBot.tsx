@@ -35,6 +35,7 @@ import {
   Radar,
   SlidersHorizontal,
   Check,
+  Scissors,
 } from 'lucide-react';
 import { 
   AutoBotConfig, 

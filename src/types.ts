@@ -190,6 +190,7 @@ export interface MTFConfluenceData {
 }
 
 export interface AIAnalysisResult {
+  symbol?: string;
   timestamp?: number; // Added to prevent immediate execution of stale signals
   decision: DecisionType;
   bias: BiasType;
