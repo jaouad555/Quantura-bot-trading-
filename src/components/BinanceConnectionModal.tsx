@@ -333,6 +333,8 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <p className="text-xs text-slate-400">
                 {isArabic
                   ? 'ربط مباشر لتنفيذ صفقات البوت الذكي على حسابك في بايننس'
+                  : isEn
+                  ? 'Direct API integration to execute bot trades on your Binance account'
                   : 'Exécution automatique des signaux d\'achat/vente sur votre compte Binance'}
               </p>
             </div>
@@ -352,7 +354,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-                {isArabic ? 'وضع تنفيذ التداول (Execution Mode)' : 'Mode d\'Exécution'}
+                {isArabic ? 'وضع تنفيذ التداول (Execution Mode)' : isEn ? 'Execution Mode' : 'Mode d\'Exécution'}
               </span>
               <span className="text-[11px] text-slate-400 font-mono">
                 {executionMode === 'BINANCE_LIVE' ? '🔴 LIVE REAL MONEY' : '🧪 SIMULATED PAPER'}
@@ -369,7 +371,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 }`}
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{isArabic ? 'تداول تجريبي (Paper Trading)' : 'Paper Trading (Virtuel)'}</span>
+                <span>{isArabic ? 'تداول تجريبي (Paper Trading)' : isEn ? 'Paper Trading (Simulated)' : 'Paper Trading (Virtuel)'}</span>
               </button>
 
               <button
@@ -381,7 +383,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 }`}
               >
                 <Flame className="w-4 h-4 text-rose-400" />
-                <span>{isArabic ? 'حساب حقيقي (Binance Live)' : 'Compte Réel (Binance Live)'}</span>
+                <span>{isArabic ? 'حساب حقيقي (Binance Live)' : isEn ? 'Real Account (Binance Live)' : 'Compte Réel (Binance Live)'}</span>
               </button>
             </div>
 
@@ -390,11 +392,13 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold">
-                    {isArabic ? 'تنبيه: التداول الحقيقي مفعل بالأموال الحقيقية!' : 'Attention : Le Trading Réel est Actif !'}
+                    {isArabic ? 'تنبيه: التداول الحقيقي مفعل بالأموال الحقيقية!' : isEn ? 'Warning: Live Real-Money Trading is Active!' : 'Attention : Le Trading Réel est Actif !'}
                   </p>
                   <p className="text-[11px] text-rose-300/80 mt-0.5">
                     {isArabic
                       ? 'عندما يصدر البوت إشارة مؤكدة (BUY/SELL)، سيتم إرسال أمر فوري حقيقي إلى حسابك في بايننس.'
+                      : isEn
+                      ? 'When the bot issues confirmed signals (BUY/SELL), real market orders will execute on your Binance account.'
                       : 'Les signaux validés par le bot exécuteront des ordres réels sur votre compte Binance.'}
                   </p>
                 </div>
@@ -415,7 +419,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-amber-400" />
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  {isArabic ? 'مقارنة الأرصدة والمصدر النشط للتداول' : 'Aperçu des Soldes (Paper vs Live)'}
+                  {isArabic ? 'مقارنة الأرصدة والمصدر النشط للتداول' : isEn ? 'Balance Overview (Paper vs Live)' : 'Aperçu des Soldes (Paper vs Live)'}
                 </span>
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
@@ -437,11 +441,11 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isArabic ? 'رصيد الورقة المالية (Paper)' : 'Solde Virtuel (Paper)'}</span>
+                    <span>{isArabic ? 'رصيد الورقة المالية (Paper)' : isEn ? 'Paper Wallet Balance' : 'Solde Virtuel (Paper)'}</span>
                   </span>
                   {executionMode === 'PAPER' && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded uppercase">
-                      {isArabic ? 'نشط' : 'Actif'}
+                      {isArabic ? 'نشط' : isEn ? 'Active' : 'Actif'}
                     </span>
                   )}
                 </div>
@@ -449,7 +453,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                   ${(paperWallet?.balance ?? 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-sans">USDT</span>
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1 font-sans">
-                  {isArabic ? 'أموال محاكاة تجريبية بدون مخاطرة' : 'Fonds virtuels de simulation'}
+                  {isArabic ? 'أموال محاكاة تجريبية بدون مخاطرة' : isEn ? 'Risk-free simulated balance' : 'Fonds virtuels de simulation'}
                 </div>
               </div>
 
@@ -462,21 +466,21 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5 text-rose-400" />
-                    <span>{isArabic ? 'رصيد بايننس الحقيقي (Live)' : 'Solde Binance Réel (Live)'}</span>
+                    <span>{isArabic ? 'رصيد بايننس الحقيقي (Live)' : isEn ? 'Binance Live Balance' : 'Solde Binance Réel (Live)'}</span>
                   </span>
                   {executionMode === 'BINANCE_LIVE' && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded uppercase">
-                      {isArabic ? 'نشط' : 'Actif'}
+                      {isArabic ? 'نشط' : isEn ? 'Active' : 'Actif'}
                     </span>
                   )}
                 </div>
                 <div className="text-base font-black font-mono text-white">
-                  ${(activeAccount?.freeUsdt ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-sans">USDT Libre</span>
+                  ${(activeAccount?.freeUsdt ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-sans">USDT {isArabic ? 'متاح' : isEn ? 'Free' : 'Libre'}</span>
                 </div>
                 <div className="text-[10px] text-slate-400 mt-1 font-sans flex items-center justify-between">
                   <span>Total: ${(activeAccount?.totalUsdtEquity ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span className={activeBinanceConfig.isConnected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                    {activeBinanceConfig.isConnected ? '● Connected' : '○ Not Connected'}
+                    {activeBinanceConfig.isConnected ? (isArabic ? '● متصل' : isEn ? '● Connected' : '● Connecté') : (isArabic ? '○ غير متصل' : isEn ? '○ Not Connected' : '○ Non Connecté')}
                   </span>
                 </div>
               </div>
@@ -487,19 +491,23 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 space-y-2">
             <div className="flex items-center gap-2 font-bold text-amber-400">
               <ShieldCheck className="w-4 h-4" />
-              <span>{isArabic ? 'إرشادات الأمان الموصى بها لمفاتيح API' : 'Sécurité & Permissions de vos Clés API'}</span>
+              <span>{isArabic ? 'إرشادات الأمان الموصى بها لمفاتيح API' : isEn ? 'API Key Security & Permissions' : 'Sécurité & Permissions de vos Clés API'}</span>
             </div>
             <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed">
               <li>
-                <strong className="text-white">{isArabic ? 'تعطيل السحب (Disable Withdrawals):' : 'Désactiver les Retraits :'}</strong>{' '}
+                <strong className="text-white">{isArabic ? 'تعطيل السحب (Disable Withdrawals):' : isEn ? 'Disable Withdrawals:' : 'Désactiver les Retraits :'}</strong>{' '}
                 {isArabic
                   ? 'تأكد من عدم تفعيل صلاحية السحب في إعدادات بايننس. اترك فقط صلاحية Spot Trading.'
+                  : isEn
+                  ? 'Never enable Withdrawals in Binance API settings. Only allow Spot / Futures Trading.'
                   : 'Ne cochez jamais "Enable Withdrawals". Autorisez uniquement "Enable Spot Trading".'}
               </li>
               <li>
-                <strong className="text-white">{isArabic ? 'تشفير الخادم:' : 'Sécurité Serveur :'}</strong>{' '}
+                <strong className="text-white">{isArabic ? 'تشفير الخادم:' : isEn ? 'Server-side Security:' : 'Sécurité Serveur :'}</strong>{' '}
                 {isArabic
                   ? 'يتم توقيع الأوامر عبر HMAC-SHA256 من الخادم الخلفي بشكل آمن ومحمي.'
+                  : isEn
+                  ? 'All HMAC-SHA256 signatures are securely generated on the backend server.'
                   : 'Toutes les signatures HMAC-SHA256 sont générées côté serveur de manière sécurisée.'}
               </li>
             </ul>
@@ -512,7 +520,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-brand-400" />
                 <span className="text-slate-300 font-bold">
-                  {isArabic ? 'سوق التداول' : 'Marché de Trading'}
+                  {isArabic ? 'سوق التداول' : isEn ? 'Trading Market' : 'Marché de Trading'}
                 </span>
               </div>
               <div className="flex bg-slate-800/80 rounded-lg p-1">
@@ -540,7 +548,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <div className="flex items-center gap-2">
                 <Server className="w-4 h-4 text-slate-400" />
                 <span className="text-slate-300 font-bold">
-                  {isArabic ? 'شبكة الاختبار (Testnet Sandbox)' : 'Utiliser Binance Testnet'}
+                  {isArabic ? 'شبكة الاختبار (Testnet Sandbox)' : isEn ? 'Use Binance Testnet Sandbox' : 'Utiliser Binance Testnet'}
                 </span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -559,7 +567,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <label className="text-slate-300 font-bold flex items-center justify-between">
                 <span>Binance API Key:</span>
                 <span className="text-[10px] text-slate-500 font-sans">
-                  {isArabic ? 'المفتاح العام' : 'Clé Publique'}
+                  {isArabic ? 'المفتاح العام' : isEn ? 'Public Key' : 'Clé Publique'}
                 </span>
               </label>
               <div className="relative">
@@ -578,7 +586,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               <label className="text-slate-300 font-bold flex items-center justify-between">
                 <span>Binance API Secret:</span>
                 <span className="text-[10px] text-slate-500 font-sans">
-                  {isArabic ? 'المفتاح السري (يتم حفظه بأمان)' : 'Clé Secrète'}
+                  {isArabic ? 'المفتاح السري (يتم حفظه بأمان)' : isEn ? 'Secret Key (Securely Saved)' : 'Clé Secrète'}
                 </span>
               </label>
               <div className="relative">
@@ -609,12 +617,12 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 {isTesting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{isArabic ? 'جارِ التحقق والاتصال...' : 'Vérification en cours...'}</span>
+                    <span>{isArabic ? 'جارِ التحقق والاتصال...' : isEn ? 'Verifying & Connecting...' : 'Vérification en cours...'}</span>
                   </>
                 ) : (
                   <>
                     <Activity className="w-4 h-4" />
-                    <span>{isArabic ? 'فحص الاتصال وحفظ المفاتيح ⚡' : 'Tester & Sauvegarder la Connexion'}</span>
+                    <span>{isArabic ? 'فحص الاتصال وحفظ المفاتيح ⚡' : isEn ? 'Test Connection & Save Keys ⚡' : 'Tester & Sauvegarder la Connexion'}</span>
                   </>
                 )}
               </button>
@@ -624,7 +632,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                   onClick={handleClearCredentials}
                   className="px-3.5 py-2.5 rounded-xl font-bold bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 transition font-sans text-xs"
                 >
-                  {isArabic ? 'مسح المفاتيح' : 'Effacer'}
+                  {isArabic ? 'مسح المفاتيح' : isEn ? 'Clear Keys' : 'Effacer'}
                 </button>
               )}
             </div>
@@ -659,7 +667,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <div className="flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-emerald-400" />
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    {isArabic ? 'أرصدة حساب Binance المباشر' : 'Solde du Compte Binance Réel'}
+                    {isArabic ? 'أرصدة حساب Binance المباشر' : isEn ? 'Live Binance Account Balances' : 'Solde du Compte Binance Réel'}
                   </h4>
                 </div>
                 <span className="text-[10px] text-slate-400">
@@ -670,27 +678,27 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               {/* Balance Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                  <span className="text-[10px] text-slate-400 block">USDT Disponible (Free)</span>
+                  <span className="text-[10px] text-slate-400 block">{isArabic ? 'USDT المتاح' : isEn ? 'Available USDT (Free)' : 'USDT Disponible (Free)'}</span>
                   <span className="text-base font-black text-emerald-400">
                     ${activeAccount.freeUsdt.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
                 <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                  <span className="text-[10px] text-slate-400 block">Total USDT Equity</span>
+                  <span className="text-[10px] text-slate-400 block">{isArabic ? 'إجمالي الرصيد' : isEn ? 'Total USDT Equity' : 'Total USDT Equity'}</span>
                   <span className="text-base font-black text-white">
                     ${activeAccount.totalUsdtEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
                 <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl col-span-2 sm:col-span-1">
-                  <span className="text-[10px] text-slate-400 block">Actifs Détenus (Coins)</span>
+                  <span className="text-[10px] text-slate-400 block">{isArabic ? 'العملات المحتفظ بها' : isEn ? 'Held Coins' : 'Actifs Détenus (Coins)'}</span>
                   <span className="text-xs font-bold text-slate-200 block truncate">
                     {(Array.isArray(activeAccount?.balances) ? activeAccount.balances : [])
                       .filter((b) => b.asset !== 'USDT')
                       .slice(0, 3)
                       .map((b) => `${b.asset}: ${b.free.toFixed(3)}`)
-                      .join(' | ') || (isArabic ? 'لا توجد عملات أخرى' : 'Aucun autre actif')}
+                      .join(' | ') || (isArabic ? 'لا توجد عملات أخرى' : isEn ? 'No other assets' : 'Aucun autre actif')}
                   </span>
                 </div>
               </div>
@@ -700,10 +708,10 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isArabic ? `تنفيذ يدوي فوري على بايننس (${activeSymbol})` : `Ordre Manuel Immédiat (${activeSymbol})`}</span>
+                    <span>{isArabic ? `تنفيذ يدوي فوري على بايننس (${activeSymbol})` : isEn ? `Instant Manual Order (${activeSymbol})` : `Ordre Manuel Immédiat (${activeSymbol})`}</span>
                   </span>
                   <div className="flex items-center gap-1.5 text-xs font-mono">
-                    <span className="text-slate-400">Montant ($):</span>
+                    <span className="text-slate-400">{isArabic ? 'المبلغ ($):' : isEn ? 'Amount ($):' : 'Montant ($):'}</span>
                     <input
                       type="number"
                       value={manualOrderAmount}
@@ -717,19 +725,19 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                   <button
                     onClick={() => handleQuickManualOrder('BUY')}
                     disabled={isOrdering}
-                    className="p-2.5 rounded-xl font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center justify-center gap-1.5"
+                    className="p-2.5 rounded-xl font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <TrendingUp className="w-3.5 h-3.5" />
-                    <span>{isArabic ? `شراء فوري BUY ($${manualOrderAmount})` : `ACHAT MARKET ($${manualOrderAmount})`}</span>
+                    <span>{isArabic ? `شراء فوري BUY ($${manualOrderAmount})` : isEn ? `MARKET BUY ($${manualOrderAmount})` : `ACHAT MARKET ($${manualOrderAmount})`}</span>
                   </button>
 
                   <button
                     onClick={() => handleQuickManualOrder('SELL')}
                     disabled={isOrdering}
-                    className="p-2.5 rounded-xl font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 transition flex items-center justify-center gap-1.5"
+                    className="p-2.5 rounded-xl font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <TrendingUp className="w-3.5 h-3.5 rotate-180" />
-                    <span>{isArabic ? `بيع فوري SELL ($${manualOrderAmount})` : `VENTE MARKET ($${manualOrderAmount})`}</span>
+                    <span>{isArabic ? `بيع فوري SELL ($${manualOrderAmount})` : isEn ? `MARKET SELL ($${manualOrderAmount})` : `VENTE MARKET ($${manualOrderAmount})`}</span>
                   </button>
                 </div>
 
@@ -753,9 +761,9 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
         <div className="p-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:text-white transition"
+            className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
           >
-            {isArabic ? 'إغلاق النافذة' : 'Fermer'}
+            {isArabic ? 'إغلاق النافذة' : isEn ? 'Close' : 'Fermer'}
           </button>
         </div>
       </div>
@@ -770,32 +778,34 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
             <div>
               <h3 className="text-lg font-black text-white">
-                {isArabic ? 'تأكيد تفعيل التداول الحقيقي بالأموال الفعلية' : 'Confirmer l\'Activation du Trading Réel'}
+                {isArabic ? 'تأكيد تفعيل التداول الحقيقي بالأموال الفعلية' : isEn ? 'Confirm Live Real-Money Trading' : 'Confirmer l\'Activation du Trading Réel'}
               </h3>
               <p className="text-xs text-slate-300 mt-2 leading-relaxed">
                 {isArabic
                   ? 'أنت على وشك تفعيل التداول الحقيقي (Binance Live). سيقوم البوت الآلي بفتح وإغلاق صفقات شراء وبيع على حسابك في منصة Binance بأموالك الحقيقية عند تأكيد الإشارات.'
+                  : isEn
+                  ? 'You are about to enable Live Trading. The automated bot will execute real buy and sell orders on your Binance account using your real balance.'
                   : 'Vous êtes sur le point d\'activer le mode Réel. Le bot automatique enverra des ordres réels sur Binance en utilisant votre solde réel.'}
               </p>
             </div>
 
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-slate-400 text-left rtl:text-right space-y-1">
-              <div>• {isArabic ? 'الرصيد المتاح للتداول:' : 'Solde disponible :'} <strong className="text-emerald-400">${activeAccount?.freeUsdt.toFixed(2) || '0.00'} USDT</strong></div>
-              <div>• {isArabic ? 'الشبكة:' : 'Réseau :'} <strong className="text-white">{useTestnet ? 'Binance Testnet' : 'Binance Mainnet (Live)'}</strong></div>
+              <div>• {isArabic ? 'الرصيد المتاح للتداول:' : isEn ? 'Available Balance:' : 'Solde disponible :'} <strong className="text-emerald-400">${activeAccount?.freeUsdt.toFixed(2) || '0.00'} USDT</strong></div>
+              <div>• {isArabic ? 'الشبكة:' : isEn ? 'Network:' : 'Réseau :'} <strong className="text-white">{useTestnet ? 'Binance Testnet' : 'Binance Mainnet (Live)'}</strong></div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
                 onClick={() => setShowRealMoneyConfirm(false)}
-                className="px-4 py-2.5 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+                className="px-4 py-2.5 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition cursor-pointer"
               >
-                {isArabic ? 'إلغاء والعودة للتجريبي' : 'Annuler'}
+                {isArabic ? 'إلغاء والعودة للتجريبي' : isEn ? 'Cancel (Stay in Paper)' : 'Annuler'}
               </button>
               <button
                 onClick={confirmEnableLiveTrading}
-                className="px-4 py-2.5 rounded-xl font-bold bg-rose-500 hover:bg-rose-400 text-white text-xs shadow-lg shadow-rose-500/25 transition"
+                className="px-4 py-2.5 rounded-xl font-bold bg-rose-500 hover:bg-rose-400 text-white text-xs shadow-lg shadow-rose-500/25 transition cursor-pointer"
               >
-                {isArabic ? 'نعم، تفعيل التداول الحقيقي 🔥' : 'Oui, Activer le Mode Réel'}
+                {isArabic ? 'نعم، تفعيل التداول الحقيقي 🔥' : isEn ? 'Yes, Activate Live Trading 🔥' : 'Oui, Activer le Mode Réel'}
               </button>
             </div>
           </div>

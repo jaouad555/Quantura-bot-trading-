@@ -79,6 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const t = translations[language] || translations.en;
   const isArabic = language === 'ar';
+  const isEn = language === 'en';
+  const isFrench = language === 'fr';
 
   const displayUsername = username?.trim() || 'JAOUAD';
   const userIdent = displayUsername.toLowerCase();
@@ -133,12 +135,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (enable) {
       set2FAEnabled(true, userIdent);
       setIs2FAActive(true);
-      setFeedbackMsg(isArabic ? '✅ تم تفعيل المصادقة الثنائية بنجاح!' : '✅ 2FA activée avec succès !');
+      setFeedbackMsg(isArabic ? '✅ تم تفعيل المصادقة الثنائية بنجاح!' : isFrench ? '✅ 2FA activée avec succès !' : '✅ 2FA enabled successfully!');
     } else {
       disable2FA(userIdent);
       setIs2FAActive(false);
       setTest2FAResult(null);
-      setFeedbackMsg(isArabic ? '⚪ تم تعطيل المصادقة الثنائية. يمكنك الدخول مباشرة بكلمة المرور.' : '⚪ 2FA désactivée. Vous pouvez vous connecter sans code.');
+      setFeedbackMsg(isArabic ? '⚪ تم تعطيل المصادقة الثنائية. يمكنك الدخول مباشرة بكلمة المرور.' : isFrench ? '⚪ 2FA désactivée. Vous pouvez vous connecter sans code.' : '⚪ 2FA disabled. You can log in directly with your password.');
     }
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
@@ -150,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     generateQRCodeDataUrl(uri).then(setSetupQR2FA).catch(console.error);
     setTest2FACode('');
     setTest2FAResult(null);
-    setFeedbackMsg(isArabic ? '🔄 تم توليد مفتاح سري جديد' : '🔄 Nouvelle clé secrète générée');
+    setFeedbackMsg(isArabic ? '🔄 تم توليد مفتاح سري جديد' : isFrench ? '🔄 Nouvelle clé secrète générée' : '🔄 New secret key generated');
     setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
@@ -162,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isValid) {
       set2FAEnabled(true, userIdent);
       setIs2FAActive(true);
-      setFeedbackMsg(isArabic ? '✅ تم التحقق وتفعيل المصادقة الثنائية بنجاح!' : '✅ 2FA validée et activée avec succès !');
+      setFeedbackMsg(isArabic ? '✅ تم التحقق وتفعيل المصادقة الثنائية بنجاح!' : isFrench ? '✅ 2FA validée et activée avec succès !' : '✅ 2FA verified and enabled successfully!');
       setTimeout(() => setFeedbackMsg(null), 3500);
     }
   };
@@ -400,18 +402,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Security Status */}
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
             <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-              {isArabic ? 'الأمان' : 'Sécurité'}
+              {isArabic ? 'الأمان' : isFrench ? 'Sécurité' : 'Security'}
             </span>
             <div className={`flex items-center gap-1 text-[11px] font-mono font-bold ${is2FAActive ? 'text-amber-400' : 'text-slate-400'}`}>
               {is2FAActive ? (
                 <>
                   <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" />
-                  <span className="truncate">{isArabic ? '2FA مفعل 🟢' : '2FA Actif'}</span>
+                  <span className="truncate">{isArabic ? '2FA مفعل 🟢' : isFrench ? '2FA Actif' : '2FA Active 🟢'}</span>
                 </>
               ) : (
                 <>
                   <ShieldOff className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span className="truncate">{isArabic ? '2FA معطل ⚪' : '2FA Inactif'}</span>
+                  <span className="truncate">{isArabic ? '2FA معطل ⚪' : isFrench ? '2FA Inactif' : '2FA Off ⚪'}</span>
                 </>
               )}
             </div>
@@ -420,7 +422,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Trader Rank */}
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
             <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-              {isArabic ? 'الرتبة' : 'Rang'}
+              {isArabic ? 'الرتبة' : isFrench ? 'Rang' : 'Rank'}
             </span>
             <div className="flex items-center gap-1 text-[11px] font-mono font-bold text-cyan-300">
               <Coins className="w-3 h-3 text-cyan-400 shrink-0" />
@@ -431,7 +433,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Trading Mode */}
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
             <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-              {isArabic ? 'الوضع' : 'Mode'}
+              {isArabic ? 'الوضع' : isFrench ? 'Mode' : 'Mode'}
             </span>
             <div className="text-[11px] font-mono font-bold text-white truncate">
               {executionMode === 'BINANCE_LIVE' ? (
@@ -487,7 +489,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] font-medium text-slate-200 transition cursor-pointer group"
           >
             <Lock className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-            <span className="truncate">{isArabic ? 'كلمة المرور' : 'Mot de passe'}</span>
+            <span className="truncate">{isArabic ? 'كلمة المرور' : isFrench ? 'Mot de passe' : 'Password'}</span>
           </button>
 
           <button
@@ -496,7 +498,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] font-medium text-slate-200 transition cursor-pointer group"
           >
             <QrCode className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span className="truncate">{isArabic ? 'إعدادات 2FA' : 'Gestion 2FA'}</span>
+            <span className="truncate">{isArabic ? 'إعدادات 2FA' : isFrench ? 'Gestion 2FA' : '2FA Settings'}</span>
           </button>
         </div>
 
@@ -508,7 +510,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-emerald-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-300 hover:text-white border border-cyan-500/30 text-xs font-bold font-mono transition cursor-pointer group shadow-xs"
           >
             <BookOpen className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-            <span>{isArabic ? '📖 دليل البدء السريع & المساعدة' : '📖 Guide & Démarrage Rapide'}</span>
+            <span>{isArabic ? '📖 دليل البدء السريع & المساعدة' : isFrench ? '📖 Guide & Démarrage Rapide' : '📖 Quick Start & Help Guide'}</span>
           </button>
         )}
 
@@ -519,7 +521,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 text-rose-300 hover:text-white border border-rose-500/30 hover:border-rose-500/50 text-xs font-bold font-mono transition cursor-pointer group"
         >
           <LogOut className="w-3.5 h-3.5 text-rose-400 group-hover:-translate-x-1 transition-transform" />
-          <span>{isArabic ? 'تسجيل الخروج' : 'Déconnexion (Logout)'}</span>
+          <span>{isArabic ? 'تسجيل الخروج' : isFrench ? 'Déconnexion' : 'Logout'}</span>
         </button>
 
         {/* Bottom Credits */}
@@ -597,7 +599,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <QrCode className="w-5 h-5 text-amber-400" />
                 </div>
                 <h3 className="text-sm font-bold uppercase tracking-wide">
-                  {isArabic ? 'إعداد المصادقة الثنائية (2FA)' : 'Configuration 2FA'}
+                  {isArabic ? 'إعداد المصادقة الثنائية (2FA)' : isFrench ? 'Configuration 2FA' : '2FA Security Configuration'}
                 </h3>
               </div>
               <button onClick={() => setIs2FAModalOpen(false)} className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">
@@ -622,14 +624,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <div>
                       <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>{isArabic ? 'المصادقة الثنائية (2FA)' : 'Authentification 2FA'}</span>
-                        <span className="text-[10px] font-normal text-slate-400">({isArabic ? 'اختيارية' : 'Optionnel'})</span>
+                        <span>{isArabic ? 'المصادقة الثنائية (2FA)' : isFrench ? 'Authentification 2FA' : 'Two-Factor Authentication (2FA)'}</span>
+                        <span className="text-[10px] font-normal text-slate-400">({isArabic ? 'اختيارية' : isFrench ? 'Optionnel' : 'Optional'})</span>
                       </div>
                       <div className="text-[11px] font-mono mt-0.5">
                         {is2FAActive ? (
-                          <span className="text-amber-400 font-bold">{isArabic ? '🟢 مفعلة ونشطة' : '🟢 Activée'}</span>
+                          <span className="text-amber-400 font-bold">{isArabic ? '🟢 مفعلة ونشطة' : isFrench ? '🟢 Activée' : '🟢 Enabled & Active'}</span>
                         ) : (
-                          <span className="text-slate-400">{isArabic ? '⚪ معطلة (دخول مباشر)' : '⚪ Désactivée'}</span>
+                          <span className="text-slate-400">{isArabic ? '⚪ معطلة (دخول مباشر)' : isFrench ? '⚪ Désactivée' : '⚪ Disabled (Direct login)'}</span>
                         )}
                       </div>
                     </div>
@@ -665,7 +667,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-slate-300">
-                        {isArabic ? 'فحص مزامنة رمز هاتفك الآن:' : 'Tester la synchronisation :'}
+                        {isArabic ? 'فحص مزامنة رمز هاتفك الآن:' : isFrench ? 'Tester la synchronisation :' : 'Test phone code sync now:'}
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
                         ⏱️ {totpCountdown}s
@@ -690,20 +692,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         disabled={test2FACode.length !== 6}
                         className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold font-mono transition cursor-pointer shrink-0"
                       >
-                        {isArabic ? 'فحص' : 'Tester'}
+                        {isArabic ? 'فحص' : isFrench ? 'Tester' : 'Test'}
                       </button>
                     </div>
 
                     {test2FAResult === 'SUCCESS' && (
                       <div className="p-2 rounded-lg bg-emerald-500/20 border border-amber-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>{isArabic ? '✅ الرمز صحيح ومطابق مع هاتفك!' : '✅ Code valide et synchronisé avec succès !'}</span>
+                        <span>{isArabic ? '✅ الرمز صحيح ومطابق مع هاتفك!' : isFrench ? '✅ Code valide et synchronisé avec succès !' : '✅ Code is valid and synchronized!'}</span>
                       </div>
                     )}
                     {test2FAResult === 'ERROR' && (
                       <div className="p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : '❌ Code invalide ou expiré.'}</span>
+                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? '❌ Code invalide ou expiré.' : '❌ Invalid or expired code.'}</span>
                       </div>
                     )}
                   </div>
@@ -716,18 +718,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="w-full py-2.5 px-3 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                     >
                       <ShieldOff className="w-4 h-4 text-rose-400" />
-                      <span>{isArabic ? 'تعطيل المصادقة الثنائية (جعل الدخول مباشر)' : 'Désactiver la 2FA (Connexion directe)'}</span>
+                      <span>{isArabic ? 'تعطيل المصادقة الثنائية (جعل الدخول مباشر)' : isFrench ? 'Désactiver la 2FA (Connexion directe)' : 'Disable 2FA (Enable direct login)'}</span>
                     </button>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-1">
-                      <span>{isArabic ? 'تغيير الجهاز أو الهاتف؟' : 'Changement d\'appareil ?'}</span>
+                      <span>{isArabic ? 'تغيير الجهاز أو الهاتف؟' : isFrench ? 'Changement d\'appareil ?' : 'Changing device or phone?'}</span>
                       <button
                         type="button"
                         onClick={handleRegenerateKey}
                         className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline cursor-pointer"
                       >
                         <RefreshCcwDot className="w-3.5 h-3.5" />
-                        <span>{isArabic ? 'توليد مفتاح جديد' : 'Générer nouvelle clé'}</span>
+                        <span>{isArabic ? 'توليد مفتاح جديد' : isFrench ? 'Générer nouvelle clé' : 'Generate New Key'}</span>
                       </button>
                     </div>
                   </div>
@@ -738,7 +740,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl space-y-1.5">
                     <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                       <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>{isArabic ? 'الميزة معطلة حالياً' : '2FA Désactivée actuellement'}</span>
+                      <span>{isArabic ? 'الميزة معطلة حالياً' : isFrench ? '2FA Désactivée actuellement' : '2FA is currently disabled'}</span>
                     </div>
                     <p className="text-[11px] text-slate-300 leading-relaxed">
                       {isArabic
@@ -761,15 +763,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {/* Manual Base32 Secret Key */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-[10px] uppercase font-mono text-slate-400">
-                      <span>{isArabic ? 'مفتاح الإعداد اليدوي:' : 'Clé secrète manuelle :'}</span>
+                      <span>{isArabic ? 'مفتاح الإعداد اليدوي:' : isFrench ? 'Clé secrète manuelle :' : 'Manual Setup Key:'}</span>
                       <button
                         type="button"
                         onClick={handleRegenerateKey}
                         className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-                        title={isArabic ? 'توليد مفتاح جديد' : 'Générer une nouvelle clé'}
+                        title={isArabic ? 'توليد مفتاح جديد' : isFrench ? 'Générer une nouvelle clé' : 'Generate new key'}
                       >
                         <RefreshCcwDot className="w-3 h-3" />
-                        <span>{isArabic ? 'تجديد' : 'Régénérer'}</span>
+                        <span>{isArabic ? 'تجديد' : isFrench ? 'Régénérer' : 'Regenerate'}</span>
                       </button>
                     </div>
                     <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 gap-2">
@@ -780,7 +782,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         type="button"
                         onClick={handleCopyKey}
                         className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white text-[11px] font-mono flex items-center gap-1 transition cursor-pointer shrink-0 ml-2"
-                        title={isArabic ? 'نسخ المفتاح' : 'Copier la clé'}
+                        title={isArabic ? 'نسخ المفتاح' : isFrench ? 'Copier la clé' : 'Copy Key'}
                       >
                         {copiedKey ? (
                           <>
@@ -790,7 +792,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5" />
-                            <span>{isArabic ? 'نسخ' : 'Copier'}</span>
+                            <span>{isArabic ? 'نسخ' : isFrench ? 'Copier' : 'Copy'}</span>
                           </>
                         )}
                       </button>
@@ -801,7 +803,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-slate-300">
-                        {isArabic ? 'أدخل الرمز من هاتفك للتفعيل:' : 'Code de confirmation :'}
+                        {isArabic ? 'أدخل الرمز من هاتفك للتفعيل:' : isFrench ? 'Code de confirmation :' : 'Enter code from your phone:'}
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
                         ⏱️ {totpCountdown}s
@@ -826,7 +828,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         disabled={test2FACode.length !== 6}
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold font-mono transition cursor-pointer shrink-0"
                       >
-                        {isArabic ? 'تحقق وتفعيل' : 'Activer 2FA'}
+                        {isArabic ? 'تحقق وتفعيل' : isFrench ? 'Activer 2FA' : 'Verify & Enable 2FA'}
                       </button>
                     </div>
 
@@ -839,7 +841,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {test2FAResult === 'ERROR' && (
                       <div className="p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : '❌ Code invalide ou expiré.'}</span>
+                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? '❌ Code invalide ou expiré.' : '❌ Invalid or expired code.'}</span>
                       </div>
                     )}
                   </div>
@@ -851,7 +853,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className="w-full py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-amber-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                   >
                     <ShieldCheck className="w-4 h-4 text-amber-400" />
-                    <span>{isArabic ? 'تفعيل 2FA مباشرة بدون اختبار' : 'Activer 2FA directement'}</span>
+                    <span>{isArabic ? 'تفعيل 2FA مباشرة بدون اختبار' : isFrench ? 'Activer 2FA directement' : 'Enable 2FA directly without test'}</span>
                   </button>
                 </div>
               )}
@@ -861,7 +863,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => setIs2FAModalOpen(false)}
               className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold uppercase tracking-wide text-xs transition mt-2 cursor-pointer border border-slate-700"
             >
-              {isArabic ? 'إغلاق وحفظ' : 'Fermer'}
+              {isArabic ? 'إغلاق وحفظ' : isFrench ? 'Fermer' : 'Close'}
             </button>
           </div>
         </div>,
@@ -887,7 +889,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Lock className="w-5 h-5 text-cyan-400" />
                 </div>
                 <h3 className="text-sm font-bold uppercase tracking-wide">
-                  {isArabic ? 'تغيير كلمة المرور' : 'Changer le mot de passe'}
+                  {isArabic ? 'تغيير كلمة المرور' : isFrench ? 'Changer le mot de passe' : 'Change Password'}
                 </h3>
               </div>
               <button onClick={() => setIsPasswordModalOpen(false)} className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer">
@@ -898,7 +900,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="py-4 space-y-3">
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-mono text-slate-500">
-                  {isArabic ? 'كلمة المرور الحالية' : 'Mot de passe actuel'}
+                  {isArabic ? 'كلمة المرور الحالية' : isFrench ? 'Mot de passe actuel' : 'Current Password'}
                 </label>
                 <input 
                   type="password" 
@@ -908,7 +910,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-mono text-slate-500">
-                  {isArabic ? 'كلمة المرور الجديدة' : 'Nouveau mot de passe'}
+                  {isArabic ? 'كلمة المرور الجديدة' : isFrench ? 'Nouveau mot de passe' : 'New Password'}
                 </label>
                 <input 
                   type="password" 
@@ -918,7 +920,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-mono text-slate-500">
-                  {isArabic ? 'تأكيد كلمة المرور' : 'Confirmer le mot de passe'}
+                  {isArabic ? 'تأكيد كلمة المرور' : isFrench ? 'Confirmer le mot de passe' : 'Confirm New Password'}
                 </label>
                 <input 
                   type="password" 
@@ -932,7 +934,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => setIsPasswordModalOpen(false)}
               className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase tracking-wide text-xs transition mt-2 cursor-pointer"
             >
-              {isArabic ? 'حفظ التغييرات' : 'Sauvegarder'}
+              {isArabic ? 'حفظ التغييرات' : isFrench ? 'Sauvegarder' : 'Save Changes'}
             </button>
           </div>
         </div>,

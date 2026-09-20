@@ -854,17 +854,29 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-lg shadow-rose-500/10'
             }`}>
               {activePosition.decision === 'LONG' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              <span>{isFutures ? `${lev}x ${activePosition.decision}` : activePosition.decision} {activePosition.symbol}</span>
+              <span>
+                {isFutures 
+                  ? `${lev}x ${activePosition.decision}` 
+                  : (activePosition.decision === 'LONG' ? (isArabic ? '🟢 شراء فوري (Spot BUY)' : '🟢 SPOT BUY') : (isArabic ? '🔴 بيع فوري (Spot SELL)' : '🔴 SPOT SELL'))} {activePosition.symbol}
+              </span>
             </div>
 
             <div>
               <div className="flex items-center flex-wrap gap-2 mb-0.5">
                 <span className="text-xs text-cyan-400 font-bold">
-                  {isArabic ? `عقد آجل #${index + 1}` : `Futures Contract #${index + 1}`}
+                  {isFutures 
+                    ? (isArabic ? `عقد آجل #${index + 1}` : (isEn ? `Futures Contract #${index + 1}` : `Contrat Futures #${index + 1}`))
+                    : (isArabic ? `صفقة تداول فوري #${index + 1}` : (isEn ? `Spot Trade #${index + 1}` : `Ordre Spot #${index + 1}`))}
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
-                  {activePosition.marginMode || 'ISOLATED'}
-                </span>
+                {isFutures ? (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                    {activePosition.marginMode || 'ISOLATED'}
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/60">
+                    {isArabic ? 'تداول فوري (1x Spot)' : 'SPOT (1x)'}
+                  </span>
+                )}
                 {activePosition.strategyName && (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
                     {activePosition.strategyName}
@@ -880,23 +892,27 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                 <span>
-                  {isArabic ? `الهامش المودع:` : `Margin:`} <strong className="text-white font-mono">${metrics.margin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong>
+                  {isFutures ? (isArabic ? `الهامش المودع:` : `Margin:`) : (isArabic ? `قيمة الأصل المشتري:` : `Purchased Value:`)} <strong className="text-white font-mono">${metrics.margin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong>
                 </span>
-                <span className="text-slate-600">|</span>
-                <span>
-                  {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lev}x)</strong>
-                </span>
+                {isFutures && (
+                  <>
+                    <span className="text-slate-600">|</span>
+                    <span>
+                      {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lev}x)</strong>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-[11px] text-slate-400 block">{isArabic ? 'العائد على الهامش (ROE %)' : 'Return on Equity (ROE)'}</span>
+              <span className="text-[11px] text-slate-400 block">{isFutures ? (isArabic ? 'العائد على الهامش (ROE %)' : 'Return on Equity (ROE)') : (isArabic ? 'ربح / خسارة الصفقة' : 'Spot PnL')}</span>
               <div className={`text-base sm:text-lg font-mono font-bold flex items-center justify-end gap-1 ${
                 liveRoePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
               }`}>
-                {liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}% ROE
+                {liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}% {isFutures ? 'ROE' : ''}
                 <span className="text-xs opacity-90 font-mono">
                   ({livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                 </span>
@@ -904,20 +920,20 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
             <button
               onClick={() => onManualClosePosition(activePosition.id)}
-              className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition shadow-lg shadow-rose-500/10"
-              title="Close Futures Position"
+              className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition shadow-lg shadow-rose-500/10 cursor-pointer"
+              title={isFutures ? 'Close Futures Position' : 'Sell Spot Asset'}
             >
-              {isArabic ? 'إغلاق فوري للربح' : 'Close Position'}
+              {isFutures ? (isArabic ? 'إغلاق فوري للعقد' : 'Close Position') : (isArabic ? 'بيع فوري للسبوت' : 'Sell Spot')}
             </button>
           </div>
         </div>
 
-        {/* Stepper Progress & Liquidation Safety Gauge */}
+        {/* Stepper Progress & Protection Gauge */}
         <div className="my-5 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-300 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{isArabic ? 'مسار الأهداف ومستويات الوقف والتصفية' : 'Futures Targets & Liquidation Guard'}</span>
+              <span>{isFutures ? (isArabic ? 'مسار الأهداف ومستويات الوقف والتصفية' : 'Futures Targets & Liquidation Guard') : (isArabic ? 'مسار الأهداف وحماية رأس المال' : 'Spot Targets & Capital Guard')}</span>
             </span>
             <span className="text-[11px] text-cyan-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
               {activePosition.lastAction || 'Active'}
@@ -934,7 +950,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               <div className="font-bold text-white font-mono">${formatCoinPrice(activePosition.entryPrice, activePosition.symbol)}</div>
               <div className="text-[10px] text-cyan-300 font-mono mt-0.5 flex items-center justify-between">
                 <span>${formatCoinPrice(metrics.currentP, activePosition.symbol)}</span>
-                <span className="text-slate-400">${metrics.margin.toFixed(0)} Mgn</span>
+                <span className="text-slate-400">{isFutures ? `$${metrics.margin.toFixed(0)} Mgn` : '1x Spot'}</span>
               </div>
             </div>
 
@@ -1012,21 +1028,36 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </div>
             </div>
 
-            {/* 6. Liquidation Price Level (Futures Exclusive) */}
-            <div className="bg-rose-950/20 border border-rose-500/40 p-2.5 rounded-xl text-rose-200">
-              <div className="flex items-center justify-between text-rose-400 text-[10px] mb-0.5 font-bold">
-                <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
-                <ShieldAlert className="w-3 h-3 text-rose-400 animate-pulse" />
+            {/* 6. Liquidation Price Level (Futures) OR Spot Asset Security (Spot) */}
+            {isFutures ? (
+              <div className="bg-rose-950/20 border border-rose-500/40 p-2.5 rounded-xl text-rose-200">
+                <div className="flex items-center justify-between text-rose-400 text-[10px] mb-0.5 font-bold">
+                  <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
+                  <ShieldAlert className="w-3 h-3 text-rose-400 animate-pulse" />
+                </div>
+                <div className="font-bold text-white font-mono">
+                  {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
+                </div>
+                <div className="text-[10px] text-rose-300 mt-0.5 font-mono">
+                  {metrics.distanceToLiqPct !== null 
+                    ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% away`)
+                    : (isArabic ? 'آمن جداً' : 'Safe')}
+                </div>
               </div>
-              <div className="font-bold text-white font-mono">
-                {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
+            ) : (
+              <div className="bg-emerald-950/25 border border-emerald-500/40 p-2.5 rounded-xl text-emerald-200">
+                <div className="flex items-center justify-between text-emerald-400 text-[10px] mb-0.5 font-bold">
+                  <span>{isArabic ? 'حماية السبوت' : (isEn ? 'Spot Security' : 'Sécurité Spot')}</span>
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                </div>
+                <div className="font-bold text-emerald-300 font-mono text-xs">
+                  {isArabic ? 'بدون تصفية (0% Liq)' : '100% Asset Ownership'}
+                </div>
+                <div className="text-[10px] text-emerald-400/90 mt-0.5 font-sans">
+                  {isArabic ? 'أصل مملوك بالكامل' : (isEn ? 'No Liquidation Risk' : 'Sans Liquidation')}
+                </div>
               </div>
-              <div className="text-[10px] text-rose-300 mt-0.5 font-mono">
-                {metrics.distanceToLiqPct !== null 
-                  ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% away`)
-                  : (isArabic ? 'آمن جداً' : 'Safe')}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -1886,7 +1917,11 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300">
             <span className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-brand-400" />
-              <span>{isArabic ? `العقود المفتوحة قيد المراقبة اللحظية (${displayPositions.length})` : `Active Futures Positions (${displayPositions.length})`}</span>
+              <span>
+                {botConfig.marketType === 'FUTURES'
+                  ? (isArabic ? `العقود الآجلة المفتوحة قيد المراقبة اللحظية (${displayPositions.length})` : (isEn ? `Active Futures Positions (${displayPositions.length})` : `Positions Futures Actives (${displayPositions.length})`))
+                  : (isArabic ? `صفقات التداول الفوري (Spot) المفتوحة (${displayPositions.length})` : (isEn ? `Active Spot Trades (${displayPositions.length})` : `Positions Spot Actives (${displayPositions.length})`))}
+              </span>
             </span>
             <div className="flex items-center gap-2">
               {onPanicCloseAll && (
@@ -1937,16 +1972,26 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             />
           </div>
           <h3 className="font-bold text-white text-sm">
-            {isArabic ? 'لا توجد عقود آجلة مفتوحة حالياً' : 'Aucune position futures active'}
+            {botConfig.marketType === 'FUTURES'
+              ? (isArabic ? 'لا توجد عقود آجلة مفتوحة حالياً' : (isEn ? 'No Active Futures Positions' : 'Aucune position futures active'))
+              : (isArabic ? 'لا توجد صفقات تداول فوري (Spot) مفتوحة حالياً' : (isEn ? 'No Active Spot Trades' : 'Aucune position Spot active'))}
           </h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
             {botConfig.enabled
-              ? (isArabic 
-                  ? `البوت في وضع الاستعداد لمراقبة ${selectedSymbol}. عند ظهور إشارة كمية بثقة ≥ ${botConfig.minConfidence}%، سيقوم بفتح عقد آجل ${botConfig.leverage || 10}x تلقائياً.`
-                  : `Le bot est en veille sur ${selectedSymbol}. Dès qu'un signal avec confiance ≥ ${botConfig.minConfidence}% apparaît, il ouvrira un contrat Futures ${botConfig.leverage || 10}x automatiquement.`)
+              ? (botConfig.marketType === 'FUTURES'
+                  ? (isArabic 
+                      ? `البوت في وضع الاستعداد لمراقبة ${selectedSymbol}. عند ظهور إشارة كمية بثقة ≥ ${botConfig.minConfidence}%، سيقوم بفتح عقد آجل ${botConfig.leverage || 10}x تلقائياً.`
+                      : (isEn 
+                          ? `Bot standing by for ${selectedSymbol}. Upon detecting a signal with confidence ≥ ${botConfig.minConfidence}%, it will open a ${botConfig.leverage || 10}x Futures position.`
+                          : `Le bot est en veille sur ${selectedSymbol}. Dès qu'un signal avec confiance ≥ ${botConfig.minConfidence}% apparaît, il ouvrira un contrat Futures ${botConfig.leverage || 10}x.`))
+                  : (isArabic
+                      ? `البوت في وضع الاستعداد لمراقبة ${selectedSymbol}. عند توفر إشارة شراء مؤكدة بثقة ≥ ${botConfig.minConfidence}%، سيقوم بشراء فوري (Spot Buy 1x) تلقائياً وحجز الأصل.`
+                      : (isEn
+                          ? `Bot standing by for ${selectedSymbol}. Upon detecting a confirmed buy signal with confidence ≥ ${botConfig.minConfidence}%, it will execute a Spot Buy (1x) automatically.`
+                          : `Le bot est en veille sur ${selectedSymbol}. Dès qu'un signal d'achat avec confiance ≥ ${botConfig.minConfidence}% apparaît, il achètera au comptant (Spot 1x).`)))
               : (isArabic 
                   ? 'البوت متوقف حالياً. انقر على "تشغيل التداول الآلي" لتفعيل الفحص والتنفيذ الآلي.'
-                  : 'Le bot est en pause. Cliquez sur "Activer l\'Auto-Trading" pour lancer les scans automatiques.')}
+                  : (isEn ? 'Bot is paused. Click "Enable Auto-Trading" to start scanning and auto-executing.' : 'Le bot est en pause. Cliquez sur "Activer l\'Auto-Trading" pour lancer les scans automatiques.'))}
           </p>
 
           <div className="pt-2 flex flex-wrap justify-center gap-2">
@@ -2550,7 +2595,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 onClick={handleSaveConfig}
                 className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 text-xs font-bold"
               >
-                {isArabic ? 'حفظ وتفعيل معايير العقود الآجلة' : 'Sauvegarder les Paramètres Futures'}
+                {botConfig.marketType === 'FUTURES'
+                  ? (isArabic ? 'حفظ وتفعيل معايير العقود الآجلة' : (isEn ? 'Save & Apply Futures Settings' : 'Sauvegarder les Paramètres Futures'))
+                  : (isArabic ? 'حفظ وتفعيل إعدادات التداول الفوري (Spot)' : (isEn ? 'Save & Apply Spot Settings' : 'Sauvegarder les Paramètres Spot'))}
               </button>
             </div>
           </div>

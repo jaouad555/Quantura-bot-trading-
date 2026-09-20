@@ -235,6 +235,12 @@ async function processTradingSignal(
     }
 
     // CRITICAL GATE 1: Authorization with StrategyManager
+    const isSpotMode = (latestConfig.marketType || config.marketType) === 'SPOT';
+    if (isSpotMode && signal.decision === 'SHORT') {
+      console.log(`[SPOT BLOCKED] ${symbol} SHORT - Short selling is not allowed in Spot trading mode (Long/Buy only).`);
+      return;
+    }
+
     const auth = await strategyManager.authorizeTrade({
       strategyId: signal.strategyId,
       symbol: symbol,
@@ -301,7 +307,8 @@ async function processTradingSignal(
     }
 
     const slDistancePct = Math.abs(currentPrice - safeSl) / currentPrice;
-    const lev = config.leverage || auth.strategy?.defaultLeverage || 3;
+    const isFutures = (config.marketType || 'FUTURES') === 'FUTURES';
+    const lev = isFutures ? (config.leverage || auth.strategy?.defaultLeverage || 3) : 1;
 
     // Calculate total equity including active positions for risk-based sizing
     let totalEquity = wallet.balance;
@@ -313,7 +320,7 @@ async function processTradingSignal(
     if (config.sizingMode === 'RISK_BASED') {
         const targetRiskUsdt = totalEquity * ((config.riskPerTradePercent || 2.0) / 100);
         const notionalSize = targetRiskUsdt / Math.max(0.008, slDistancePct);
-        margin = notionalSize / lev;
+        margin = isFutures ? notionalSize / lev : notionalSize;
         margin = Math.min(margin, totalEquity * 0.45); // Max 45% of portfolio per position
     } else {
         const allocationPct = Math.min(0.5, Math.max(0.02, (config.tradeAllocationPercent || 25) / 100));
@@ -400,9 +407,11 @@ async function processTradingSignal(
       await kv.set('btc_paper_wallet', JSON.stringify(freshWallet));
     }
 
-    const liqPrice = isLong
-      ? currentPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
-      : currentPrice * (1 + (1 / lev) - 0.005);
+    const liqPrice = isFutures && lev > 1
+      ? (isLong
+          ? currentPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
+          : currentPrice * (1 + (1 / lev) - 0.005))
+      : undefined;
 
     const newPos = {
       id: `bot-pos-${Date.now()}`,
@@ -415,14 +424,14 @@ async function processTradingSignal(
       remainingAmountBtc: quantity,
       marginUsdt: margin,
       positionSizeUsdt: notional,
-      leverage: lev,
+      leverage: isFutures ? lev : 1,
       tp1: safeTp1,
       tp2: safeTp2,
       tp3: safeTp3,
       stopLoss: safeSl,
       liquidationPrice: liqPrice,
-      marketType: (config.marketType || 'FUTURES') as 'FUTURES' | 'SPOT',
-      marginMode: (config.marginMode || 'ISOLATED') as 'ISOLATED' | 'CROSS',
+      marketType: isFutures ? 'FUTURES' : 'SPOT',
+      marginMode: isFutures ? ((config.marginMode || 'ISOLATED') as 'ISOLATED' | 'CROSS') : undefined,
       tp1Hit: false,
       tp2Hit: false,
       realizedPnlUsdt: 0,
@@ -435,7 +444,7 @@ async function processTradingSignal(
       strategyStatus: 'ACTIVE',
       confidence: signal.confidence,
       mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
-      lastAction: `Position Opened (${signal.strategyName})`,
+      lastAction: isFutures ? `Futures ${lev}x ${signal.decision} Opened (${signal.strategyName})` : `Spot Buy Executed (${signal.strategyName})`,
       isTrailingActive: false,
       peakPrice: currentPrice,
     };

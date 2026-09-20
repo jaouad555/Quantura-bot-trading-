@@ -414,23 +414,25 @@ class StrategyManager {
     switch (strategyId) {
       case 'MOMENTUM': {
         // Trend following with moving average confluence and ADX
-        const isBullishTrend = currentPrice > ema20 && ema20 > ema50 && adx >= 20;
-        const isBearishTrend = currentPrice < ema20 && ema20 < ema50 && adx >= 20;
+        const isBullishMacro = currentPrice >= ema200 || ema50 >= ema200;
+        const isBearishMacro = currentPrice <= ema200 || ema50 <= ema200;
+        const isBullishTrend = currentPrice > ema20 && ema20 > ema50 && adx >= 22;
+        const isBearishTrend = currentPrice < ema20 && ema20 < ema50 && adx >= 22;
 
-        if (isBullishTrend && rsi >= 48 && rsi <= 72) {
+        if (isBullishTrend && rsi >= 48 && rsi <= 68 && isBullishMacro) {
           decision = 'LONG';
-          confidence = Math.min(92, Math.round(65 + (adx - 20) * 1.2 + (rsi - 50) * 0.5));
-          reason = `Momentum Trend: EMA alignment (20>50) with strong ADX (${adx.toFixed(1)}) and healthy RSI (${rsi.toFixed(1)}).`;
+          confidence = Math.min(94, Math.round(70 + (adx - 22) * 1.0 + (rsi - 50) * 0.4 + (currentPrice > ema200 ? 6 : 0)));
+          reason = `Momentum Trend: Golden EMA alignment (Price > EMA20 > EMA50) with strong ADX (${adx.toFixed(1)}) and healthy RSI (${rsi.toFixed(1)}).`;
           const rawSl = Math.min(ema50, currentPrice - atr * 1.5);
           stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.5, currentPrice * 0.01);
           const risk = currentPrice - stopLoss;
           tp1 = currentPrice + risk * 1.5;
           tp2 = currentPrice + risk * 2.5;
           tp3 = currentPrice + risk * 4.0;
-        } else if (isBearishTrend && rsi <= 52 && rsi >= 28) {
+        } else if (isBearishTrend && rsi <= 52 && rsi >= 32 && isBearishMacro) {
           decision = 'SHORT';
-          confidence = Math.min(92, Math.round(65 + (adx - 20) * 1.2 + (50 - rsi) * 0.5));
-          reason = `Momentum Trend: Bearish EMA alignment (20<50) with high ADX (${adx.toFixed(1)}) and falling RSI (${rsi.toFixed(1)}).`;
+          confidence = Math.min(94, Math.round(70 + (adx - 22) * 1.0 + (50 - rsi) * 0.4 + (currentPrice < ema200 ? 6 : 0)));
+          reason = `Momentum Trend: Bearish EMA alignment (Price < EMA20 < EMA50) with high ADX (${adx.toFixed(1)}) and falling RSI (${rsi.toFixed(1)}).`;
           const rawSl = Math.max(ema50, currentPrice + atr * 1.5);
           stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.5, currentPrice * 0.01);
           const risk = stopLoss - currentPrice;
@@ -442,48 +444,52 @@ class StrategyManager {
       }
 
       case 'SCALPER': {
-        // Institutional Precision Scalping (Target Win-Rate > 85-90%, Low False-Positive Rate)
+        // Institutional Precision Scalping (High Win-Rate, Strict Trend Alignment)
         // 1. Structural Trend Filter: EMA20 vs EMA50 dictates micro-trend direction
         const isBullishMicroTrend = currentPrice >= ema20 && ema20 >= ema50;
         const isBearishMicroTrend = currentPrice <= ema20 && ema20 <= ema50;
+        const isAboveEma200 = currentPrice >= ema200;
 
         // 2. Volatility Condition: Avoid dead/flat sideways consolidation where noise triggers false signals
         const hasMinimumVolatility = atr >= currentPrice * 0.0025;
 
         // 3. Precision Oscillators: Extreme pullbacks with momentum confirmation
-        const isOversoldStoch = stoch.k < 28 && stoch.k > stoch.d;
-        const isOverboughtStoch = stoch.k > 72 && stoch.k < stoch.d;
+        const isOversoldStoch = stoch.k < 26 && stoch.k > stoch.d;
+        const isOverboughtStoch = stoch.k > 74 && stoch.k < stoch.d;
         const isLowerBbTouch = currentPrice <= bb.lower * 1.004;
         const isUpperBbTouch = currentPrice >= bb.upper * 0.996;
 
-        // LONG Condition: Bullish micro-trend pullback to support/lower BB OR extreme oversold bounce with confirmation
+        // LONG Condition: Bullish micro-trend pullback to support in alignment with macro trend
         if (
           hasMinimumVolatility &&
-          ((isBullishMicroTrend && (isOversoldStoch || isLowerBbTouch) && rsi >= 36 && rsi <= 55) ||
-           (!isBearishMicroTrend && isLowerBbTouch && isOversoldStoch && rsi <= 35))
+          isBullishMicroTrend &&
+          (isOversoldStoch || isLowerBbTouch) &&
+          rsi >= 38 && rsi <= 55 &&
+          isAboveEma200
         ) {
           decision = 'LONG';
-          confidence = Math.min(94, Math.round(75 + (30 - Math.min(30, stoch.k)) * 0.5 + (isBullishMicroTrend ? 8 : 0)));
-          reason = `Precision Scalper: ${isBullishMicroTrend ? 'Trend pullback to key support' : 'Extreme oversold bounce'} (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price near BB Lower).`;
+          confidence = Math.min(95, Math.round(76 + (28 - Math.min(28, stoch.k)) * 0.5 + (isAboveEma200 ? 6 : 0)));
+          reason = `Precision Scalper: Bullish trend pullback to key support (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price > EMA200).`;
           
-          // Tight ATR-based risk with guaranteed institutional R:R >= 2.0
           const risk = Math.max(atr * 0.9, currentPrice * 0.007);
           stopLoss = currentPrice - risk;
-          tp1 = currentPrice + risk * 2.0; // Meets RiskEngine minRiskRewardRatio 2.0
+          tp1 = currentPrice + risk * 2.0;
           tp2 = currentPrice + risk * 3.2;
           tp3 = currentPrice + risk * 5.0;
         } else if (
           hasMinimumVolatility &&
-          ((isBearishMicroTrend && (isOverboughtStoch || isUpperBbTouch) && rsi <= 64 && rsi >= 45) ||
-           (!isBullishMicroTrend && isUpperBbTouch && isOverboughtStoch && rsi >= 65))
+          isBearishMicroTrend &&
+          (isOverboughtStoch || isUpperBbTouch) &&
+          rsi <= 62 && rsi >= 45 &&
+          !isAboveEma200
         ) {
           decision = 'SHORT';
-          confidence = Math.min(94, Math.round(75 + (Math.max(70, stoch.k) - 70) * 0.5 + (isBearishMicroTrend ? 8 : 0)));
-          reason = `Precision Scalper: ${isBearishMicroTrend ? 'Trend pullback to key resistance' : 'Extreme overbought rejection'} (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price near BB Upper).`;
+          confidence = Math.min(95, Math.round(76 + (Math.max(72, stoch.k) - 72) * 0.5 + (!isAboveEma200 ? 6 : 0)));
+          reason = `Precision Scalper: Bearish trend pullback to key resistance (Stoch ${stoch.k.toFixed(1)}, RSI ${rsi.toFixed(1)}, Price < EMA200).`;
           
           const risk = Math.max(atr * 0.9, currentPrice * 0.007);
           stopLoss = currentPrice + risk;
-          tp1 = currentPrice - risk * 2.0; // Meets RiskEngine minRiskRewardRatio 2.0
+          tp1 = currentPrice - risk * 2.0;
           tp2 = currentPrice - risk * 3.2;
           tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
         }
@@ -491,22 +497,22 @@ class StrategyManager {
       }
 
       case 'BREAKOUT': {
-        // Volatility expansion breaking out of squeeze
-        const isBandwidthExpanding = bb.bandwidthPercent > 3.0;
-        if (isBandwidthExpanding && currentPrice >= bb.upper && rsi >= 58) {
+        // Volatility expansion breaking out of squeeze with ADX confirmation
+        const isBandwidthExpanding = bb.bandwidthPercent > 3.2 && adx >= 24;
+        if (isBandwidthExpanding && currentPrice >= bb.upper && rsi >= 56 && rsi <= 76) {
           decision = 'LONG';
-          confidence = Math.min(94, Math.round(70 + bb.bandwidthPercent * 2));
-          reason = `Volatility Breakout: Bollinger bandwidth expansion (${bb.bandwidthPercent.toFixed(1)}%) piercing upper envelope with RSI ${rsi.toFixed(1)}.`;
+          confidence = Math.min(94, Math.round(72 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice > ema200 ? 5 : 0)));
+          reason = `Volatility Breakout: Confirmed Bollinger expansion (${bb.bandwidthPercent.toFixed(1)}%) with ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
           const rawSl = Math.min(bb.middle, currentPrice - atr * 1.2);
           stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.2, currentPrice * 0.008);
           const risk = currentPrice - stopLoss;
           tp1 = currentPrice + risk * 1.5;
           tp2 = currentPrice + risk * 2.8;
           tp3 = currentPrice + risk * 4.5;
-        } else if (isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 42) {
+        } else if (isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 44 && rsi >= 24) {
           decision = 'SHORT';
-          confidence = Math.min(94, Math.round(70 + bb.bandwidthPercent * 2));
-          reason = `Volatility Breakout: Downward volatility expansion (${bb.bandwidthPercent.toFixed(1)}%) piercing lower envelope with RSI ${rsi.toFixed(1)}.`;
+          confidence = Math.min(94, Math.round(72 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice < ema200 ? 5 : 0)));
+          reason = `Volatility Breakout: Downward expansion (${bb.bandwidthPercent.toFixed(1)}%) with ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
           const rawSl = Math.max(bb.middle, currentPrice + atr * 1.2);
           stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.2, currentPrice * 0.008);
           const risk = stopLoss - currentPrice;
@@ -518,20 +524,21 @@ class StrategyManager {
       }
 
       case 'MEAN_REVERSION': {
-        // Statistical deviation bounce towards EMA20 / BB Middle
-        if (currentPrice < bb.lower || (rsi < 30 && currentPrice < ema20)) {
+        // Statistical deviation bounce ONLY in ranging/non-trending market (ADX < 24)
+        const isRangingMarket = adx < 24;
+        if (isRangingMarket && (currentPrice < bb.lower || (rsi < 28 && currentPrice < ema20))) {
           decision = 'LONG';
-          confidence = Math.min(88, Math.round(66 + (30 - rsi) * 1.0));
-          reason = `Mean Reversion: Extreme deviation below Lower Bollinger Band / RSI ${rsi.toFixed(1)}. Targeting mean reversion to EMA20.`;
+          confidence = Math.min(90, Math.round(68 + (28 - Math.min(28, rsi)) * 1.2));
+          reason = `Mean Reversion: Statistical oversold deviation in range market (RSI ${rsi.toFixed(1)}, ADX ${adx.toFixed(1)}). Targeting EMA20.`;
           const risk = Math.max(atr * 1.2, currentPrice * 0.008);
           stopLoss = currentPrice - risk;
           tp1 = Math.max(currentPrice + risk * 1.2, ema20 > currentPrice ? ema20 : currentPrice + risk * 1.2);
           tp2 = Math.max(tp1 + risk * 0.8, bb.middle > tp1 ? bb.middle : tp1 + risk * 0.8);
           tp3 = Math.max(tp2 + risk * 1.0, bb.upper > tp2 ? bb.upper : tp2 + risk * 1.0);
-        } else if (currentPrice > bb.upper || (rsi > 70 && currentPrice > ema20)) {
+        } else if (isRangingMarket && (currentPrice > bb.upper || (rsi > 72 && currentPrice > ema20))) {
           decision = 'SHORT';
-          confidence = Math.min(88, Math.round(66 + (rsi - 70) * 1.0));
-          reason = `Mean Reversion: Extreme deviation above Upper Bollinger Band / RSI ${rsi.toFixed(1)}. Targeting mean reversion to EMA20.`;
+          confidence = Math.min(90, Math.round(68 + (Math.max(72, rsi) - 72) * 1.2));
+          reason = `Mean Reversion: Statistical overbought rejection in range market (RSI ${rsi.toFixed(1)}, ADX ${adx.toFixed(1)}). Targeting EMA20.`;
           const risk = Math.max(atr * 1.2, currentPrice * 0.008);
           stopLoss = currentPrice + risk;
           tp1 = Math.min(currentPrice - risk * 1.2, ema20 < currentPrice ? ema20 : currentPrice - risk * 1.2);
@@ -543,22 +550,22 @@ class StrategyManager {
 
       case 'INSTITUTIONAL_SMC': {
         // Smart Money Concepts: BOS / CHoCH + Liquidity Sweeps
-        const isSmcBullish = ms.trend === 'UPTREND' || ms.structure === 'HIGHER_HIGH' || (typeof ms.bos === 'string' && ms.bos.toLowerCase().includes('bullish'));
-        const isSmcBearish = ms.trend === 'DOWNTREND' || ms.structure === 'LOWER_LOW' || (typeof ms.bos === 'string' && ms.bos.toLowerCase().includes('bearish'));
+        const isSmcBullish = (ms.trend === 'UPTREND' || ms.structure === 'HIGHER_HIGH' || (typeof ms.bos === 'string' && ms.bos.toLowerCase().includes('bullish'))) && currentPrice >= ema50;
+        const isSmcBearish = (ms.trend === 'DOWNTREND' || ms.structure === 'LOWER_LOW' || (typeof ms.bos === 'string' && ms.bos.toLowerCase().includes('bearish'))) && currentPrice <= ema50;
 
-        if (isSmcBullish && currentPrice > ema50 && rsi >= 46) {
+        if (isSmcBullish && currentPrice > ema50 && rsi >= 46 && rsi <= 68) {
           decision = 'LONG';
-          confidence = 82;
-          reason = `Institutional SMC: Bullish market structure break (BOS) with discount liquidity sweep mitigation.`;
+          confidence = Math.min(95, 82 + (currentPrice > ema200 ? 5 : 0) + (adx >= 22 ? 4 : 0));
+          reason = `Institutional SMC: Bullish structure break (BOS) with discount liquidity sweep mitigation above EMA50.`;
           const risk = Math.max(atr * 1.4, currentPrice * 0.01);
           stopLoss = currentPrice - risk;
           tp1 = currentPrice + risk * 1.8;
           tp2 = currentPrice + risk * 3.0;
           tp3 = currentPrice + risk * 5.0;
-        } else if (isSmcBearish && currentPrice < ema50 && rsi <= 54) {
+        } else if (isSmcBearish && currentPrice < ema50 && rsi <= 54 && rsi >= 32) {
           decision = 'SHORT';
-          confidence = 82;
-          reason = `Institutional SMC: Bearish market structure break (BOS) with premium liquidity pool mitigation.`;
+          confidence = Math.min(95, 82 + (currentPrice < ema200 ? 5 : 0) + (adx >= 22 ? 4 : 0));
+          reason = `Institutional SMC: Bearish structure break (BOS) with premium liquidity pool mitigation below EMA50.`;
           const risk = Math.max(atr * 1.4, currentPrice * 0.01);
           stopLoss = currentPrice + risk;
           tp1 = currentPrice - risk * 1.8;
@@ -575,7 +582,7 @@ class StrategyManager {
 
         if (isSwingBullish && rsi >= 45 && rsi <= 68) {
           decision = 'LONG';
-          confidence = 85;
+          confidence = Math.min(96, 86 + (adx >= 26 ? 4 : 0));
           reason = `Conservative Swing: Multi-period HTF trend alignment (Price > EMA50 > EMA200, ADX ${adx.toFixed(1)}). Low drawdown swing.`;
           const rawSl = Math.min(ema200, currentPrice - atr * 2.5);
           stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 2.0, currentPrice * 0.015);
@@ -585,7 +592,7 @@ class StrategyManager {
           tp3 = currentPrice + risk * 5.0;
         } else if (isSwingBearish && rsi <= 55 && rsi >= 32) {
           decision = 'SHORT';
-          confidence = 85;
+          confidence = Math.min(96, 86 + (adx >= 26 ? 4 : 0));
           reason = `Conservative Swing: Multi-period HTF downtrend alignment (Price < EMA50 < EMA200, ADX ${adx.toFixed(1)}). Low drawdown swing.`;
           const rawSl = Math.max(ema200, currentPrice + atr * 2.5);
           stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 2.0, currentPrice * 0.015);

@@ -132,6 +132,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
   const isEn = language === 'en';
+  const isFrench = language === 'fr';
 
   // Find active position for this specific symbol
   const activePosition = useMemo(() => {
@@ -769,7 +770,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               id="btn-chart-reset-zoom"
               onClick={handleResetZoom}
               className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer active:scale-95"
-              title={isArabic ? 'إعادة ضبط العرض' : 'Recentrer le graphique'}
+              title={isArabic ? 'إعادة ضبط العرض' : isFrench ? 'Recentrer le graphique' : 'Reset Chart Zoom'}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -781,7 +782,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400'
               }`}
-              title={isArabic ? 'لوحة المؤشرات الفنية' : 'Barre des indicateurs'}
+              title={isArabic ? 'لوحة المؤشرات الفنية' : isFrench ? 'Barre des indicateurs' : 'Technical Indicators'}
             >
               <Sliders className="w-3.5 h-3.5" />
             </button>
@@ -793,7 +794,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white'
               }`}
-              title={isFullscreen ? (isArabic ? 'تصغير' : 'Réduire') : (isArabic ? 'ملء الشاشة' : 'Plein écran')}
+              title={isFullscreen ? (isArabic ? 'تصغير' : isFrench ? 'Réduire' : 'Exit Fullscreen') : (isArabic ? 'ملء الشاشة' : isFrench ? 'Plein écran' : 'Fullscreen')}
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
@@ -832,7 +833,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   {rsiValue}
                 </span>
                 <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">
-                  {rsiValue >= 70 ? (isArabic ? 'تشبع شراء' : 'Suracheté') : rsiValue <= 30 ? (isArabic ? 'تشبع بيع' : 'Survendu') : (isArabic ? 'معتدل' : 'Neutre')}
+                  {rsiValue >= 70
+                    ? (isArabic ? 'تشبع شراء' : isFrench ? 'Suracheté' : 'Overbought')
+                    : rsiValue <= 30
+                    ? (isArabic ? 'تشبع بيع' : isFrench ? 'Survendu' : 'Oversold')
+                    : (isArabic ? 'معتدل' : isFrench ? 'Neutre' : 'Neutral')}
                 </span>
               </div>
             </div>
@@ -862,10 +867,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'شموع يابانية' : 'Bougies'}
+              title={isArabic ? 'شموع يابانية' : isFrench ? 'Bougies' : 'Candlesticks'}
             >
               <CandlestickChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'شموع' : 'Bougies'}</span>
+              <span className="hidden sm:inline">{isArabic ? 'شموع' : isFrench ? 'Bougies' : 'Candles'}</span>
             </button>
             <button
               id="btn-style-heikin"
@@ -888,10 +893,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'مساحة' : 'Zone'}
+              title={isArabic ? 'مساحة' : isFrench ? 'Zone' : 'Area'}
             >
               <AreaChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'مساحة' : 'Zone'}</span>
+              <span className="hidden sm:inline">{isArabic ? 'مساحة' : isFrench ? 'Zone' : 'Area'}</span>
             </button>
             <button
               id="btn-style-line"
@@ -901,10 +906,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'خط' : 'Ligne'}
+              title={isArabic ? 'خط' : isFrench ? 'Ligne' : 'Line'}
             >
               <LineChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'خط' : 'Ligne'}</span>
+              <span className="hidden sm:inline">{isArabic ? 'خط' : isFrench ? 'Ligne' : 'Line'}</span>
             </button>
           </div>
         </div>
@@ -915,7 +920,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-900/70 border border-slate-800/80 rounded-2xl animate-in fade-in duration-200">
           <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            {isArabic ? 'المؤشرات النشطة:' : 'Indicateurs:'}
+            {isArabic ? 'المؤشرات النشطة:' : isFrench ? 'Indicateurs:' : 'Active Indicators:'}
           </span>
 
           {/* EMA 20 */}
@@ -1014,7 +1019,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               }`}
             >
               <Sparkles className="w-3 h-3 text-brand-400" />
-              {isArabic ? 'أهداف الإشارة (TP/SL)' : 'Cibles Signal'}
+              {isArabic ? 'أهداف الإشارة (TP/SL)' : isFrench ? 'Cibles Signal' : 'Signal Targets (TP/SL)'}
             </button>
           )}
 
@@ -1030,7 +1035,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               }`}
             >
               <Zap className="w-3 h-3 text-emerald-400" />
-              {isArabic ? 'صفقة البوت الحية' : 'Position Bot'}
+              {isArabic ? 'صفقة البوت الحية' : isFrench ? 'Position Bot' : 'Bot Position'}
             </button>
           )}
         </div>
@@ -1060,7 +1065,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         {/* Real-Time Candle Inspection Bar (Crosshair HUD) */}
         <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap text-xs font-mono text-slate-300">
           <span className="text-slate-400 text-[11px]">
-            {hoveredCandle ? (isArabic ? 'المحددة:' : 'Curseur:') : (isArabic ? 'الحالية:' : 'Dernier:')}
+            {hoveredCandle
+              ? (isArabic ? 'المحددة:' : isFrench ? 'Curseur:' : 'Selected:')
+              : (isArabic ? 'الحالية:' : isFrench ? 'Dernier:' : 'Live:')}
           </span>
           <span>
             <strong className="text-slate-400">O:</strong>{' '}

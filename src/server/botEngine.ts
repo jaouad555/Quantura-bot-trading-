@@ -360,18 +360,29 @@ export const startBotEngine = () => {
         if (!pos.pnlHistory) pos.pnlHistory = [];
         pos.pnlHistory = [...pos.pnlHistory, Math.round(roePercent * 10) / 10].slice(-50);
 
-        // Calculate liquidation price if missing
-        if (!pos.liquidationPrice) {
-          pos.liquidationPrice = isLong
-            ? pos.entryPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
-            : pos.entryPrice * (1 + (1 / lev) - 0.005);
-        }
-        pos.distanceToLiqPct = Math.abs((currentP - pos.liquidationPrice) / currentP) * 100;
+        // In SPOT mode (or 1x leverage), there is NO liquidation mechanism whatsoever
+        const isPosFutures = pos.marketType === 'FUTURES' && (pos.leverage || 1) > 1;
 
-        // 1. LIQUIDATION GUARD CHECK
-        const isLiquidated = (isLong && currentP <= pos.liquidationPrice) ||
-                             (!isLong && currentP >= pos.liquidationPrice) ||
-                             roePercent <= -99.0;
+        if (isPosFutures) {
+          // Calculate liquidation price if missing for Futures
+          if (!pos.liquidationPrice) {
+            pos.liquidationPrice = isLong
+              ? pos.entryPrice * Math.max(0.001, 1 - (1 / lev) + 0.005)
+              : pos.entryPrice * (1 + (1 / lev) - 0.005);
+          }
+          pos.distanceToLiqPct = Math.abs((currentP - pos.liquidationPrice) / currentP) * 100;
+        } else {
+          pos.liquidationPrice = undefined;
+          pos.distanceToLiqPct = undefined;
+          pos.leverage = 1;
+        }
+
+        // 1. LIQUIDATION GUARD CHECK (FUTURES ONLY)
+        const isLiquidated = isPosFutures && (
+          (isLong && currentP <= (pos.liquidationPrice || 0)) ||
+          (!isLong && currentP >= (pos.liquidationPrice || Infinity)) ||
+          roePercent <= -99.0
+        );
 
         if (isLiquidated) {
           console.warn(`[SERVER ENGINE] 🚨 LIQUIDATION TRIGGERED for ${pos.symbol} at ${currentP} (Entry: ${pos.entryPrice}, Liq: ${pos.liquidationPrice})`);

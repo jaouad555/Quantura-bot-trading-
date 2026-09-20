@@ -141,6 +141,8 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
+  const isEn = language === 'en';
+  const isFrench = language === 'fr';
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [prevPrice, setPrevPrice] = useState<number | null>(null);
   const [priceFlash, setPriceFlash] = useState<'UP' | 'DOWN' | null>(null);
@@ -413,7 +415,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenMenu}
                 className="h-8 flex items-center justify-center gap-1.5 px-2 sm:px-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-xs transition shrink-0 active:scale-95 group cursor-pointer"
-                title={isArabic ? 'القائمة الرئيسية' : 'Menu Quantura'}
+                title={isArabic ? 'القائمة الرئيسية' : isFrench ? 'Menu Quantura' : 'Quantura Menu'}
                 aria-label="Menu"
               >
                 <Menu className="w-4 h-4 text-cyan-400 group-hover:rotate-90 transition-transform duration-300 shrink-0" strokeWidth={2} />
@@ -431,7 +433,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-slate-900 border-cyan-500/70 shadow-sm text-white'
                     : 'bg-slate-950/90 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80 text-slate-200'
                 }`}
-                title={isArabic ? 'قائمة الأزواج والعملات' : 'Liste des paires'}
+                title={isArabic ? 'قائمة الأزواج والعملات' : isFrench ? 'Liste des paires' : 'Pair Selector'}
               >
                 <div
                   className={`w-4 h-4 rounded-md bg-gradient-to-br ${activePair.iconBg} flex items-center justify-center text-slate-950 font-black text-[9px] shadow-xs shrink-0`}
@@ -575,7 +577,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
                 }`}
-                title={isArabic ? 'اضغط للتبديل بين Spot و Futures' : 'Cliquer pour basculer entre Spot et Futures'}
+                title={isArabic ? 'اضغط للتبديل بين Spot و Futures' : isFrench ? 'Cliquer pour basculer entre Spot et Futures' : 'Click to toggle Spot / Futures'}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${marketType === 'FUTURES' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
                 <span className="tracking-wider">{marketType === 'FUTURES' ? 'FUTURES' : 'SPOT'}</span>
@@ -621,7 +623,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onRefreshData}
               disabled={isRefreshing}
               className="h-8 w-8 text-slate-400 hover:text-white rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 transition disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer active:scale-95 shadow-xs"
-              title={isArabic ? 'تحديث فوري للبيانات' : 'Actualiser les données'}
+              title={isArabic ? 'تحديث فوري للبيانات' : isFrench ? 'Actualiser les données' : 'Refresh Live Data'}
               aria-label="Refresh"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : 'text-slate-400'}`} strokeWidth={2} />
@@ -703,7 +705,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-slate-800 text-indigo-300 border-indigo-500/40'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : 'Positions ouvertes et Bot'}
+                title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : isFrench ? 'Positions ouvertes et Bot' : 'Open Positions & Bot'}
               >
                 <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
                 <span>{openPositionsCount}</span>
@@ -721,7 +723,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : 'Radar Global Scanner'}
+                title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : isFrench ? 'Radar Global Scanner' : 'Global Market Scanner'}
               >
                 <Radar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'globalScanner' ? 'text-cyan-400 animate-spin' : 'text-cyan-400/80'}`} strokeWidth={2} />
                 <span className="hidden sm:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
@@ -738,7 +740,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-emerald-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : 'Graphique en direct (Chart)'}
+                title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : isFrench ? 'Graphique en direct (Chart)' : 'Live Chart'}
               >
                 <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
                 <span className="hidden sm:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
@@ -755,7 +757,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : 'Analyse IA Quantitative'}
+                title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : isFrench ? 'Analyse IA Quantitative' : 'AI Quant Analysis'}
               >
                 <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
                 <span className="hidden sm:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
@@ -772,7 +774,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : 'Simulateur Backtest'}
+                title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : isFrench ? 'Simulateur Backtest' : 'Backtest Simulator'}
               >
                 <FlaskConical className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
@@ -789,7 +791,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : 'Heatmap du Marché'}
+                title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : isFrench ? 'Heatmap du Marché' : 'Market Heatmap'}
               >
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'السوق' : 'Market'}</span>
@@ -806,7 +808,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-teal-300 hover:bg-slate-800'
                 }`}
-                title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : 'Gestion du Portefeuille'}
+                title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : isFrench ? 'Gestion du Portefeuille' : 'Risk & Portfolio Management'}
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
@@ -827,10 +829,10 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-rose-600 text-white border-rose-400 animate-pulse shadow-md shadow-rose-900/50'
                     : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/40 text-rose-300'
                 }`}
-                title={isArabic ? 'إغلاق طوارئ فوري لكافة الصفقات لحماية الرصيد' : 'Fermeture d\'urgence de toutes les positions'}
+                title={isArabic ? 'إغلاق طوارئ فوري لكافة الصفقات لحماية الرصيد' : isFrench ? 'Fermeture d\'urgence de toutes les positions' : 'Emergency Panic Close All Positions'}
               >
                 <AlertOctagon className="w-3.5 h-3.5 text-rose-300 shrink-0" strokeWidth={2} />
-                <span>{panicConfirmState ? (isArabic ? 'تأكيد؟' : 'Confirmer?') : (isArabic ? 'طوارئ' : 'Panic')}</span>
+                <span>{panicConfirmState ? (isArabic ? 'تأكيد؟' : isFrench ? 'Confirmer?' : 'Confirm?') : (isArabic ? 'طوارئ' : 'Panic')}</span>
               </button>
             )}
 
@@ -860,8 +862,8 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title={
                 isFullscreen || displayMode === 'fullscreen'
-                  ? (isArabic ? 'إنهاء وضع ملء الشاشة' : 'Quitter le plein écran')
-                  : (isArabic ? 'وضع ملء الشاشة (Plein écran)' : 'Mode Plein écran (Fullscreen)')
+                  ? (isArabic ? 'إنهاء وضع ملء الشاشة' : isFrench ? 'Quitter le plein écran' : 'Exit Fullscreen')
+                  : (isArabic ? 'وضع ملء الشاشة (Plein écran)' : isFrench ? 'Mode Plein écran (Fullscreen)' : 'Fullscreen Mode')
               }
               aria-label="Plein écran Fullscreen"
             >
@@ -879,7 +881,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenHelp}
                 className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 shadow-xs"
-                title={isArabic ? 'دليل الاستخدام والبدء السريع (Quick Start & Help)' : 'Guide & Démarrage Rapide'}
+                title={isArabic ? 'دليل الاستخدام والبدء السريع (Quick Start & Help)' : isFrench ? 'Guide & Démarrage Rapide' : 'Quick Start & Help Guide'}
                 aria-label="Help Guide"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} />
@@ -895,7 +897,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onOpenSettings}
               className="h-8 w-8 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'الإعدادات واللغات' : 'Paramètres & Langues'}
+              title={isArabic ? 'الإعدادات واللغات' : isFrench ? 'Paramètres & Langues' : 'Settings & Languages'}
               aria-label="Settings"
             >
               <Settings className="w-3.5 h-3.5" strokeWidth={2} />
@@ -916,7 +918,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={handleCycleTimezone}
               className="h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-[10px] sm:text-xs font-mono text-slate-300 transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'اضغط لتغيير المنطقة الزمنية (GMT+1 / UTC / LOCAL)' : 'Cliquer pour changer le fuseau horaire'}
+              title={isArabic ? 'اضغط لتغيير المنطقة الزمنية (GMT+1 / UTC / LOCAL)' : isFrench ? 'Cliquer pour changer le fuseau horaire' : 'Click to change timezone (GMT+1 / UTC / LOCAL)'}
             >
               <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
               <span className="font-bold text-slate-200">{formatTime(currentTime, timezone, false)}</span>
@@ -930,7 +932,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onRefreshData}
               className="h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-[10px] sm:text-xs font-mono text-slate-400 hover:text-cyan-300 transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'سرعة الاستجابة اللحظية (اضغط للتحديث وفحص الاتصال)' : 'Latence WebSocket (Cliquer pour tester le ping)'}
+              title={isArabic ? 'سرعة الاستجابة اللحظية (اضغط للتحديث وفحص الاتصال)' : isFrench ? 'Latence WebSocket (Cliquer pour tester le ping)' : 'WebSocket Latency (Click to ping)'}
             >
               <Wifi className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
               <span className="text-emerald-400 font-bold">{pingMs}ms</span>
@@ -946,7 +948,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
                   : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
               }`}
-              title={isAndroidView ? (isArabic ? 'التبديل إلى وضع الكمبيوتر الكامل' : 'Basculer en Vue PC') : (isArabic ? 'التبديل إلى محاكاة الهاتف' : 'Basculer en Vue Mobile')}
+              title={isAndroidView ? (isArabic ? 'التبديل إلى وضع الكمبيوتر الكامل' : isFrench ? 'Basculer en Vue PC' : 'Switch to Desktop View') : (isArabic ? 'التبديل إلى محاكاة الهاتف' : isFrench ? 'Basculer en Vue Mobile' : 'Switch to Mobile View')}
               aria-label="Toggle Screen View"
             >
               {isAndroidView ? (
@@ -972,7 +974,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                     : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-slate-300'
                 }`}
-                title={isArabic ? 'تبديل تشغيل/إيقاف البوت الآلي' : 'Activer / Désactiver le Bot'}
+                title={isArabic ? 'تبديل تشغيل/إيقاف البوت الآلي' : isFrench ? 'Activer / Désactiver le Bot' : 'Enable / Disable Trading Bot'}
               >
                 <Bot className={`w-3.5 h-3.5 shrink-0 ${botEnabled ? 'text-emerald-400' : 'text-slate-500'}`} strokeWidth={2} />
                 <span className={`w-1.5 h-1.5 rounded-full ${botEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
@@ -990,7 +992,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                     : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
                 }`}
-                title={isArabic ? 'زخم واتجاه السوق العام (Market Overview)' : 'Tendance du Marché'}
+                title={isArabic ? 'زخم واتجاه السوق العام (Market Overview)' : isFrench ? 'Tendance du Marché' : 'Market Trend & Overview'}
               >
                 <Flame className={`w-3.5 h-3.5 shrink-0 ${isPricePositive ? 'text-emerald-400' : 'text-rose-400'}`} strokeWidth={2} />
                 <span className="hidden sm:inline">{isPricePositive ? (isArabic ? 'صاعد' : 'BULL') : (isArabic ? 'هابط' : 'BEAR')}</span>
@@ -1007,7 +1009,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
                     : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-900'
                 }`}
-                title={isArabic ? 'لوحة الإشارات وتحليل التداول الفوري' : 'Panneau des Signaux en direct'}
+                title={isArabic ? 'لوحة الإشارات وتحليل التداول الفوري' : isFrench ? 'Panneau des Signaux en direct' : 'Live Signals Panel'}
               >
                 <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'الإشارة' : 'Signal'}</span>
@@ -1041,7 +1043,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50'
                     : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-900'
                 }`}
-                title={isArabic ? 'استراتيجيات وإعدادات البوت الآلي' : 'Stratégies et Presets du Bot'}
+                title={isArabic ? 'استراتيجيات وإعدادات البوت الآلي' : isFrench ? 'Stratégies et Presets du Bot' : 'Bot Strategies & Presets'}
               >
                 <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
                 <span className="hidden md:inline">{isArabic ? 'الاستراتيجية' : 'Presets'}</span>
@@ -1058,10 +1060,10 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                     : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-900'
                 }`}
-                title={isArabic ? 'سجل الصفقات والعمليات (History)' : 'Historique des Trades'}
+                title={isArabic ? 'سجل الصفقات والعمليات (History)' : isFrench ? 'Historique des Trades' : 'Trade History & Journal'}
               >
                 <History className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
-                <span className="hidden md:inline">{isArabic ? 'السجل' : 'Journal'}</span>
+                <span className="hidden md:inline">{isArabic ? 'السجل' : isFrench ? 'Journal' : 'History'}</span>
               </button>
             )}
           </div>
@@ -1078,7 +1080,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
                     : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-cyan-300'
                 }`}
-                title={isArabic ? (copiedPrice ? 'تم النسخ!' : 'نسخ السعر الحالي') : (copiedPrice ? 'Copié !' : 'Copier le prix')}
+                title={isArabic ? (copiedPrice ? 'تم النسخ!' : 'نسخ السعر الحالي') : isFrench ? (copiedPrice ? 'Copié !' : 'Copier le prix') : (copiedPrice ? 'Copied!' : 'Copy Current Price')}
                 aria-label="Copy Price"
               >
                 {copiedPrice ? (
@@ -1096,7 +1098,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={handleCycleLanguage}
               className="h-8 px-2 sm:px-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-cyan-300 text-[10px] sm:text-xs font-mono font-bold flex items-center gap-1 transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'تبديل اللغة السريع (عربي / فرنسي / إنجليزي)' : 'Changer rapidement de langue'}
+              title={isArabic ? 'تبديل اللغة السريع (عربي / فرنسي / إنجليزي)' : isFrench ? 'Changer rapidement de langue' : 'Switch Language (EN / FR / AR)'}
             >
               <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
               <span className="uppercase">{language}</span>
@@ -1112,7 +1114,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 shadow-xs'
                   : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
               }`}
-              title={soundEnabled ? (isArabic ? 'كتم الصوت' : 'Couper le son') : (isArabic ? 'تشغيل الصوت' : 'Activer le son')}
+              title={soundEnabled ? (isArabic ? 'كتم الصوت' : isFrench ? 'Couper le son' : 'Mute Sound') : (isArabic ? 'تشغيل الصوت' : isFrench ? 'Activer le son' : 'Enable Sound')}
               aria-label="Toggle Sound"
             >
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} /> : <VolumeX className="w-3.5 h-3.5" strokeWidth={2} />}
@@ -1130,8 +1132,8 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title={
                 notificationsEnabled
-                  ? (isArabic ? 'إيقاف التنبيهات (اضغط للتعطيل)' : 'Désactiver les notifications')
-                  : (isArabic ? 'تشغيل التنبيهات (اضغط للتفعيل)' : 'Activer les notifications')
+                  ? (isArabic ? 'إيقاف التنبيهات (اضغط للتعطيل)' : isFrench ? 'Désactiver les notifications' : 'Mute Notifications')
+                  : (isArabic ? 'تشغيل التنبيهات (اضغط للتفعيل)' : isFrench ? 'Activer les notifications' : 'Enable Notifications')
               }
               aria-label="Toggle Notifications"
             >
@@ -1148,7 +1150,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onOpenNotifications}
               className="h-8 w-8 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition relative shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'مركز الإشعارات والسجل' : 'Centre de notifications'}
+              title={isArabic ? 'مركز الإشعارات والسجل' : isFrench ? 'Centre de notifications' : 'Notification Center'}
               aria-label="Notifications Center"
             >
               <Activity className="w-3.5 h-3.5" strokeWidth={2} />
@@ -1171,8 +1173,8 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title={
                 displayMode === 'compact'
-                  ? (isArabic ? 'الوضع المدمج مفعل (اضغط للوضع العادي)' : 'Mode Compact actif')
-                  : (isArabic ? 'الوضع العادي (اضغط للوضع المدمج)' : 'Mode Standard')
+                  ? (isArabic ? 'الوضع المدمج مفعل (اضغط للوضع العادي)' : isFrench ? 'Mode Compact actif' : 'Compact Mode Active')
+                  : (isArabic ? 'الوضع العادي (اضغط للوضع المدمج)' : isFrench ? 'Mode Standard' : 'Standard Mode')
               }
               aria-label="Toggle Density"
             >
