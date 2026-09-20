@@ -495,7 +495,7 @@ const cachedTickers: Map<string, { data: BinanceTicker; timestamp: number }> = n
 const cachedKlines: Map<string, { data: KlineCandle[]; timestamp: number }> = new Map();
 const cachedOrderBooks: Map<string, { data: OrderBookSummary; timestamp: number }> = new Map();
 const cachedMtfConfluence: Map<string, { data: { allTimeframes: any; mtfConfluence: MTFConfluenceData }; timestamp: number }> = new Map();
-let cachedDerivatives: { data: DerivativesData; timestamp: number } | null = null;
+const cachedDerivatives: Map<string, { data: DerivativesData; timestamp: number }> = new Map();
 const cachedAIAnalysis: Map<string, { analysis: { fr: string; ar: string; en: string }; timestamp: number; price: number }> = new Map();
 
 const CACHE_TTL_MS = 3000; // 3 seconds fast cache for tickers and active klines
@@ -529,17 +529,18 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
     return cached.data;
   }
 
+  // STRICT SEPARATION: Never cross Spot and Futures endpoints
   const urls = marketType === 'FUTURES'
     ? [
         `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-        `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
+        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${normSymbol}`,
       ]
     : [
         `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-        `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
         `https://api1.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+        `https://api2.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+        `https://api3.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+        `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
       ];
 
   let lastError: any = null;
@@ -619,17 +620,17 @@ async function fetchBinanceKlines(
     return cached.data;
   }
 
+  // STRICT SEPARATION: Futures uses fapi, Spot uses api/api1/api2/api3/vision
   const urls = marketType === 'FUTURES'
     ? [
         `https://fapi.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://api.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
       ]
     : [
         `https://api.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://fapi.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
         `https://api1.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+        `https://api2.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+        `https://api3.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+        `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
       ];
 
   for (const url of urls) {
@@ -910,14 +911,15 @@ async function fetchBinanceOrderBook(symbol = 'BTCUSDT', marketType: 'SPOT' | 'F
     return cached.data;
   }
 
+  // STRICT SEPARATION: Depth endpoints
   const urls = marketType === 'FUTURES'
     ? [
         `https://fapi.binance.com/fapi/v1/depth?symbol=${normSymbol}&limit=20`,
-        `https://api.binance.com/api/v3/depth?symbol=${normSymbol}&limit=20`,
       ]
     : [
         `https://api.binance.com/api/v3/depth?symbol=${normSymbol}&limit=20`,
-        `https://fapi.binance.com/fapi/v1/depth?symbol=${normSymbol}&limit=20`,
+        `https://api1.binance.com/api/v3/depth?symbol=${normSymbol}&limit=20`,
+        `https://data-api.binance.vision/api/v3/depth?symbol=${normSymbol}&limit=20`,
       ];
 
   for (const url of urls) {
@@ -1026,8 +1028,9 @@ function asksVolume(asks: { price: number; qty: number }[]): number {
 async function fetchBinanceDerivatives(symbol = 'BTCUSDT'): Promise<DerivativesData> {
   const normSymbol = symbol.toUpperCase();
   const now = Date.now();
-  if (cachedDerivatives && now - cachedDerivatives.timestamp < 10000) {
-    return cachedDerivatives.data;
+  const cached = cachedDerivatives.get(normSymbol);
+  if (cached && now - cached.timestamp < 10000) {
+    return cached.data;
   }
 
   try {
@@ -1077,7 +1080,7 @@ async function fetchBinanceDerivatives(symbol = 'BTCUSDT'): Promise<DerivativesD
       lastUpdated: now,
     };
 
-    cachedDerivatives = { data: derivatives, timestamp: now };
+    cachedDerivatives.set(normSymbol, { data: derivatives, timestamp: now });
     return derivatives;
   } catch (err) {
     return {
@@ -1205,7 +1208,7 @@ app.get('/api/binance/market-data', async (req, res) => {
         fetchBinanceTicker(symbol, marketType),
         fetchBinanceKlines(symbol, timeframe, 350, marketType),
         fetchBinanceOrderBook(symbol, marketType),
-        fetchBinanceDerivatives(symbol),
+        marketType === 'FUTURES' ? fetchBinanceDerivatives(symbol) : Promise.resolve(null),
         fetchMultiTimeframeConfluence(symbol, marketType),
       ]);
 

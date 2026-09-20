@@ -392,7 +392,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       try {
         const symbolsToFetch = viewMode === 'MULTI_COIN' ? activeSymbolsForBacktest : [currentSymbol];
         let klinesMap = { ...allCoinsKlines };
-        const hasAllCached = !forceFetch && symbolsToFetch.every((s) => klinesMap[s] && klinesMap[s].length >= 30);
+        const hasAllCached = !forceFetch && symbolsToFetch.every((s) => klinesMap[`${marketType}_${s}`] && klinesMap[`${marketType}_${s}`].length >= 30);
 
         if (!hasAllCached) {
           setLoadingProgress(35);
@@ -405,7 +405,9 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
             if (res.ok) {
               const data = await res.json();
               if (data.results && Object.keys(data.results).length > 0) {
-                klinesMap = data.results;
+                Object.entries(data.results).forEach(([sym, klines]) => {
+                  klinesMap[`${marketType}_${sym}`] = klines as KlineCandle[];
+                });
               }
             }
           } catch (fetchErr) {
@@ -413,8 +415,9 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
           }
 
           symbolsToFetch.forEach((sym) => {
-            if (!klinesMap[sym] || klinesMap[sym].length < 30) {
-              klinesMap[sym] = generateFallbackKlines(sym, timeframe, months);
+            const kKey = `${marketType}_${sym}`;
+            if (!klinesMap[kKey] || klinesMap[kKey].length < 30) {
+              klinesMap[kKey] = generateFallbackKlines(sym, timeframe, months);
             }
           });
           setAllCoinsKlines(klinesMap);
@@ -424,7 +427,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
         setLoadingStatusText(isArabic ? 'جاري محاكاة الصفقات واختبار الاستراتيجيات...' : 'Simulating order executions...');
 
         // 1. Single Asset Backtest
-        const primaryKlines = klinesMap[currentSymbol] || klinesMap[symbolsToFetch[0]] || generateFallbackKlines(currentSymbol, timeframe, months);
+        const primaryKlines = klinesMap[`${marketType}_${currentSymbol}`] || klinesMap[`${marketType}_${symbolsToFetch[0]}`] || generateFallbackKlines(currentSymbol, timeframe, months);
         const singleRes = runHistoricalBacktest(primaryKlines, currentConfig, currentSymbol);
         setSingleResult(singleRes);
 
@@ -436,7 +439,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
         if (viewMode === 'MULTI_COIN') {
           const activeKlinesMap: Record<string, KlineCandle[]> = {};
           symbolsToFetch.forEach((sym) => {
-            if (klinesMap[sym]) activeKlinesMap[sym] = klinesMap[sym];
+            const kKey = `${marketType}_${sym}`;
+            if (klinesMap[kKey]) activeKlinesMap[sym] = klinesMap[kKey];
           });
           const multiRes = runMultiCoinBacktest(activeKlinesMap, currentConfig);
           setMultiResult(multiRes);
@@ -457,7 +461,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
   useEffect(() => {
     executeSimulation(false);
-  }, [timeframe, months, currentSymbol, viewMode, selectedStrategyId]);
+  }, [timeframe, months, currentSymbol, viewMode, selectedStrategyId, marketType]);
 
   // Primary active result
   const activeResult: BacktestResult | null = useMemo(() => {
@@ -533,7 +537,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       {/* ========================================================================= */}
       {/* COMPACT PRO CONTROL BAR (Platform Grade Terminal Header)                 */}
       {/* ========================================================================= */}
-      <div className="relative z-30 bg-[#0f172a]/95 border border-[#1e293b] rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col gap-4">
+      <div className={`relative ${isLeverageDropdownOpen || isSymbolDropdownOpen || isTimeframeDropdownOpen ? 'z-50' : 'z-20'} bg-[#0f172a]/95 border border-[#1e293b] rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col gap-4`}>
         
         {/* Row 1: Strategy Selector Bar & Mode Switches */}
         <div className="flex flex-col gap-3 border-b border-[#1e293b] pb-3.5">
@@ -837,7 +841,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
           )}
 
           {/* Market Type (Futures / Spot) */}
-          <div className={`flex flex-col gap-1 relative ${isLeverageDropdownOpen ? 'z-50' : 'z-10'}`} ref={leverageDropdownRef}>
+          <div className={`flex flex-col gap-1 relative ${isLeverageDropdownOpen ? 'z-[80]' : 'z-10'}`} ref={leverageDropdownRef}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'السوق والرافعة' : 'Market & Lev'}
             </span>
@@ -868,12 +872,12 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
 
               {marketType === 'FUTURES' ? (
-                <div className="relative">
+                <div className={`relative ${isLeverageDropdownOpen ? 'z-[90]' : 'z-10'}`}>
                   <button
                     type="button"
                     onClick={() => setIsLeverageDropdownOpen((prev) => !prev)}
                     className={`bg-[#1e293b] border ${
-                      isLeverageDropdownOpen ? 'border-amber-400 ring-1 ring-amber-400/50' : 'border-amber-500/50 hover:border-amber-400'
+                      isLeverageDropdownOpen ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-amber-500/50 hover:border-amber-400'
                     } rounded-lg px-2.5 py-1 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer`}
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -883,58 +887,82 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
                   {/* Vertical Popover List strictly inside the app, floating high above Net P&L and all cards */}
                   {isLeverageDropdownOpen && (
-                    <div className="absolute top-[110%] start-0 z-[100] w-56 bg-[#0a101f] border border-slate-700 rounded-xl shadow-2xl backdrop-blur-2xl p-1.5 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 max-h-64 overflow-y-auto no-scrollbar ring-1 ring-amber-500/30">
-                      <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-800">
-                        {isArabic ? 'اختر الرافعة المالية' : 'Select Leverage'}
+                    <div className="absolute top-full mt-2 start-0 z-[9999] w-64 bg-[#0a1224] border-2 border-amber-500/80 rounded-xl shadow-[0_25px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100 max-h-80 overflow-y-auto ring-4 ring-amber-500/20">
+                      <div className="px-2 py-1 text-[10px] font-bold text-amber-400 uppercase border-b border-slate-800 flex items-center justify-between">
+                        <span>{isArabic ? 'الرافعة المالية (عمودية)' : 'Select Leverage (Futures)'}</span>
+                        <span className="font-mono text-xs text-white">{leverage}x</span>
                       </div>
-                      {[
-                        { lev: 1, label: '1x', desc: isArabic ? 'بدون مضاعفة (محافظ)' : '1x Conservative', tag: 'Safe' },
-                        { lev: 2, label: '2x', desc: isArabic ? 'موصى به للأمان' : '2x Low Risk', tag: 'Safe' },
-                        { lev: 3, label: '3x', desc: isArabic ? 'توازن مثالي' : '3x Balanced', tag: 'Optimal' },
-                        { lev: 5, label: '5x', desc: isArabic ? 'مخاطرة قياسية' : '5x Standard', tag: 'Standard' },
-                        { lev: 7, label: '7x', desc: isArabic ? 'صفقات زخم' : '7x Momentum', tag: 'Active' },
-                        { lev: 10, label: '10x', desc: isArabic ? 'مضاربة نشطة' : '10x Scalp', tag: 'Aggressive' },
-                        { lev: 15, label: '15x', desc: isArabic ? 'مضاربة عالية' : '15x High Risk', tag: 'High' },
-                        { lev: 20, label: '20x', desc: isArabic ? 'مضاربة سريعة' : '20x Fast Scalp', tag: 'High' },
-                        { lev: 25, label: '25x', desc: isArabic ? 'احترافية قصوى' : '25x Pro Only', tag: 'Expert' },
-                        { lev: 50, label: '50x', desc: isArabic ? 'مخاطرة قصوى' : '50x Extreme', tag: 'Extreme' },
-                      ].map((item) => {
-                        const isSelected = Number(leverage) === item.lev;
-                        return (
-                          <button
-                            key={item.lev}
-                            type="button"
-                            onClick={() => {
-                              setLeverage(item.lev);
-                              setIsLeverageDropdownOpen(false);
-                            }}
-                            className={`w-full px-2.5 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
-                                : 'hover:bg-[#1e293b] text-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-xs text-amber-300">
-                                {item.label}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                ({item.desc})
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
-                                item.lev <= 3 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40' :
-                                item.lev <= 10 ? 'bg-amber-950 text-amber-400 border border-amber-800/40' :
-                                'bg-rose-950 text-rose-400 border border-rose-800/40'
-                              }`}>
-                                {item.tag}
-                              </span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                            </div>
-                          </button>
-                        );
-                      })}
+
+                      {/* Custom Leverage Input */}
+                      <div className="px-1 py-1 flex items-center gap-2 bg-[#141e33] rounded-lg border border-slate-700/80">
+                        <span className="text-[10px] text-slate-400 shrink-0 pl-1">
+                          {isArabic ? 'مخصص:' : 'Custom:'}
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={125}
+                          value={leverage}
+                          onChange={(e) => {
+                            const val = Math.min(125, Math.max(1, parseInt(e.target.value, 10) || 1));
+                            setLeverage(val);
+                          }}
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded px-2 py-0.5 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                        <span className="text-xs font-bold text-amber-400 pr-1">x</span>
+                      </div>
+
+                      {/* Vertical Ordered Multipliers */}
+                      <div className="flex flex-col gap-1">
+                        {[
+                          { lev: 1, label: '1x', desc: isArabic ? 'بدون مضاعفة (محافظ)' : '1x Conservative', tag: 'Safe' },
+                          { lev: 2, label: '2x', desc: isArabic ? 'موصى به للأمان' : '2x Low Risk', tag: 'Safe' },
+                          { lev: 3, label: '3x', desc: isArabic ? 'توازن مثالي' : '3x Balanced', tag: 'Optimal' },
+                          { lev: 5, label: '5x', desc: isArabic ? 'مخاطرة قياسية' : '5x Standard', tag: 'Standard' },
+                          { lev: 7, label: '7x', desc: isArabic ? 'صفقات زخم' : '7x Momentum', tag: 'Active' },
+                          { lev: 10, label: '10x', desc: isArabic ? 'مضاربة نشطة' : '10x Scalp', tag: 'Aggressive' },
+                          { lev: 15, label: '15x', desc: isArabic ? 'مضاربة عالية' : '15x High Risk', tag: 'High' },
+                          { lev: 20, label: '20x', desc: isArabic ? 'مضاربة سريعة' : '20x Fast Scalp', tag: 'High' },
+                          { lev: 25, label: '25x', desc: isArabic ? 'احترافية قصوى' : '25x Pro Only', tag: 'Expert' },
+                          { lev: 50, label: '50x', desc: isArabic ? 'مخاطرة قصوى' : '50x Extreme', tag: 'Extreme' },
+                        ].map((item) => {
+                          const isSelected = Number(leverage) === item.lev;
+                          return (
+                            <button
+                              key={item.lev}
+                              type="button"
+                              onClick={() => {
+                                setLeverage(item.lev);
+                                setIsLeverageDropdownOpen(false);
+                              }}
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/50 ring-1 ring-amber-500/30'
+                                  : 'hover:bg-[#1e293b] text-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-xs text-amber-300 min-w-6">
+                                  {item.label}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  ({item.desc})
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
+                                  item.lev <= 3 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40' :
+                                  item.lev <= 10 ? 'bg-amber-950 text-amber-400 border border-amber-800/40' :
+                                  'bg-rose-950 text-rose-400 border border-rose-800/40'
+                                }`}>
+                                  {item.tag}
+                                </span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1089,7 +1117,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       {/* EXECUTIVE KPI PERFORMANCE STRIP (Institutional Financial Metrics)        */}
       {/* ========================================================================= */}
       {activeResult && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 relative z-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 relative z-0 isolate">
           
           {/* Card 1: Net PnL & ROI */}
           <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md relative overflow-hidden">
@@ -1941,7 +1969,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
       {/* Multi-Pair Basket Customizer Modal */}
       {isBasketModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
           <div
             className="bg-[#0f172a] border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95"
             dir={isArabic ? 'rtl' : 'ltr'}

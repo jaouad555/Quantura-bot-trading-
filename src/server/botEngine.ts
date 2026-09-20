@@ -44,23 +44,28 @@ const priceCache = new Map<string, { price: number; timestamp: number }>();
 /**
  * Resilient live price fetcher with multi-endpoint failover and in-memory cache
  */
-export const fetchSymbolPrice = async (rawSymbol: string): Promise<number> => {
+export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | 'FUTURES' = 'FUTURES'): Promise<number> => {
   const symbol = (rawSymbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
   const now = Date.now();
-  const cached = priceCache.get(symbol);
+  const cacheKey = `${marketType}_${symbol}`;
+  const cached = priceCache.get(cacheKey);
   
-  // Return cached price if fresh (less than 4 seconds old)
-  if (cached && now - cached.timestamp < 4000) {
+  // Return cached price if fresh (less than 3 seconds old)
+  if (cached && now - cached.timestamp < 3000) {
     return cached.price;
   }
 
-  const endpoints = [
-    `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
-    `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
-    `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-    `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
-  ];
+  const endpoints = marketType === 'FUTURES'
+    ? [
+        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
+        `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`,
+      ]
+    : [
+        `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+        `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+        `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
+        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+      ];
 
   for (const url of endpoints) {
     const controller = new AbortController();
@@ -122,21 +127,26 @@ export const startTelegramSync = () => {
       let unrealizedPnl = 0;
 
       if (positions.length > 0) {
-        const symbols: string[] = Array.from(new Set(positions.map((p: any) => String(p.symbol || 'BTCUSDT'))));
+        const uniqueKeys: string[] = Array.from(new Set(positions.map((p: any) => `${(p.marketType || 'FUTURES')}_${String(p.symbol || 'BTCUSDT')}`)));
         const prices: Record<string, number> = {};
         
-        const priceResults = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s)));
-        symbols.forEach((sym, idx) => {
+        const priceResults = await Promise.allSettled(uniqueKeys.map((k: string) => {
+          const [mt, sym] = k.split('_');
+          return fetchSymbolPrice(sym, mt as 'SPOT' | 'FUTURES');
+        }));
+        uniqueKeys.forEach((k: string, idx: number) => {
           const res = priceResults[idx];
-          if (res.status === 'fulfilled' && res.value > 0) {
-            prices[sym] = res.value;
+          const [_, sym] = k.split('_');
+          if (res.status === 'fulfilled' && (res.value as number) > 0) {
+            prices[k] = res.value as number;
           } else {
-            prices[sym] = FALLBACK_PRICES[sym] || 50.0;
+            prices[k] = FALLBACK_PRICES[sym] || 50.0;
           }
         });
         
         for (const pos of positions) {
-          const currentP = prices[pos.symbol];
+          const pKey = `${pos.marketType || 'FUTURES'}_${pos.symbol}`;
+          const currentP = prices[pKey];
           if (currentP) {
             unrealizedPnl += calculatePnl(pos, currentP);
           }
@@ -321,14 +331,20 @@ export const startBotEngine = () => {
       const historyToAdd: any[] = [];
 
 
-      // Group by symbol to fetch prices efficiently
-      const symbols = Array.from(new Set(positions.map((p: any) => p.symbol)));
-      const priceResults = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s)));
+      // Group by symbol and marketType to fetch prices efficiently
+      const uniqueKeys = Array.from(new Set(positions.map((p: any) => `${(p.marketType || 'FUTURES')}_${String(p.symbol || 'BTCUSDT')}`)));
+      const priceResults = await Promise.allSettled(uniqueKeys.map(k => {
+        const [mt, sym] = k.split('_');
+        return fetchSymbolPrice(sym, mt as 'SPOT' | 'FUTURES');
+      }));
       const prices: Record<string, number> = {};
-      symbols.forEach((sym, idx) => {
+      uniqueKeys.forEach((k, idx) => {
         const res = priceResults[idx];
+        const [_, sym] = k.split('_');
         if (res.status === 'fulfilled' && (res.value as number) > 0) {
-          prices[sym as string] = res.value as number;
+          prices[k] = res.value as number;
+        } else {
+          prices[k] = FALLBACK_PRICES[sym] || 50.0;
         }
       });
 
@@ -337,7 +353,8 @@ export const startBotEngine = () => {
 
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
-        const currentP = prices[pos.symbol];
+        const pKey = `${pos.marketType || 'FUTURES'}_${pos.symbol}`;
+        const currentP = prices[pKey];
         
         if (!currentP || currentP <= 0) continue;
 
@@ -744,7 +761,7 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
       return { success: false, error: 'Position not found' };
     }
 
-    const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol);
+    const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
     const isLong = pos.decision === 'LONG';
     const lev = Math.max(1, pos.leverage || 1);
     const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;

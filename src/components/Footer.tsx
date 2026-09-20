@@ -27,6 +27,9 @@ import {
   Radio,
   Sliders,
   CheckCircle2,
+  PieChart,
+  History,
+  Coins,
 } from 'lucide-react';
 import { Language, TradingExecutionMode, BinanceApiConfig, APP_VERSION_TAG, APP_VERSION } from '../types';
 
@@ -52,6 +55,7 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenSettingsModal,
 }) => {
   const isArabic = language === 'ar';
+  const marketType = binanceConfig?.marketType || 'FUTURES';
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -95,8 +99,21 @@ export const Footer: React.FC<FooterProps> = ({
 
             <span className="hidden md:inline text-slate-700">|</span>
 
+            {/* Active Market Protocol Badge */}
+            <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                MARKET:{' '}
+                <strong className={marketType === 'FUTURES' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                  {marketType === 'FUTURES' ? 'USDT-M FUTURES' : 'SPOT TRADING'}
+                </strong>
+              </span>
+            </div>
+
+            <span className="hidden md:inline text-slate-700">|</span>
+
             {/* Risk Guard State */}
-            <div className="hidden md:flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
+            <div className="hidden lg:flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
               <span>RISK GUARD: <strong className="text-cyan-300">STRICT ARMED</strong></span>
             </div>
@@ -109,7 +126,7 @@ export const Footer: React.FC<FooterProps> = ({
               className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
             >
               <Key className="w-3 h-3 text-amber-400" />
-              <span>{binanceConfig.isConnected ? 'API CONNECTED' : 'SETUP API KEYS'}</span>
+              <span>{binanceConfig?.isConnected ? 'API CONNECTED' : 'SETUP API KEYS'}</span>
             </button>
 
             <button
@@ -170,8 +187,8 @@ export const Footer: React.FC<FooterProps> = ({
               {/* Bio & Description */}
               <p className="text-xs text-slate-400 leading-relaxed mb-5 max-w-md">
                 {isArabic
-                  ? 'محطة التداول الكمي الاحترافية المدعومة بالذكاء الاصطناعي وخوارزميات المؤسسات المالية. صممت لتوفير تنفيذ فوري للصفقات، حماية صارمة لرأس المال عبر إدارة المخاطر اللحظية، ومسح شامل لأسواق بينانس في بيئة موثوقة وفائقة السرعة.'
-                  : 'Enterprise-grade quantitative AI trading terminal engineered with institutional algorithms, deterministic risk guardrails, real-time Binance order routing, and sub-millisecond market intelligence.'}
+                  ? 'محطة التداول الكمي الاحترافية المدعومة بالذكاء الاصطناعي وخوارزميات المؤسسات المالية. تتميز بمعمارية مزدوجة معزولة بالكامل تدعم تداول Spot و USDT-M Futures، مع تنفيذ فوري للصفقات وحماية رأس المال عبر حارس المخاطر اللحظي.'
+                  : 'Enterprise-grade quantitative AI trading terminal engineered with institutional algorithms, zero-cross isolated Spot & USDT-M Futures routing, deterministic risk guardrails, and sub-millisecond market intelligence.'}
               </p>
 
               {/* Institutional Specs Chips */}
@@ -182,7 +199,7 @@ export const Footer: React.FC<FooterProps> = ({
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
                   <Zap className="w-3 h-3 text-amber-400" />
-                  <span>Low Latency Routing</span>
+                  <span>Spot & USDT-M Isolated</span>
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
                   <Shield className="w-3 h-3 text-cyan-400" />
@@ -360,6 +377,34 @@ export const Footer: React.FC<FooterProps> = ({
                   <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => onSelectTab('history')}
+                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                    activeTab === 'history' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <History className="w-3.5 h-3.5 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
+                    <span>{isArabic ? 'سجل الصفقات الحي' : 'Trade Journal & History'}</span>
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onSelectTab('riskWallet')}
+                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                    activeTab === 'riskWallet' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <PieChart className="w-3.5 h-3.5 text-teal-400 group-hover:translate-x-0.5 transition-transform" />
+                    <span>{isArabic ? 'المحفظة وتوزيع المخاطر' : 'Wallet & Risk Allocation'}</span>
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -446,7 +491,7 @@ export const Footer: React.FC<FooterProps> = ({
                     {isArabic ? 'إعدادات ربط بينانس API' : 'Binance API Integration'}
                   </div>
                   <div className="text-[10px] text-slate-400 font-mono">
-                    {binanceConfig.isConnected ? 'SPOT & FUTURES CONNECTED' : 'KEY PAIR UNCONFIGURED'}
+                    {binanceConfig?.isConnected ? `${marketType} CONNECTED` : 'KEY PAIR UNCONFIGURED'}
                   </div>
                 </div>
                 <Key className="w-4 h-4 text-amber-400 shrink-0" />
@@ -479,8 +524,8 @@ export const Footer: React.FC<FooterProps> = ({
           </div>
           <p>
             {isArabic
-              ? 'تداول الأصول الرقمية والعقود الآجلة ينطوي على مخاطر مالية عالية وتقلبات سعرية حادة قد تؤدي إلى خسارة جزء أو كامل رأس المال المستثمر. منصة Quantura توفر أدوات تحليل وخوارزميات مساعدة كمية، ولا تقدم أي نصائح أو استشارات استثمارية أو مالية مباشرة. الأداء التاريخي لأي استراتيجية ليس ضماناً للنتائج المستقبلية. تقع مسؤولية إدارة المخاطر وتحديد حجم الصفقات بالكامل على عاتق المستخدم.'
-              : 'Digital asset trading, futures, and algorithmic derivatives carry substantial financial risk and extreme price volatility that can result in the loss of all deployed capital. Quantura provides quantitative tooling and automated algorithmic infrastructure for informational and execution purposes only, and does not constitute financial, investment, or legal advice. Past performance is no guarantee of future returns. You remain solely responsible for your risk tolerance and capital preservation.'}
+              ? 'تداول الأصول الرقمية، العقود الفورية (Spot)، والعقود الآجلة (USDT-M Futures) ينطوي على مخاطر مالية عالية وتقلبات سعرية حادة قد تؤدي إلى خسارة جزء أو كامل رأس المال المستثمر. منصة Quantura توفر أدوات تحليل وخوارزميات مساعدة كمية، ولا تقدم أي نصائح أو استشارات استثمارية أو مالية مباشرة. الأداء التاريخي لأي استراتيجية ليس ضماناً للنتائج المستقبلية. تقع مسؤولية إدارة المخاطر وتحديد حجم الصفقات ومضاعف الرافعة بالكامل على عاتق المستخدم.'
+              : 'Digital asset trading across Spot and USDT-M Futures markets carries substantial financial risk and extreme price volatility that can result in the loss of all deployed capital. Quantura provides quantitative tooling and automated algorithmic infrastructure for informational and execution purposes only, and does not constitute financial, investment, or legal advice. Past performance is no guarantee of future returns. You remain solely responsible for your risk tolerance and capital preservation.'}
           </p>
         </div>
 
@@ -489,7 +534,7 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             <span>&copy; {currentYear} QUANTURA TERMINAL ({APP_VERSION_TAG}). ALL RIGHTS RESERVED.</span>
             <span className="text-slate-700 hidden sm:inline">•</span>
-            <span className="text-slate-300">BINANCE REST API & WEBHOOK COMPATIBLE</span>
+            <span className="text-slate-300">BINANCE SPOT & USDT-M FUTURES PROTOCOLS</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -509,4 +554,5 @@ export const Footer: React.FC<FooterProps> = ({
     </footer>
   );
 };
+
 
