@@ -295,7 +295,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
               {takerRatio.toFixed(2)}x
             </div>
             <div className="text-[10px] text-slate-400 mt-1">
-              {takerRatio >= 1 ? (isArabic ? '🟢 شراء هجومي سائد' : '🟢 Acheteurs Dominants') : (isArabic ? '🔴 بيع هجومي سائد' : '🔴 Vendeurs Dominants')}
+              {takerRatio >= 1 ? (isArabic ? 'شراء هجومي سائد' : 'Acheteurs Dominants') : (isArabic ? 'بيع هجومي سائد' : 'Vendeurs Dominants')}
             </div>
           </div>
 
@@ -309,7 +309,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
               ${formatCoinPrice(spreadUsd, currentSymbol)}
             </div>
             <div className="text-[10px] text-slate-400 mt-1">
-              {spreadBps < 1.0 ? '💎 Liquidité Ultra-Élevée' : spreadBps < 3.0 ? '⚡ Liquidité Excellente' : '⚠️ Spread Élargi'} ({spreadBps.toFixed(2)} bps)
+              {spreadBps < 1.0 ? 'Liquidité Ultra-Élevée' : spreadBps < 3.0 ? 'Liquidité Excellente' : 'Spread Élargi'} ({spreadBps.toFixed(2)} bps)
             </div>
           </div>
         </div>
@@ -337,10 +337,10 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                     : 'bg-slate-800 text-slate-400 border-slate-700'
                 }`}>
                   {orderBook.bias === 'BUYERS_STRONG'
-                    ? (isArabic ? '🟢 هيمنة المشترين' : 'ACHETEURS DOMINANTS')
+                    ? (isArabic ? 'هيمنة المشترين' : 'ACHETEURS DOMINANTS')
                     : orderBook.bias === 'SELLERS_STRONG'
-                    ? (isArabic ? '🔴 هيمنة البائعين' : 'VENDEURS DOMINANTS')
-                    : (isArabic ? '⚪ توازن قوى' : 'ÉQUILIBRÉ')}
+                    ? (isArabic ? 'هيمنة البائعين' : 'VENDEURS DOMINANTS')
+                    : (isArabic ? 'توازن قوى' : 'ÉQUILIBRÉ')}
                 </span>
               </div>
 
@@ -410,7 +410,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between font-mono text-xs">
                   <div>
                     <span className={orderBook.largeWalls[0].type === 'BID' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                      {orderBook.largeWalls[0].type === 'BID' ? (isArabic ? '🟢 جدار شراء ضخم' : '🟢 Support Whale') : (isArabic ? '🔴 جدار بيع ضخم' : '🔴 Résistance Whale')}
+                      {orderBook.largeWalls[0].type === 'BID' ? (isArabic ? 'جدار شراء ضخم' : 'Support Whale') : (isArabic ? 'جدار بيع ضخم' : 'Résistance Whale')}
                     </span>
                     <span className="text-[10px] text-slate-500 block">
                       ${formatCoinPrice(orderBook.largeWalls[0].price, currentSymbol)}
@@ -553,7 +553,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm">
-                            {isBid ? (isArabic ? '🟢 جدار شراء مؤسسي' : '🟢 Mur d\'Achat (Support)') : (isArabic ? '🔴 جدار بيع مؤسسي' : '🔴 Mur de Vente (Résistance)')}
+                            {isBid ? (isArabic ? 'جدار شراء مؤسسي' : 'Mur d\'Achat (Support)') : (isArabic ? 'جدار بيع مؤسسي' : 'Mur de Vente (Résistance)')}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-slate-300">
                             {distPct > 0 ? `+${distPct.toFixed(2)}%` : `${distPct.toFixed(2)}%`}

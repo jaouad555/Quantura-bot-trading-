@@ -140,9 +140,9 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 
             {/* Elegant Robot Emotion Badge */}
             <div className="px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 shadow-sm">
-              <Flame className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
               <span className="truncate">
-                {isArabic ? 'مشاعر الروبوت: متفائل ونشط 🟢' : 'Bot Mood: Active & Hyped 🟢'}
+                {isArabic ? 'مشاعر الروبوت: متفائل ونشط' : 'Bot Mood: Active & Hyped'}
               </span>
             </div>
           </div>
@@ -328,9 +328,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({
                 </>
               )}
             </button>
-            <div className="text-center mt-2">
+            <div className="text-center mt-2 flex items-center justify-center gap-1.5">
+              <Zap className="w-3 h-3 text-cyan-400" />
               <span className="text-[11px] text-slate-400">
-                {isArabic ? '⚡ جاهز لحساب نقاط الدخول ووقف الخسارة ونسبة العائد للمخاطرة' : '⚡ Prêt à calculer les niveaux optimaux de TP, SL et Ratio R/R'}
+                {isArabic ? 'جاهز لحساب نقاط الدخول ووقف الخسارة ونسبة العائد للمخاطرة' : 'Prêt à calculer les niveaux optimaux de TP, SL et Ratio R/R'}
               </span>
             </div>
           </div>
@@ -381,10 +382,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       case 'LONG':
         return {
           title: isArabic ? 'شراء • LONG' : 'ACHAT • LONG',
-          tag: isArabic ? 'شراء (LONG 🟢)' : 'ACHAT (LONG 🟢)',
+          tag: isArabic ? 'شراء (LONG)' : 'ACHAT (LONG)',
           moodLabel: isArabic ? 'مشاعر السوق: تفاؤل وإقبال (Greed)' : 'Sentiment: Euphorie & Greed',
           moodBadgeBg: 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300',
-          moodIcon: <Flame className="w-3.5 h-3.5 text-emerald-400" />,
+          moodIcon: <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />,
           glowColor: 'rgba(16, 185, 129, 0.22)',
           cardBorder: 'border-emerald-500/30 hover:border-emerald-500/50',
           bgRadial: 'radial-gradient(ellipse 90% 70% at 50% -10%, rgba(6, 182, 212, 0.16), rgba(16, 185, 129, 0.12), rgba(13, 20, 36, 0.40))',
@@ -398,10 +399,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       case 'SHORT':
         return {
           title: isArabic ? 'بيع • SHORT' : 'VENTE • SHORT',
-          tag: isArabic ? 'بيع (SHORT 🔴)' : 'VENTE (SHORT 🔴)',
+          tag: isArabic ? 'بيع (SHORT)' : 'VENTE (SHORT)',
           moodLabel: isArabic ? 'مشاعر السوق: حذر وخوف (Fear)' : 'Sentiment: Pression Vendeuse (Fear)',
           moodBadgeBg: 'bg-rose-500/15 border-rose-500/35 text-rose-300',
-          moodIcon: <Frown className="w-3.5 h-3.5 text-rose-400" />,
+          moodIcon: <TrendingDown className="w-3.5 h-3.5 text-rose-400" />,
           glowColor: 'rgba(244, 63, 94, 0.22)',
           cardBorder: 'border-rose-500/30 hover:border-rose-500/50',
           bgRadial: 'radial-gradient(ellipse 90% 70% at 50% -10%, rgba(244, 63, 94, 0.14), rgba(168, 85, 247, 0.10), rgba(13, 20, 36, 0.40))',
@@ -416,7 +417,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       default:
         return {
           title: isArabic ? 'ترقب • WAIT' : 'ATTENTE • WAIT',
-          tag: isArabic ? 'ترقب (WAIT 🟡)' : 'ATTENTE (WAIT 🟡)',
+          tag: isArabic ? 'ترقب (WAIT)' : 'ATTENTE (WAIT)',
           moodLabel: isArabic ? 'مشاعر السوق: توازن وترقب (Neutral)' : 'Sentiment: Phase d\'Attente (Neutral)',
           moodBadgeBg: 'bg-amber-500/15 border-amber-500/35 text-amber-300',
           moodIcon: <Clock className="w-3.5 h-3.5 text-amber-400" />,
@@ -449,7 +450,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 
     const text = isArabic
       ? `
-🎯 إشارة تداول ${symbol} (${tf}) [${marketHeader}]
+[إشارة تداول كمية] ${symbol} (${tf}) [${marketHeader}]
 • القرار : ${t.decisions[decision] || decision} (القوة: ${confidence}%)
 • الدخول المثالي : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'N/A'} (النطاق: $${formatCoinPrice(entryZone?.min, symbol)} - $${formatCoinPrice(entryZone?.max, symbol)})
 • الهدف 1 : ${targets ? `$${formatCoinPrice(targets.tp1, symbol)} (${getTargetDiff(targets.tp1)})` : 'N/A'}
@@ -460,7 +461,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 © Quantura Institutional Terminal
 `.trim()
       : `
-🎯 SIGNAL QUANTITATIF ${symbol} (${tf}) [${marketHeader}]
+[SIGNAL QUANTITATIF] ${symbol} (${tf}) [${marketHeader}]
 • Décision : ${emotion.title} (Force: ${confidence}%)
 • Entrée Idéale : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'N/A'} (Zone: $${formatCoinPrice(entryZone?.min, symbol)} - $${formatCoinPrice(entryZone?.max, symbol)})
 • TP1 : ${targets ? `$${formatCoinPrice(targets.tp1, symbol)} (${getTargetDiff(targets.tp1)})` : 'N/A'}
@@ -828,12 +829,12 @@ export const SignalCard: React.FC<SignalCardProps> = ({
               {notified ? (
                 <>
                   <Check className="w-4 h-4 text-emerald-400" />
-                  <span>{isArabic ? 'تم التنبيه ✓' : 'Alerte Active ✓'}</span>
+                  <span>{isArabic ? 'تم التنبيه' : 'Alerte Active'}</span>
                 </>
               ) : (
                 <>
                   <BellRing className="w-4 h-4 text-cyan-400" />
-                  <span>{isArabic ? 'تنبيه 🔔' : 'Notification 🔔'}</span>
+                  <span>{isArabic ? 'تفعيل تنبيه' : 'Notification'}</span>
                 </>
               )}
             </button>

@@ -96,11 +96,11 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
     modalTitle: isArabic ? 'دليل البدء السريع & مركز المساعدة' : isFrench ? 'Guide de Démarrage Rapide & Aide' : 'Quick Start Guide & Help Center',
     modalSubtitle: isArabic ? 'تعلم كيفية قراءة الإشارات الذكية، تشغيل البوت وإدارة المخاطر باحترافية' : isFrench ? 'Apprenez à interpréter les signaux IA, configurer le bot et gérer le risque' : 'Learn how to interpret AI signals, configure the bot, and master risk management',
     tabs: {
-      quickStart: isArabic ? '🚀 البدء السريع (5 دقائق)' : isFrench ? '🚀 Démarrage Rapide (5 min)' : '🚀 Quick Start (5 min)',
-      aiSignals: isArabic ? '🎯 تفسير إشارات الذكاء' : isFrench ? '🎯 Interprétation Signaux IA' : '🎯 Interpreting AI Signals',
-      botSetup: isArabic ? '🤖 إعداد وتشغيل البوت' : isFrench ? '🤖 Configuration du Bot' : '🤖 Bot Setup & Execution',
-      riskManagement: isArabic ? '🛡️ إدارة المخاطر والأمان' : isFrench ? '🛡️ Gestion du Risque' : '🛡️ Risk & Capital Rules',
-      faq: isArabic ? '💡 أسئلة شائعة ونصائح' : isFrench ? '💡 FAQ & Bonnes Pratiques' : '💡 FAQ & Pro Tips',
+      quickStart: isArabic ? 'البدء السريع (5 دقائق)' : isFrench ? 'Démarrage Rapide (5 min)' : 'Quick Start (5 min)',
+      aiSignals: isArabic ? 'تفسير إشارات الذكاء' : isFrench ? 'Interprétation Signaux IA' : 'Interpreting AI Signals',
+      botSetup: isArabic ? 'إعداد وتشغيل البوت' : isFrench ? 'Configuration du Bot' : 'Bot Setup & Execution',
+      riskManagement: isArabic ? 'إدارة المخاطر والأمان' : isFrench ? 'Gestion du Risque' : 'Risk & Capital Rules',
+      faq: isArabic ? 'أسئلة شائعة ونصائح' : isFrench ? 'FAQ & Bonnes Pratiques' : 'FAQ & Pro Tips',
     }
   };
 
@@ -439,7 +439,7 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    LONG 🟢
+                    LONG
                   </button>
                   <button
                     type="button"
@@ -450,7 +450,7 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    SHORT 🔴
+                    SHORT
                   </button>
                 </div>
               </div>
@@ -478,7 +478,7 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                       }`}
                     >
                       {interactiveSignalType === 'LONG' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      <span>{interactiveSignalType === 'LONG' ? 'ACHAT (LONG 🟢)' : 'VENTE (SHORT 🔴)'}</span>
+                      <span>{interactiveSignalType === 'LONG' ? 'ACHAT (LONG)' : 'VENTE (SHORT)'}</span>
                     </button>
                   </div>
 
@@ -623,15 +623,15 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                           </p>
                           <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 font-mono text-[11px]">
                             <div className="text-emerald-400 flex items-center justify-between">
-                              <span>🟢 80% - 100% (Grade A+)</span>
+                              <span>80% - 100% (Grade A+)</span>
                               <span className="text-[10px] text-slate-400">{isArabic ? 'أقوى الصفقات' : 'Très Haute Probabilité'}</span>
                             </div>
                             <div className="text-amber-400 flex items-center justify-between">
-                              <span>🟡 65% - 79% (Grade B)</span>
+                              <span>65% - 79% (Grade B)</span>
                               <span className="text-[10px] text-slate-400">{isArabic ? 'صفقات اتجاهية جيدة' : 'Tendance Solide'}</span>
                             </div>
                             <div className="text-slate-400 flex items-center justify-between">
-                              <span>⚪ &lt; 65% (Grade C/D)</span>
+                              <span>&lt; 65% (Grade C/D)</span>
                               <span className="text-[10px] text-slate-500">{isArabic ? 'تجنب الدخول / انتظار' : 'Marché Neutre / Attente'}</span>
                             </div>
                           </div>
@@ -647,8 +647,8 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                           </p>
                           <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400">
                             {isArabic 
-                              ? '⚠️ لا تدخل أي صفقة إذا كانت الإشارة NO_TRADE أو WAIT حتى تتكون شمعة تأكيد جديدة.'
-                              : '⚠️ N’entrez jamais sur un statut WAIT ou NO_TRADE avant confirmation algorithmique.'}
+                              ? 'لا تدخل أي صفقة إذا كانت الإشارة NO_TRADE أو WAIT حتى تتكون شمعة تأكيد جديدة.'
+                              : 'N’entrez jamais sur un statut WAIT ou NO_TRADE avant confirmation algorithmique.'}
                           </div>
                         </>
                       )}
@@ -693,8 +693,8 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                           </p>
                           <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-[11px]">
                             {isArabic 
-                              ? '🛡️ البوت الآلي يلتزم دائماً بوقف الخسارة ولا يتردد في الإغلاق لحماية 98% من رصيدك.'
-                              : '🛡️ Le bot exécute rigoureusement le Stop Loss pour préserver votre capital disponible.'}
+                              ? 'البوت الآلي يلتزم دائماً بوقف الخسارة ولا يتردد في الإغلاق لحماية 98% من رصيدك.'
+                              : 'Le bot exécute rigoureusement le Stop Loss pour préserver votre capital disponible.'}
                           </div>
                         </>
                       )}
@@ -760,7 +760,7 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
-                        🧪
+                        <FlaskConical className="w-4 h-4" />
                       </div>
                       <h4 className="text-sm font-bold text-amber-300 font-mono">
                         PAPER TRADING (Simulé)
@@ -785,7 +785,7 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 font-bold text-sm">
-                        ⚡
+                        <Zap className="w-4 h-4" />
                       </div>
                       <h4 className="text-sm font-bold text-rose-300 font-mono">
                         BINANCE LIVE FUTURES
@@ -817,37 +817,37 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {[
                     {
-                      name: '⚡ HFT Scalper',
+                      name: 'HFT Scalper',
                       tf: '1m / 5m',
                       lev: '3x - 5x',
                       desc: isArabic ? 'صفقات خاطفة سريعة تخطف ارتدادات 0.8% إلى 1.5% بنسبة فوز مرتفعة.' : 'Scalping haute fréquence sur micro-mouvements avec stops très serrés.',
                     },
                     {
-                      name: '🌊 Momentum Trend',
+                      name: 'Momentum Trend',
                       tf: '15m / 1h',
                       lev: '2x - 3x',
                       desc: isArabic ? 'تتبع الاتجاهات القوية وكسر مستويات الدعم والمقاومة التاريخية.' : 'Suit les vagues de tendance directionnelles et les cassures de structure.',
                     },
                     {
-                      name: '🏛️ Institutional SMC',
+                      name: 'Institutional SMC',
                       tf: '15m / 4h',
                       lev: '2x - 3x',
                       desc: isArabic ? 'دخول دقيق على مناطق تجمع سيولة البنوك (Order Blocks & Fair Value Gaps).' : 'Entrées institutionnelles sur balayages de liquidité et blocs d’ordres.',
                     },
                     {
-                      name: '💥 Breakout Volatility',
+                      name: 'Breakout Volatility',
                       tf: '5m / 15m',
                       lev: '3x - 5x',
                       desc: isArabic ? 'رصد انفجارات الفولتيلتي بعد فترات الضغط والانضغاط السعري الساكن.' : 'Détecte les explosions de volatilité après compression de Bollinger.',
                     },
                     {
-                      name: '🔄 Mean Reversion',
+                      name: 'Mean Reversion',
                       tf: '15m / 30m',
                       lev: '2x - 3x',
                       desc: isArabic ? 'شراء مناطق التشبع البيعي الحاد وبيع مناطق التشبع الشرائي نحو EMA20.' : 'Achète les surventes RSI extrêmes pour un retour à la moyenne EMA.',
                     },
                     {
-                      name: '📈 Swing Macro',
+                      name: 'Swing Macro',
                       tf: '1h / 4h / 1D',
                       lev: '1x - 2x',
                       desc: isArabic ? 'صفقات استثمارية طويلة المدى تستهدف نسب ربح عالية (R:R 1:4+).' : 'Positions swing de plusieurs jours visant de grands ratios R:R (1:4+).',
@@ -977,25 +977,25 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                         <td className="py-2 px-2 font-bold text-emerald-400">1x (Spot)</td>
                         <td className="py-2 px-2">100%</td>
                         <td className="py-2 px-2">-100% (No liquidation)</td>
-                        <td className="py-2 px-2 text-emerald-400 font-bold">🟢 أمان فائق (Ultra Safe)</td>
+                        <td className="py-2 px-2 text-emerald-400 font-bold">أمان فائق (Ultra Safe)</td>
                       </tr>
                       <tr>
                         <td className="py-2 px-2 font-bold text-cyan-400">2x - 3x</td>
                         <td className="py-2 px-2">33% - 50%</td>
                         <td className="py-2 px-2">-33% إلى -50%</td>
-                        <td className="py-2 px-2 text-cyan-300">🟢 موصى به للمبتدئين (Recommended)</td>
+                        <td className="py-2 px-2 text-cyan-300">موصى به للمبتدئين (Recommended)</td>
                       </tr>
                       <tr>
                         <td className="py-2 px-2 font-bold text-amber-400">5x</td>
                         <td className="py-2 px-2">20%</td>
                         <td className="py-2 px-2">-20%</td>
-                        <td className="py-2 px-2 text-amber-300">🟡 مخاطرة متوسطة (Moderate)</td>
+                        <td className="py-2 px-2 text-amber-300">مخاطرة متوسطة (Moderate)</td>
                       </tr>
                       <tr>
                         <td className="py-2 px-2 font-bold text-rose-400">10x</td>
                         <td className="py-2 px-2">10%</td>
                         <td className="py-2 px-2">-10%</td>
-                        <td className="py-2 px-2 text-rose-400">🔴 يتطلب احترافية ومراقبة (High Risk)</td>
+                        <td className="py-2 px-2 text-rose-400">يتطلب احترافية ومراقبة (High Risk)</td>
                       </tr>
                     </tbody>
                   </table>

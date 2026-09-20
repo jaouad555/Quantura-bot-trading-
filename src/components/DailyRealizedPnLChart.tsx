@@ -313,7 +313,7 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
                 isProfit ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
               }`}
             >
-              {isProfit ? (isArabic ? 'يوم رابح 🟢' : 'Green Day') : (isArabic ? 'يوم خاسر 🔴' : 'Red Day')}
+              {isProfit ? (isArabic ? 'يوم رابح' : 'Green Day') : (isArabic ? 'يوم خاسر' : 'Red Day')}
             </span>
           </div>
 

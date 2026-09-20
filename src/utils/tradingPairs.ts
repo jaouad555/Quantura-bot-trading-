@@ -101,7 +101,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Next-Gen Move-based Layer 1 with High Throughput & Momentum',
     arabicDescription: 'شبكة الجيل القادم بلغة Move ذات زخم تداولي وتدفق سيولة مضاربية متسارعة',
     iconBg: 'from-cyan-500 to-blue-600',
-    iconText: '💧',
+    iconText: 'S',
     decimals: 4,
   },
   {
@@ -179,7 +179,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Ultra High Beta Momentum Asset with Explosive Breakouts',
     arabicDescription: 'أعلى عملة زخماً وسيولة مضاربية مع انفجارات سعرية واضحة للكسور الفنية',
     iconBg: 'from-green-500 to-emerald-700',
-    iconText: '🐸',
+    iconText: 'P',
     decimals: 7,
   },
   {
@@ -192,7 +192,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Massive Global Community Ecosystem with Deep Liquidity',
     arabicDescription: 'منظومة شيبا العالمية ذات السيولة الضخمة والارتدادات الحادة على مستويات الدعم',
     iconBg: 'from-orange-500 to-amber-600',
-    iconText: '🐕',
+    iconText: 'SH',
     decimals: 7,
   },
   {
@@ -231,7 +231,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'DeFi & Derivatives Specialized Layer 1 with Powerful Trend Consistency',
     arabicDescription: 'بلوكتشين المشتقات والتمويل اللامركزي ذو الاتجاهات السعرية الواضحة',
     iconBg: 'from-cyan-600 to-blue-700',
-    iconText: '🥏',
+    iconText: 'INJ',
     decimals: 3,
   },
   {
@@ -244,7 +244,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Decentralized GPU Compute & AI Narrative Leader',
     arabicDescription: 'رائد الحوسبة اللامركزية والذكاء الاصطناعي ذو موجات صعود قوية',
     iconBg: 'from-red-500 to-rose-700',
-    iconText: '⚡',
+    iconText: 'R',
     decimals: 3,
   },
   {
@@ -257,7 +257,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Premier Global Liquidity & Lending Market Leader',
     arabicDescription: 'بروتوكول الإقراض اللامركزي الأول عالمياً ذو احترام هيكلي عالي للمستويات',
     iconBg: 'from-purple-600 to-indigo-700',
-    iconText: '👻',
+    iconText: 'A',
     decimals: 2,
   },
   {
@@ -270,7 +270,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Top Solana Ecosystem Meme with High Volatility & Sharp Trend Swings',
     arabicDescription: 'عملة سولانا الشعبية ذات التقلبات السعرية العالية والفرص المضاربية السريعة',
     iconBg: 'from-amber-600 to-yellow-700',
-    iconText: '🧢',
+    iconText: 'W',
     decimals: 4,
   },
   {
@@ -283,7 +283,7 @@ export const RESPECTED_TRADING_PAIRS: TradingPair[] = [
     description: 'Autonomous AI Agent Economy & Superintelligence Alliance',
     arabicDescription: 'تحالف الذكاء الاصطناعي الفائق ذو الزخم التداولي والتوافق الفني',
     iconBg: 'from-blue-600 to-teal-500',
-    iconText: '🤖',
+    iconText: 'F',
     decimals: 4,
   },
 ];

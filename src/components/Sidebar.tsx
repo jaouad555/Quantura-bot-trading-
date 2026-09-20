@@ -135,12 +135,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (enable) {
       set2FAEnabled(true, userIdent);
       setIs2FAActive(true);
-      setFeedbackMsg(isArabic ? '✅ تم تفعيل المصادقة الثنائية بنجاح!' : isFrench ? '✅ 2FA activée avec succès !' : '✅ 2FA enabled successfully!');
+      setFeedbackMsg(isArabic ? 'تم تفعيل المصادقة الثنائية بنجاح!' : isFrench ? '2FA activée avec succès !' : '2FA enabled successfully!');
     } else {
       disable2FA(userIdent);
       setIs2FAActive(false);
       setTest2FAResult(null);
-      setFeedbackMsg(isArabic ? '⚪ تم تعطيل المصادقة الثنائية. يمكنك الدخول مباشرة بكلمة المرور.' : isFrench ? '⚪ 2FA désactivée. Vous pouvez vous connecter sans code.' : '⚪ 2FA disabled. You can log in directly with your password.');
+      setFeedbackMsg(isArabic ? 'تم تعطيل المصادقة الثنائية. يمكنك الدخول مباشرة بكلمة المرور.' : isFrench ? '2FA désactivée. Vous pouvez vous connecter sans code.' : '2FA disabled. You can log in directly with your password.');
     }
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
@@ -152,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     generateQRCodeDataUrl(uri).then(setSetupQR2FA).catch(console.error);
     setTest2FACode('');
     setTest2FAResult(null);
-    setFeedbackMsg(isArabic ? '🔄 تم توليد مفتاح سري جديد' : isFrench ? '🔄 Nouvelle clé secrète générée' : '🔄 New secret key generated');
+    setFeedbackMsg(isArabic ? 'تم توليد مفتاح سري جديد' : isFrench ? 'Nouvelle clé secrète générée' : 'New secret key generated');
     setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
@@ -164,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isValid) {
       set2FAEnabled(true, userIdent);
       setIs2FAActive(true);
-      setFeedbackMsg(isArabic ? '✅ تم التحقق وتفعيل المصادقة الثنائية بنجاح!' : isFrench ? '✅ 2FA validée et activée avec succès !' : '✅ 2FA verified and enabled successfully!');
+      setFeedbackMsg(isArabic ? 'تم التحقق وتفعيل المصادقة الثنائية بنجاح!' : isFrench ? '2FA validée et activée avec succès !' : '2FA verified and enabled successfully!');
       setTimeout(() => setFeedbackMsg(null), 3500);
     }
   };
@@ -408,12 +408,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {is2FAActive ? (
                 <>
                   <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" />
-                  <span className="truncate">{isArabic ? '2FA مفعل 🟢' : isFrench ? '2FA Actif' : '2FA Active 🟢'}</span>
+                  <span className="truncate">{isArabic ? '2FA مفعل' : isFrench ? '2FA Actif' : '2FA Active'}</span>
                 </>
               ) : (
                 <>
                   <ShieldOff className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span className="truncate">{isArabic ? '2FA معطل ⚪' : isFrench ? '2FA Inactif' : '2FA Off ⚪'}</span>
+                  <span className="truncate">{isArabic ? '2FA معطل' : isFrench ? '2FA Inactif' : '2FA Off'}</span>
                 </>
               )}
             </div>
@@ -510,7 +510,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-emerald-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 text-cyan-300 hover:text-white border border-cyan-500/30 text-xs font-bold font-mono transition cursor-pointer group shadow-xs"
           >
             <BookOpen className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-            <span>{isArabic ? '📖 دليل البدء السريع & المساعدة' : isFrench ? '📖 Guide & Démarrage Rapide' : '📖 Quick Start & Help Guide'}</span>
+            <span>{isArabic ? 'دليل البدء السريع & المساعدة' : isFrench ? 'Guide & Démarrage Rapide' : 'Quick Start & Help Guide'}</span>
           </button>
         )}
 
@@ -629,9 +629,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       <div className="text-[11px] font-mono mt-0.5">
                         {is2FAActive ? (
-                          <span className="text-amber-400 font-bold">{isArabic ? '🟢 مفعلة ونشطة' : isFrench ? '🟢 Activée' : '🟢 Enabled & Active'}</span>
+                          <span className="text-amber-400 font-bold">{isArabic ? 'مفعلة ونشطة' : isFrench ? 'Activée' : 'Enabled & Active'}</span>
                         ) : (
-                          <span className="text-slate-400">{isArabic ? '⚪ معطلة (دخول مباشر)' : isFrench ? '⚪ Désactivée' : '⚪ Disabled (Direct login)'}</span>
+                          <span className="text-slate-400">{isArabic ? 'معطلة (دخول مباشر)' : isFrench ? 'Désactivée' : 'Disabled (Direct login)'}</span>
                         )}
                       </div>
                     </div>
@@ -670,7 +670,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {isArabic ? 'فحص مزامنة رمز هاتفك الآن:' : isFrench ? 'Tester la synchronisation :' : 'Test phone code sync now:'}
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                        ⏱️ {totpCountdown}s
+                        {totpCountdown}s
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -699,13 +699,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {test2FAResult === 'SUCCESS' && (
                       <div className="p-2 rounded-lg bg-emerald-500/20 border border-amber-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>{isArabic ? '✅ الرمز صحيح ومطابق مع هاتفك!' : isFrench ? '✅ Code valide et synchronisé avec succès !' : '✅ Code is valid and synchronized!'}</span>
+                        <span>{isArabic ? 'الرمز صحيح ومطابق مع هاتفك!' : isFrench ? 'Code valide et synchronisé avec succès !' : 'Code is valid and synchronized!'}</span>
                       </div>
                     )}
                     {test2FAResult === 'ERROR' && (
                       <div className="p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? '❌ Code invalide ou expiré.' : '❌ Invalid or expired code.'}</span>
+                        <span>{isArabic ? 'الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? 'Code invalide ou expiré.' : 'Invalid or expired code.'}</span>
                       </div>
                     )}
                   </div>
@@ -806,7 +806,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {isArabic ? 'أدخل الرمز من هاتفك للتفعيل:' : isFrench ? 'Code de confirmation :' : 'Enter code from your phone:'}
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                        ⏱️ {totpCountdown}s
+                        {totpCountdown}s
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -835,13 +835,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {test2FAResult === 'SUCCESS' && (
                       <div className="p-2 rounded-lg bg-emerald-500/20 border border-amber-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>{isArabic ? '✅ تم تفعيل المصادقة الثنائية بنجاح!' : '✅ 2FA activée avec succès !'}</span>
+                        <span>{isArabic ? 'تم تفعيل المصادقة الثنائية بنجاح!' : '2FA activée avec succès !'}</span>
                       </div>
                     )}
                     {test2FAResult === 'ERROR' && (
                       <div className="p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5 animate-in fade-in">
                         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{isArabic ? '❌ الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? '❌ Code invalide ou expiré.' : '❌ Invalid or expired code.'}</span>
+                        <span>{isArabic ? 'الرمز غير صحيح أو انتهت صلاحيته.' : isFrench ? 'Code invalide ou expiré.' : 'Invalid or expired code.'}</span>
                       </div>
                     )}
                   </div>

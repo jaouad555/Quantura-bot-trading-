@@ -53,28 +53,28 @@ export const LiquidityMonitorBadge: React.FC<LiquidityMonitorBadgeProps> = ({
     if (isArabic) {
       switch (status) {
         case 'CRITICAL_ILLIQUID':
-          return 'سيولة حرجة (انزلاق خطير ⚠️)';
+          return 'سيولة حرجة (انزلاق خطير)';
         case 'INSUFFICIENT':
-          return 'عمق دفتر غير كافٍ ⚠️';
+          return 'عمق دفتر غير كافٍ';
         case 'MODERATE':
-          return 'سيولة متوسطة ⚡';
+          return 'سيولة متوسطة';
         case 'EXCELLENT':
-          return 'سيولة ممتازة وعميقة ✓';
+          return 'سيولة ممتازة وعميقة';
         default:
-          return 'عمق دفتر ملائم ✓';
+          return 'عمق دفتر ملائم';
       }
     } else {
       switch (status) {
         case 'CRITICAL_ILLIQUID':
-          return 'Liquidité Critique (Glissement Sévère ⚠️)';
+          return 'Liquidité Critique (Glissement Sévère)';
         case 'INSUFFICIENT':
-          return 'Profondeur Insuffisante ⚠️';
+          return 'Profondeur Insuffisante';
         case 'MODERATE':
-          return 'Liquidité Modérée ⚡';
+          return 'Liquidité Modérée';
         case 'EXCELLENT':
-          return 'Liquidité Optimale & Profonde ✓';
+          return 'Liquidité Optimale & Profonde';
         default:
-          return 'Profondeur Adéquate ✓';
+          return 'Profondeur Adéquate';
       }
     }
   };

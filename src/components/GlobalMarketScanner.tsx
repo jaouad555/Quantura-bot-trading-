@@ -22,6 +22,9 @@ import {
   Flame,
   Maximize2,
   Volume2,
+  ChevronDown,
+  Check,
+  Filter,
 } from 'lucide-react';
 import { Language, Timeframe } from '../types';
 import { RESPECTED_TRADING_PAIRS, TradingPair, formatCoinPrice } from '../utils/tradingPairs';
@@ -60,6 +63,19 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
   const [isScanningNow, setIsScanningNow] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number>(Date.now());
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('1h');
+  const [isSignalDropdownOpen, setIsSignalDropdownOpen] = useState(false);
+  const signalDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (signalDropdownRef.current && !signalDropdownRef.current.contains(event.target as Node)) {
+        setIsSignalDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch scanner status regularly
   const fetchScannerStatus = async () => {
@@ -461,19 +477,73 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
               ))}
             </div>
 
-            {/* Signal Filter Select */}
-            <select
-              value={signalFilter}
-              onChange={(e) => setSignalFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 font-medium"
-            >
-              <option value="ALL">{isArabic ? 'جميع الإشارات والمؤشرات' : 'All Signals'}</option>
-              <option value="LONG">🟢 {isArabic ? 'إشارات الشراء (LONG)' : 'LONG Signals Only'}</option>
-              <option value="SHORT">🔴 {isArabic ? 'إشارات البيع (SHORT)' : 'SHORT Signals Only'}</option>
-              <option value="OVERSOLD">📉 {isArabic ? 'تشبع بيعي (RSI < 35)' : 'RSI Oversold (<35)'}</option>
-              <option value="OVERBOUGHT">📈 {isArabic ? 'تشبع شرائي (RSI > 65)' : 'RSI Overbought (>65)'}</option>
-              <option value="HIGH_ADX">⚡ {isArabic ? 'ترند قوي (ADX > 25)' : 'Strong Trend (ADX > 25)'}</option>
-            </select>
+            {/* Custom In-App Signal Filter Menu (Prevents OS popups from escaping iframe) */}
+            <div className="relative" ref={signalDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsSignalDropdownOpen((prev) => !prev)}
+                className={`flex items-center gap-2 bg-slate-950 border ${
+                  isSignalDropdownOpen ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800 hover:border-slate-700'
+                } text-slate-200 text-xs rounded-xl px-3 py-1.5 font-bold transition shadow-sm cursor-pointer`}
+              >
+                {signalFilter === 'ALL' && <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                {signalFilter === 'LONG' && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                {signalFilter === 'SHORT' && <ArrowDownRight className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                {signalFilter === 'OVERSOLD' && <TrendingDown className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                {signalFilter === 'OVERBOUGHT' && <TrendingUp className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                {signalFilter === 'HIGH_ADX' && <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}
+                <span>
+                  {signalFilter === 'ALL'
+                    ? (isArabic ? 'جميع الإشارات والمؤشرات' : 'All Signals')
+                    : signalFilter === 'LONG'
+                    ? (isArabic ? 'إشارات الشراء (LONG)' : 'LONG Signals')
+                    : signalFilter === 'SHORT'
+                    ? (isArabic ? 'إشارات البيع (SHORT)' : 'SHORT Signals')
+                    : signalFilter === 'OVERSOLD'
+                    ? (isArabic ? 'تشبع بيعي (RSI < 35)' : 'RSI Oversold')
+                    : signalFilter === 'OVERBOUGHT'
+                    ? (isArabic ? 'تشبع شرائي (RSI > 65)' : 'RSI Overbought')
+                    : (isArabic ? 'ترند قوي (ADX > 25)' : 'Strong Trend')}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isSignalDropdownOpen ? 'rotate-180 text-cyan-400' : ''}`} />
+              </button>
+
+              {isSignalDropdownOpen && (
+                <div className={`absolute top-full mt-1.5 z-50 w-64 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl p-1.5 space-y-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 ${isArabic ? 'right-0' : 'left-0'}`}>
+                  {[
+                    { id: 'ALL', labelAr: 'جميع الإشارات والمؤشرات', labelEn: 'All Signals & Indicators', icon: <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> },
+                    { id: 'LONG', labelAr: 'إشارات الشراء فقط (LONG)', labelEn: 'LONG Signals Only', icon: <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> },
+                    { id: 'SHORT', labelAr: 'إشارات البيع فقط (SHORT)', labelEn: 'SHORT Signals Only', icon: <ArrowDownRight className="w-3.5 h-3.5 text-rose-400 shrink-0" /> },
+                    { id: 'OVERSOLD', labelAr: 'تشبع بيعي (RSI < 35)', labelEn: 'RSI Oversold (<35)', icon: <TrendingDown className="w-3.5 h-3.5 text-amber-400 shrink-0" /> },
+                    { id: 'OVERBOUGHT', labelAr: 'تشبع شرائي (RSI > 65)', labelEn: 'RSI Overbought (>65)', icon: <TrendingUp className="w-3.5 h-3.5 text-purple-400 shrink-0" /> },
+                    { id: 'HIGH_ADX', labelAr: 'ترند قوي ملحوظ (ADX > 25)', labelEn: 'Strong Trend (ADX > 25)', icon: <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0" /> },
+                  ].map((opt) => {
+                    const isCurrent = signalFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setSignalFilter(opt.id);
+                          setIsSignalDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-semibold transition text-left cursor-pointer ${
+                          isCurrent
+                            ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {opt.icon}
+                          <span>{isArabic ? opt.labelAr : opt.labelEn}</span>
+                        </div>
+                        {isCurrent && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* View Mode Toggle */}
             <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
@@ -662,7 +732,10 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
                           </span>
                           <span className="text-[9px] text-slate-500">
                             {(item.bollinger?.bandwidth ?? 0.05) < 0.04 ? (
-                              <span className="text-amber-400 font-bold">⚡ Squeeze</span>
+                              <span className="inline-flex items-center gap-0.5 text-amber-400 font-bold">
+                                <Zap className="w-2.5 h-2.5 text-amber-400" />
+                                <span>Squeeze</span>
+                              </span>
                             ) : (
                               'Normal'
                             )}
@@ -914,15 +987,20 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
                     <div className="flex justify-between items-center text-[11px]">
                       <span>{isArabic ? 'إشارة البوت:' : 'Quant Signal:'}</span>
                       {isLongSignal ? (
-                        <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                          🟢 LONG ({item.confidence}%)
+                        <span className="inline-flex items-center gap-1 font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                          <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+                          <span>LONG ({item.confidence}%)</span>
                         </span>
                       ) : isShortSignal ? (
-                        <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded">
-                          🔴 SHORT ({item.confidence}%)
+                        <span className="inline-flex items-center gap-1 font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
+                          <ArrowDownRight className="w-3 h-3 text-rose-400" />
+                          <span>SHORT ({item.confidence}%)</span>
                         </span>
                       ) : (
-                        <span className="text-slate-500">⚪ WAIT</span>
+                        <span className="inline-flex items-center gap-1 text-slate-400 bg-slate-800/40 px-2 py-0.5 rounded">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          <span>WAIT</span>
+                        </span>
                       )}
                     </div>
                   </div>

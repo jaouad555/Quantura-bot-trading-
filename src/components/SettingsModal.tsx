@@ -194,8 +194,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </h4>
                     <span className="text-xs text-slate-400">
                       {executionMode === 'BINANCE_LIVE'
-                        ? (isArabic ? '🔴 التداول الحقيقي مفعل' : '🔴 Mode Réel Actif')
-                        : (isArabic ? '🧪 وضع التداول التجريبي (Paper)' : '🧪 Mode Virtuel Actif')}
+                        ? (isArabic ? 'التداول الحقيقي مفعل' : 'Mode Réel Actif')
+                        : (isArabic ? 'وضع التداول التجريبي (Paper)' : 'Mode Virtuel Actif')}
                     </span>
                   </div>
                 </div>
@@ -268,7 +268,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-2 pt-3 border-t border-slate-800">
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-brand-400" />
-              <label className="text-sm font-bold text-white">Langue de l'Interface</label>
+              <label className="text-sm font-bold text-white">
+                {isArabic ? 'لغة الواجهة (Interface Language)' : language === 'en' ? 'Interface Language' : 'Langue de l\'Interface'}
+              </label>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
@@ -276,7 +278,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   key={lang}
                   onClick={() => onLanguageChange(lang)}
-                  className={`p-2.5 rounded-xl border text-center font-bold transition ${
+                  className={`p-2.5 rounded-xl border text-center font-bold transition cursor-pointer ${
                     language === lang
                       ? 'bg-brand-500 text-slate-950 border-brand-400 shadow-md shadow-brand-500/20'
                       : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
@@ -285,27 +287,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {lang === 'fr' ? 'Français' : lang === 'ar' ? 'العربية' : 'English'}
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* Minimum Confidence Threshold */}
-          <div className="space-y-2 pt-3 border-t border-slate-800">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-bold text-white">{t.settings.minConfidence}</label>
-              <span className="text-xs font-mono font-bold text-brand-400">{minConfidenceThreshold}%</span>
-            </div>
-            <input
-              type="range"
-              min="50"
-              max="85"
-              step="5"
-              value={minConfidenceThreshold}
-              onChange={(e) => onConfidenceChange(Number(e.target.value))}
-              className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-brand-500"
-            />
-            <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>50% (Plus de signaux)</span>
-              <span>85% (Filtre Strict Grade A)</span>
             </div>
           </div>
 
@@ -497,7 +478,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-xs text-slate-400">{t.settings.devModeDesc}</p>
             {isDeveloperMode && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-mono">
-                ⚠️ ATTENTION : Le mode Test utilise des données simulées pour le développement hors-ligne.
+                ATTENTION : Le mode Test utilise des données simulées pour le développement hors-ligne.
               </div>
             )}
           </div>

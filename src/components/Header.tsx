@@ -399,7 +399,7 @@ export const Header: React.FC<HeaderProps> = ({
       {isDeveloperMode && (
         <div className="bg-amber-500/20 border-b border-amber-500/40 px-3 py-0.5 text-center text-[11px] text-amber-300 flex items-center justify-center gap-1.5 font-mono">
           <AlertTriangle className="w-3 h-3 shrink-0" strokeWidth={2} />
-          <span className="truncate">⚠️ {t.status.devModeWarning}</span>
+          <span className="truncate">{t.status.devModeWarning}</span>
         </div>
       )}
 
@@ -553,7 +553,7 @@ export const Header: React.FC<HeaderProps> = ({
                                 <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-1" strokeWidth={2.5} />
                               ) : (
                                 <span className="text-[10px] font-mono text-slate-500">
-                                  {pair.category === 'MEME' ? '🔥' : '⚡'}
+                                  {pair.category === 'MEME' ? <Flame className="w-3 h-3 text-amber-400" /> : <Zap className="w-3 h-3 text-cyan-400" />}
                                 </span>
                               )}
                             </button>

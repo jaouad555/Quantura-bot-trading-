@@ -171,6 +171,10 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   const [isTimeframeDropdownOpen, setIsTimeframeDropdownOpen] = useState(false);
   const timeframeDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Leverage selector in-app dropdown state
+  const [isLeverageDropdownOpen, setIsLeverageDropdownOpen] = useState(false);
+  const leverageDropdownRef = useRef<HTMLDivElement>(null);
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -179,6 +183,9 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       }
       if (timeframeDropdownRef.current && !timeframeDropdownRef.current.contains(e.target as Node)) {
         setIsTimeframeDropdownOpen(false);
+      }
+      if (leverageDropdownRef.current && !leverageDropdownRef.current.contains(e.target as Node)) {
+        setIsLeverageDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -519,14 +526,14 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       {showAppliedToast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-emerald-500/90 backdrop-blur-md text-white font-bold rounded-xl shadow-2xl shadow-emerald-500/30 border border-emerald-400/40 animate-bounce">
           <CheckCircle2 className="w-5 h-5" />
-          <span>{isArabic ? 'تم تطبيق بارامترات الاستراتيجية بنجاح على البوت الحي! 🚀' : 'Strategy parameters applied to Live Bot! 🚀'}</span>
+          <span>{isArabic ? 'تم تطبيق بارامترات الاستراتيجية بنجاح على البوت الحي!' : 'Strategy parameters applied to Live Bot!'}</span>
         </div>
       )}
 
       {/* ========================================================================= */}
       {/* COMPACT PRO CONTROL BAR (Platform Grade Terminal Header)                 */}
       {/* ========================================================================= */}
-      <div className="bg-[#0f172a]/95 border border-[#1e293b] rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col gap-4">
+      <div className="relative z-30 bg-[#0f172a]/95 border border-[#1e293b] rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col gap-4">
         
         {/* Row 1: Strategy Selector Bar & Mode Switches */}
         <div className="flex flex-col gap-3 border-b border-[#1e293b] pb-3.5">
@@ -618,13 +625,19 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-500/15 text-brand-300 border border-brand-500/30 font-bold font-mono">
-                  {isArabic ? `فريم: ${activeStrategyObj.defaultTimeframe.toUpperCase()}` : `Frame: ${activeStrategyObj.defaultTimeframe.toUpperCase()}`}
+                  {isArabic ? `فريم: ${timeframe.toUpperCase()}` : `Frame: ${timeframe.toUpperCase()}`}
                 </span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono">
-                  {isArabic ? `رافعة: ${activeStrategyObj.defaultLeverage}x` : `Lev: ${activeStrategyObj.defaultLeverage}x`}
-                </span>
+                {marketType === 'SPOT' ? (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold font-mono">
+                    {isArabic ? 'سوق فوري (بدون رافعة)' : 'Spot: 1x (No Lev)'}
+                  </span>
+                ) : (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono">
+                    {isArabic ? `رافعة: ${leverage}x` : `Lev: ${leverage}x`}
+                  </span>
+                )}
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold font-mono">
-                  {isArabic ? `هدف: 1:${activeStrategyObj.defaultRiskReward}` : `RR: 1:${activeStrategyObj.defaultRiskReward}`}
+                  {isArabic ? `هدف: 1:${riskRewardTarget}` : `RR: 1:${riskRewardTarget}`}
                 </span>
               </div>
             </div>
@@ -668,7 +681,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
           {/* Symbol Selector (when single coin) or Basket Trigger (when multi coin) */}
           {viewMode === 'SINGLE_COIN' ? (
-            <div className="flex flex-col gap-1 relative" ref={symbolDropdownRef}>
+            <div className={`flex flex-col gap-1 relative ${isSymbolDropdownOpen ? 'z-50' : 'z-10'}`} ref={symbolDropdownRef}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   {isArabic ? 'زوج التداول' : 'Symbol'}
@@ -698,7 +711,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
               {/* Floating Pro Pairs Dropdown Menu (Strictly within in-app container) */}
               {isSymbolDropdownOpen && (
-                <div className="absolute top-[105%] left-0 z-50 w-72 sm:w-80 bg-[#0f172a] border border-slate-700/90 rounded-xl shadow-2xl backdrop-blur-xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute top-[105%] start-0 z-[100] w-72 sm:w-80 bg-[#0f172a] border border-slate-700/90 rounded-xl shadow-2xl backdrop-blur-xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/80">
                   {/* Search Bar inside dropdown */}
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -725,8 +738,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[9px]">
                     {[
                       { id: 'ALL', label: isArabic ? 'الكل' : 'All' },
-                      { id: 'HOT', label: isArabic ? '🔥 الشائعة' : '🔥 Hot' },
-                      { id: 'MAJOR', label: isArabic ? '⭐ القيادية' : '⭐ Major' },
+                      { id: 'HOT', label: isArabic ? 'الشائعة' : 'Hot' },
+                      { id: 'MAJOR', label: isArabic ? 'القيادية' : 'Major' },
                       { id: 'LAYER1', label: 'Layer 1' },
                       { id: 'DEFI', label: 'DeFi' },
                     ].map((cat) => (
@@ -817,46 +830,124 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   </span>
                 </div>
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30">
-                  {isArabic ? 'تعديل ⚙️' : 'Edit ⚙️'}
+                  {isArabic ? 'تعديل' : 'Edit'}
                 </span>
               </button>
             </div>
           )}
 
           {/* Market Type (Futures / Spot) */}
-          <div className="flex flex-col gap-1">
+          <div className={`flex flex-col gap-1 relative ${isLeverageDropdownOpen ? 'z-50' : 'z-10'}`} ref={leverageDropdownRef}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'السوق والرافعة' : 'Market & Lev'}
             </span>
-            <div className="flex items-center gap-1">
-              <select
-                value={marketType}
-                onChange={(e) => setMarketType(e.target.value as 'SPOT' | 'FUTURES')}
-                className="bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white focus:ring-1 focus:ring-brand-500 focus:outline-none flex-1 cursor-pointer"
-              >
-                <option value="FUTURES">Futures</option>
-                <option value="SPOT">Spot</option>
-              </select>
-              {marketType === 'FUTURES' && (
-                <select
-                  value={leverage}
-                  onChange={(e) => setLeverage(Number(e.target.value))}
-                  className="bg-[#1e293b] border border-amber-500/50 rounded-lg px-1.5 py-1 text-xs font-bold text-amber-300 focus:ring-1 focus:ring-amber-500 focus:outline-none w-14 cursor-pointer"
+            <div className="flex items-center gap-1.5">
+              <div className="flex bg-[#1e293b] p-0.5 rounded-lg border border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMarketType('FUTURES')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                    marketType === 'FUTURES' ? 'bg-brand-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <option value={1}>1x</option>
-                  <option value={2}>2x</option>
-                  <option value={3}>3x</option>
-                  <option value={4}>4x</option>
-                  <option value={5}>5x</option>
-                  <option value={10}>10x</option>
-                  <option value={20}>20x</option>
-                </select>
+                  Futures
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMarketType('SPOT');
+                    setLeverage(1);
+                    setIsLeverageDropdownOpen(false);
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                    marketType === 'SPOT' ? 'bg-cyan-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Spot
+                </button>
+              </div>
+
+              {marketType === 'FUTURES' ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsLeverageDropdownOpen((prev) => !prev)}
+                    className={`bg-[#1e293b] border ${
+                      isLeverageDropdownOpen ? 'border-amber-400 ring-1 ring-amber-400/50' : 'border-amber-500/50 hover:border-amber-400'
+                    } rounded-lg px-2.5 py-1 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="font-mono font-bold text-amber-300">{leverage}x</span>
+                    <ChevronDown className={`w-3 h-3 text-amber-400/80 transition-transform ${isLeverageDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Vertical Popover List strictly inside the app, floating high above Net P&L and all cards */}
+                  {isLeverageDropdownOpen && (
+                    <div className="absolute top-[110%] start-0 z-[100] w-56 bg-[#0a101f] border border-slate-700 rounded-xl shadow-2xl backdrop-blur-2xl p-1.5 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 max-h-64 overflow-y-auto no-scrollbar ring-1 ring-amber-500/30">
+                      <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-800">
+                        {isArabic ? 'اختر الرافعة المالية' : 'Select Leverage'}
+                      </div>
+                      {[
+                        { lev: 1, label: '1x', desc: isArabic ? 'بدون مضاعفة (محافظ)' : '1x Conservative', tag: 'Safe' },
+                        { lev: 2, label: '2x', desc: isArabic ? 'موصى به للأمان' : '2x Low Risk', tag: 'Safe' },
+                        { lev: 3, label: '3x', desc: isArabic ? 'توازن مثالي' : '3x Balanced', tag: 'Optimal' },
+                        { lev: 5, label: '5x', desc: isArabic ? 'مخاطرة قياسية' : '5x Standard', tag: 'Standard' },
+                        { lev: 7, label: '7x', desc: isArabic ? 'صفقات زخم' : '7x Momentum', tag: 'Active' },
+                        { lev: 10, label: '10x', desc: isArabic ? 'مضاربة نشطة' : '10x Scalp', tag: 'Aggressive' },
+                        { lev: 15, label: '15x', desc: isArabic ? 'مضاربة عالية' : '15x High Risk', tag: 'High' },
+                        { lev: 20, label: '20x', desc: isArabic ? 'مضاربة سريعة' : '20x Fast Scalp', tag: 'High' },
+                        { lev: 25, label: '25x', desc: isArabic ? 'احترافية قصوى' : '25x Pro Only', tag: 'Expert' },
+                        { lev: 50, label: '50x', desc: isArabic ? 'مخاطرة قصوى' : '50x Extreme', tag: 'Extreme' },
+                      ].map((item) => {
+                        const isSelected = Number(leverage) === item.lev;
+                        return (
+                          <button
+                            key={item.lev}
+                            type="button"
+                            onClick={() => {
+                              setLeverage(item.lev);
+                              setIsLeverageDropdownOpen(false);
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                                : 'hover:bg-[#1e293b] text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-xs text-amber-300">
+                                {item.label}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                ({item.desc})
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                                item.lev <= 3 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40' :
+                                item.lev <= 10 ? 'bg-amber-950 text-amber-400 border border-amber-800/40' :
+                                'bg-rose-950 text-rose-400 border border-rose-800/40'
+                              }`}>
+                                {item.tag}
+                              </span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="px-2 py-1 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-[10px] font-mono text-cyan-300 flex items-center gap-1">
+                  <span>1x (Spot)</span>
+                </div>
               )}
             </div>
           </div>
 
           {/* Timeframe Selector (Custom in-app popover dropdown strictly inside the application) */}
-          <div className="flex flex-col gap-1 relative" ref={timeframeDropdownRef}>
+          <div className={`flex flex-col gap-1 relative ${isTimeframeDropdownOpen ? 'z-50' : 'z-10'}`} ref={timeframeDropdownRef}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'الفريم الزمني' : 'Timeframe'}
             </span>
@@ -878,7 +969,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
             {/* In-app floating popup inside container */}
             {isTimeframeDropdownOpen && (
-              <div className="absolute top-[105%] left-0 z-50 w-48 bg-[#0f172a] border border-slate-700/90 rounded-xl shadow-2xl backdrop-blur-xl p-1.5 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute top-[105%] start-0 z-[100] w-48 bg-[#0a101f] border border-slate-700 rounded-xl shadow-2xl backdrop-blur-2xl p-1.5 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-brand-500/20">
                 {[
                   { value: '15m' as Timeframe, label: '15m', desc: isArabic ? '15 دقيقة' : '15 Min', tag: 'Scalper' },
                   { value: '30m' as Timeframe, label: '30m', desc: isArabic ? '30 دقيقة' : '30 Min', tag: 'Breakout' },
@@ -927,17 +1018,26 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'العمق الزمني' : 'Horizon'}
             </span>
-            <select
-              value={months}
-              onChange={(e) => setMonths(Number(e.target.value))}
-              className="bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white focus:ring-1 focus:ring-brand-500 focus:outline-none cursor-pointer"
-            >
-              <option value={1}>1 {isArabic ? 'شهر' : 'Month'}</option>
-              <option value={3}>3 {isArabic ? 'أشهر' : 'Months'}</option>
-              <option value={6}>6 {isArabic ? 'أشهر' : 'Months'}</option>
-              <option value={12}>12 {isArabic ? 'شهر (سنة)' : 'Months (1Y)'}</option>
-              <option value={24}>24 {isArabic ? 'شهر (سنتين)' : 'Months (2Y)'}</option>
-            </select>
+            <div className="flex bg-[#1e293b] p-0.5 rounded-lg border border-slate-700">
+              {[
+                { m: 1, label: isArabic ? '1ش' : '1M' },
+                { m: 3, label: isArabic ? '3ش' : '3M' },
+                { m: 6, label: isArabic ? '6ش' : '6M' },
+                { m: 12, label: isArabic ? '1س' : '1Y' },
+                { m: 24, label: isArabic ? '2س' : '2Y' },
+              ].map((h) => (
+                <button
+                  key={h.m}
+                  type="button"
+                  onClick={() => setMonths(h.m)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                    months === h.m ? 'bg-brand-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {h.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Initial Capital */}
@@ -989,7 +1089,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       {/* EXECUTIVE KPI PERFORMANCE STRIP (Institutional Financial Metrics)        */}
       {/* ========================================================================= */}
       {activeResult && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 relative z-0">
           
           {/* Card 1: Net PnL & ROI */}
           <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md relative overflow-hidden">
@@ -1050,7 +1150,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                 {activeResult.profitFactor > 0 ? activeResult.profitFactor.toFixed(2) : '0.00'}
               </div>
               <div className="text-[10px] font-bold text-slate-500 mt-0.5">
-                {activeResult.profitFactor >= 2 ? (isArabic ? 'ممتاز جداً 🌟' : 'Institutional Grade') : (isArabic ? 'مقبول' : 'Standard')}
+                {activeResult.profitFactor >= 2 ? (isArabic ? 'ممتاز جداً' : 'Institutional Grade') : (isArabic ? 'مقبول' : 'Standard')}
               </div>
             </div>
           </div>
@@ -1141,7 +1241,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               }`}
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isArabic ? 'مصفوفة مقارنة الاستراتيجيات الست ⚡' : '6 Strategies Benchmark ⚡'}</span>
+              <span>{isArabic ? 'مصفوفة مقارنة الاستراتيجيات الست' : '6 Strategies Benchmark'}</span>
             </button>
 
             <button
@@ -1831,7 +1931,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                 }}
                 className="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all"
               >
-                {isArabic ? 'تطبيق وإعادة المحاكاة 🚀' : 'Apply & Re-simulate 🚀'}
+                {isArabic ? 'تطبيق وإعادة المحاكاة' : 'Apply & Re-simulate'}
               </button>
             </div>
           </div>
@@ -1883,28 +1983,28 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   onClick={() => setBasketPreset('TOP3')}
                   className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
                 >
-                  ⭐ Top 3 (BTC, ETH, SOL)
+                  Top 3 (BTC, ETH, SOL)
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('TOP5')}
                   className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
                 >
-                  🔥 Top 5 Major
+                  Top 5 Major
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('LAYER1')}
                   className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
                 >
-                  ⚡ Layer 1
+                  Layer 1
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('DEFI')}
                   className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
                 >
-                  💎 DeFi
+                  DeFi
                 </button>
                 <button
                   type="button"
@@ -2009,7 +2109,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   onClick={() => setIsBasketModalOpen(false)}
                   className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all cursor-pointer"
                 >
-                  {isArabic ? 'حفظ وتطبيق السلة 🚀' : 'Done & Apply Basket 🚀'}
+                  {isArabic ? 'حفظ وتطبيق السلة' : 'Done & Apply Basket'}
                 </button>
               </div>
             </div>

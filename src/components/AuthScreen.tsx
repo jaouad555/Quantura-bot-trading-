@@ -225,7 +225,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
             className="w-full bg-slate-950 hover:bg-slate-800/80 text-emerald-400 border border-emerald-500/30 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs cursor-pointer active:scale-[0.99]"
           >
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isArabic ? '⚡ الدخول الفوري المباشر للبوت' : '⚡ Quick Direct Bot Access'}</span>
+            <span>{isArabic ? 'الدخول الفوري المباشر للبوت' : 'Quick Direct Bot Access'}</span>
           </button>
         </form>
 

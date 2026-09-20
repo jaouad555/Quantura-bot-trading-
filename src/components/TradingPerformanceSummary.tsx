@@ -471,7 +471,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
                   : 'bg-rose-500/20 text-rose-400'
               }`}
             >
-              {data.pnl >= 0 ? (isArabic ? 'يوم رابح 🟢' : 'Green Day') : (isArabic ? 'يوم خاسر 🔴' : 'Red Day')}
+              {data.pnl >= 0 ? (isArabic ? 'يوم رابح' : 'Green Day') : (isArabic ? 'يوم خاسر' : 'Red Day')}
             </span>
           </div>
           <div className="flex justify-between items-center gap-4 text-slate-300 pt-0.5">
@@ -824,7 +824,7 @@ export const TradingPerformanceSummary: React.FC<TradingPerformanceSummaryProps>
                 <span>{perf.consecutiveWins}</span>
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                Streak: {stats.maxWinStreak} 🔥
+                Streak: {stats.maxWinStreak}
               </span>
             </div>
             <div className="flex items-baseline gap-2">

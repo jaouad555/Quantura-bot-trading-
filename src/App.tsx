@@ -485,9 +485,9 @@ export const App: React.FC = () => {
     setBotLogs((prev) => [newLog, ...(prev || []).slice(0, 49)]);
     
     if (telegramBotTokenRef.current && telegramChatIdRef.current) {
-      const modeText = newLog.mode === 'BINANCE_LIVE' ? '🔴 LIVE' : '🧪 PAPER';
+      const modeText = newLog.mode === 'BINANCE_LIVE' ? 'LIVE' : 'PAPER';
       const pnlText = newLog.pnlUsdt ? `\nPnL: $${newLog.pnlUsdt.toFixed(2)}` : '';
-      const message = `<b>🤖 Bot Action (${modeText})</b>\n\nPair: ${newLog.symbol}\nAction: ${newLog.type}\nReason: ${newLog.reason}\nPrice: $${newLog.price}${pnlText}`;
+      const message = `<b>Quantura Bot Action (${modeText})</b>\n\nPair: ${newLog.symbol}\nAction: ${newLog.type}\nReason: ${newLog.reason}\nPrice: $${newLog.price}${pnlText}`;
       sendTelegramMessage(telegramBotTokenRef.current, telegramChatIdRef.current, message);
     }
   }, []);
@@ -781,22 +781,22 @@ export const App: React.FC = () => {
 
       if (plan.decision === 'LONG') {
         title = isArabic
-          ? `🟢 [${pairName}] توصية صفقة شراء (BUY / LONG) • ${tf}`
+          ? `[${pairName}] توصية صفقة شراء (BUY / LONG) • ${tf}`
           : isEn
-          ? `🟢 [${pairName}] BUY Signal (LONG) • ${tf}`
-          : `🟢 [${pairName}] Signal ACHAT (LONG) • ${tf}`;
+          ? `[${pairName}] BUY Signal (LONG) • ${tf}`
+          : `[${pairName}] Signal ACHAT (LONG) • ${tf}`;
       } else if (plan.decision === 'SHORT') {
         title = isArabic
-          ? `🔴 [${pairName}] توصية صفقة بيع (SELL / SHORT) • ${tf}`
+          ? `[${pairName}] توصية صفقة بيع (SELL / SHORT) • ${tf}`
           : isEn
-          ? `🔴 [${pairName}] SELL Signal (SHORT) • ${tf}`
-          : `🔴 [${pairName}] Signal VENTE (SHORT) • ${tf}`;
+          ? `[${pairName}] SELL Signal (SHORT) • ${tf}`
+          : `[${pairName}] Signal VENTE (SHORT) • ${tf}`;
       } else {
         title = isArabic
-          ? `🔵 [${pairName}] تنبيه مراقبة عادي (WAIT) • ${tf}`
+          ? `[${pairName}] تنبيه مراقبة عادي (WAIT) • ${tf}`
           : isEn
-          ? `🔵 [${pairName}] Market Notice (WAIT) • ${tf}`
-          : `🔵 [${pairName}] Alerte Marché (ATTENTE) • ${tf}`;
+          ? `[${pairName}] Market Notice (WAIT) • ${tf}`
+          : `[${pairName}] Alerte Marché (ATTENTE) • ${tf}`;
       }
 
       const marketTypeNote = plan.decision === 'LONG'
@@ -1061,8 +1061,8 @@ export const App: React.FC = () => {
         const currentModePositions = workingPositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
         if (currentModePositions.length >= maxTrades) {
           const rejectMsg = isArabicLang
-            ? `🛑 تم رفض فتح الصفقة: تم بلوغ الحد الأقصى للصفقات المتزامنة المسموح بها (${currentModePositions.length}/${maxTrades} صفقات مفتوحة). لن يتم فتح أي صفقة جديدة.`
-            : `🛑 Trade Opening Blocked: Maximum open trades limit reached (${currentModePositions.length}/${maxTrades} active positions). No new trades can be opened.`;
+            ? `تم رفض فتح الصفقة: تم بلوغ الحد الأقصى للصفقات المتزامنة المسموح بها (${currentModePositions.length}/${maxTrades} صفقات مفتوحة). لن يتم فتح أي صفقة جديدة.`
+            : `Trade Opening Blocked: Maximum open trades limit reached (${currentModePositions.length}/${maxTrades} active positions). No new trades can be opened.`;
 
           addBotLog({
             id: `log-rejected-${Date.now()}`,
@@ -1080,7 +1080,7 @@ export const App: React.FC = () => {
 
           const rejectAlert: PushAlert = {
             id: `alert-max-reached-${Date.now()}`,
-            title: isArabicLang ? '⚠️ تم رفض فتح الصفقة (اكتمال الحد)' : '⚠️ Trade Rejected (Max Slots Reached)',
+            title: isArabicLang ? 'تم رفض فتح الصفقة (اكتمال الحد)' : 'Trade Rejected (Max Slots Reached)',
             body: rejectMsg,
             timestamp: Date.now(),
             type: 'SYSTEM',
@@ -1247,10 +1247,10 @@ export const App: React.FC = () => {
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           lastAction: isArabicLang
             ? (isFutures
-                ? `⚡ فتح عقد آجل ${decision} برافعة ${effectiveLeverage}x عند $${entryPrice.toLocaleString()}`
+                ? `فتح عقد آجل ${decision} برافعة ${effectiveLeverage}x عند $${entryPrice.toLocaleString()}`
                 : `تم الشراء الفوري عند $${entryPrice.toLocaleString()}`)
             : (isFutures
-                ? `⚡ Opened ${decision} Futures ${effectiveLeverage}x at $${entryPrice.toLocaleString()}`
+                ? `Opened ${decision} Futures ${effectiveLeverage}x at $${entryPrice.toLocaleString()}`
                 : `Spot Buy at $${entryPrice.toLocaleString()}`),
           realizedPnlUsdt: 0,
           pnlHistory: [0],
@@ -1278,8 +1278,8 @@ export const App: React.FC = () => {
 
         if (tradeBlockedByHardCap) {
           const rejectMsg = isArabicLang
-            ? `🛑 تم منع فتح الصفقة بالحد الصارم: تم الوصول إلى ${maxTrades} صفقات مفتوحة كحد أقصى.`
-            : `🛑 Hard Cap Block: Maximum open positions (${maxTrades}) reached.`;
+            ? `تم منع فتح الصفقة بالحد الصارم: تم الوصول إلى ${maxTrades} صفقات مفتوحة كحد أقصى.`
+            : `Hard Cap Block: Maximum open positions (${maxTrades}) reached.`;
           addBotLog({
             id: `log-cap-blocked-${Date.now()}`,
             timestamp: Date.now(),
@@ -1394,8 +1394,8 @@ export const App: React.FC = () => {
           pnlUsdt: -marginLost,
           pnlPercent: -100,
           reason: isArabicLang 
-            ? `🚨 تصفية تلقائية للعقد الآجل (${lev}x ${pos.decision}) لوصول السعر لمستوى التصفية ($${pos.liquidationPrice?.toLocaleString()})`
-            : `🚨 Futures Liquidation (${lev}x ${pos.decision}) triggered at Liq Price ($${pos.liquidationPrice?.toLocaleString()})`,
+            ? `تصفية تلقائية للعقد الآجل (${lev}x ${pos.decision}) لوصول السعر لمستوى التصفية ($${pos.liquidationPrice?.toLocaleString()})`
+            : `Futures Liquidation (${lev}x ${pos.decision}) triggered at Liq Price ($${pos.liquidationPrice?.toLocaleString()})`,
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: 'FUTURES',
           leverage: lev,
@@ -1438,7 +1438,7 @@ export const App: React.FC = () => {
           stopLoss: isLong
             ? Math.max(pos.stopLoss || 0, breakevenFeeAdjusted)
             : Math.min(pos.stopLoss || breakevenFeeAdjusted, breakevenFeeAdjusted),
-          lastAction: isArabicLang ? `تم تحقيق TP1 وجني 50% وتأمين SL للتعادل+ ✓` : `TP1 hit: 50% closed, SL locked at breakeven+ ✓`,
+          lastAction: isArabicLang ? `تم تحقيق TP1 وجني 50% وتأمين SL للتعادل+` : `TP1 hit: 50% closed, SL locked at breakeven+`,
         };
 
         updateBotPositionsSync((prev) => prev.map(p => p.id === pos.id ? updatedPos : p));
@@ -1474,7 +1474,7 @@ export const App: React.FC = () => {
           amountUsdt: marginClosed * lev,
           pnlUsdt,
           pnlPercent: roePercent,
-          reason: isArabicLang ? `جني أرباح الهدف الأول (TP1) بنسبة 50% [${lev}x] ✓` : `TP1 hit, 50% profit taken [${lev}x] ✓`,
+          reason: isArabicLang ? `جني أرباح الهدف الأول (TP1) بنسبة 50% [${lev}x]` : `TP1 hit, 50% profit taken [${lev}x]`,
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: pos.marketType,
           leverage: lev,
@@ -1501,7 +1501,7 @@ export const App: React.FC = () => {
             marginUsdt: pos.remainingAmountUsdt + rebuyMargin,
             positionSizeUsdt: (pos.remainingAmountUsdt + rebuyMargin) * lev,
             remainingAmountBtc: pos.remainingAmountBtc + addedContracts,
-            lastAction: isArabicLang ? `تعزيز العقد الآجل على الارتداد ✓` : `Smart Futures Rebuy on pullback ✓`,
+            lastAction: isArabicLang ? `تعزيز العقد الآجل على الارتداد` : `Smart Futures Rebuy on pullback`,
           };
           if (isLiveMode && currentBinance.isConnected) {
             executeBinanceLiveOrder(pos.symbol, pos.decision === 'LONG' ? 'BUY' : 'SELL', rebuyMargin * lev, addedContracts, actualP).then((orderRes) => {
@@ -1525,7 +1525,7 @@ export const App: React.FC = () => {
             side: isLong ? 'BUY' : 'SELL',
             price: actualP,
             amountUsdt: rebuyMargin * lev,
-            reason: isArabicLang ? `تعزيز العقد الآجل على الارتداد (${lev}x) ✓` : `Futures Rebuy on pullback (${lev}x) ✓`,
+            reason: isArabicLang ? `تعزيز العقد الآجل على الارتداد (${lev}x)` : `Futures Rebuy on pullback (${lev}x)`,
             mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
             marketType: pos.marketType,
             leverage: lev,
@@ -1569,7 +1569,7 @@ export const App: React.FC = () => {
           stopLoss: (pos.tp1 && pos.tp1 > 0)
             ? (isLong ? Math.max(pos.stopLoss || 0, pos.tp1) : Math.min(pos.stopLoss || pos.tp1, pos.tp1))
             : pos.stopLoss,
-          lastAction: isArabicLang ? `تم تحقيق TP2 وجني نصف المتبقي وتأمين SL على TP1 ✓` : `TP2 hit: 50% of remaining closed, SL locked at TP1 ✓`,
+          lastAction: isArabicLang ? `تم تحقيق TP2 وجني نصف المتبقي وتأمين SL على TP1` : `TP2 hit: 50% of remaining closed, SL locked at TP1`,
         };
 
         updateBotPositionsSync((prev) => prev.map(p => p.id === pos.id ? updatedPos : p));
@@ -1583,7 +1583,7 @@ export const App: React.FC = () => {
           price: actualP,
           amountUsdt: marginClosed * lev,
           pnlUsdt,
-          reason: isArabicLang ? `جني أرباح الهدف الثاني (TP2) بنسبة 50% من المتبقي [${lev}x] ✓` : `TP2 hit, 50% of remaining taken [${lev}x] ✓`,
+          reason: isArabicLang ? `جني أرباح الهدف الثاني (TP2) بنسبة 50% من المتبقي [${lev}x]` : `TP2 hit, 50% of remaining taken [${lev}x]`,
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: pos.marketType,
           leverage: lev,
@@ -1675,11 +1675,11 @@ export const App: React.FC = () => {
           pnlPercent: roePercent,
           reason: customReason || (isArabicLang 
             ? (actionType === 'SL' 
-                ? (pos.isTrailingActive ? `إغلاق وتأمين الأرباح بالوقف المتحرك (${lev}x Trailing SL) 🎯` : `إغلاق كامل بوقف الخسارة (${lev}x SL) 🛑`) 
-                : `إغلاق كامل بالهدف الثالث (${lev}x TP3) 🚀`) 
+                ? (pos.isTrailingActive ? `إغلاق وتأمين الأرباح بالوقف المتحرك (${lev}x Trailing SL)` : `إغلاق كامل بوقف الخسارة (${lev}x SL)`) 
+                : `إغلاق كامل بالهدف الثالث (${lev}x TP3)`) 
             : (actionType === 'SL' 
-                ? (pos.isTrailingActive ? `Trailing Stop Triggered (${lev}x) — Profits Locked 🎯` : `Closed at SL (${lev}x) 🛑`) 
-                : `Closed at TP3 (${lev}x) 🚀`)),
+                ? (pos.isTrailingActive ? `Trailing Stop Triggered (${lev}x) — Profits Locked` : `Closed at SL (${lev}x)`) 
+                : `Closed at TP3 (${lev}x)`)),
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
           marketType: pos.marketType,
           leverage: lev,
@@ -1780,7 +1780,7 @@ export const App: React.FC = () => {
       side: 'SELL',
       price: currentP,
       amountUsdt: 0,
-      reason: isArabicLang ? '🚨 تصفية طارئة فورية وإغلاق كافة الصفقات النشطة (Panic Close All)' : '🚨 Emergency Panic Close All executed for all open positions',
+      reason: isArabicLang ? 'تصفية طارئة فورية وإغلاق كافة الصفقات النشطة (Panic Close All)' : 'Emergency Panic Close All executed for all open positions',
       mode: executionModeRef.current,
     };
     addBotLog(newLog);
@@ -1809,8 +1809,8 @@ export const App: React.FC = () => {
       price: ticker?.price || 0,
       amountUsdt: 0,
       reason: isArabicLang 
-        ? '🛡️ تم استئناف البوت وإعادة تصفير عداد الخسارة اليومية بنجاح.' 
-        : '🛡️ Shield reset successfully. Bot resumed and daily loss counter reset.',
+        ? 'تم استئناف البوت وإعادة تصفير عداد الخسارة اليومية بنجاح.' 
+        : 'Shield reset successfully. Bot resumed and daily loss counter reset.',
       mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
     };
     addBotLog(resetLog);
@@ -1828,11 +1828,11 @@ export const App: React.FC = () => {
         if (activeCount === 0) {
           const isAr = language === 'ar';
           const msg = isAr 
-            ? '⚠️ لا يمكن تشغيل البوت بدون اختيار استراتيجية واحدة على الأقل. يرجى اختيار وتفعيل استراتيجية من القائمة أدناه أولاً.'
-            : '⚠️ Cannot start bot without selecting at least one strategy. Please choose and configure a strategy below first.';
+            ? 'لا يمكن تشغيل البوت بدون اختيار استراتيجية واحدة على الأقل. يرجى اختيار وتفعيل استراتيجية من القائمة أدناه أولاً.'
+            : 'Cannot start bot without selecting at least one strategy. Please choose and configure a strategy below first.';
           const alert: PushAlert = {
             id: `alert-no-strat-${Date.now()}`,
-            title: isAr ? '⚠️ لم يتم اختيار استراتيجية' : '⚠️ No Strategy Selected',
+            title: isAr ? 'لم يتم اختيار استراتيجية' : 'No Strategy Selected',
             body: msg,
             timestamp: Date.now(),
             type: 'SYSTEM',
@@ -1854,8 +1854,8 @@ export const App: React.FC = () => {
           price: ticker?.price || 0,
           amountUsdt: 0,
           reason: isAr
-            ? `⚡ تم تفعيل وتشغيل البوت يدوياً بنجاح (${prev.activePresets?.length} استراتيجية نشطة).`
-            : `⚡ Bot manually activated successfully (${prev.activePresets?.length} active strategies).`,
+            ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${prev.activePresets?.length} استراتيجية نشطة).`
+            : `Bot manually activated successfully (${prev.activePresets?.length} active strategies).`,
           mode: executionModeRef.current === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'PAPER',
         };
         addBotLog(startLog);
@@ -1871,8 +1871,8 @@ export const App: React.FC = () => {
           price: ticker?.price || 0,
           amountUsdt: 0,
           reason: isAr
-            ? '⏸️ تم إيقاف البوت يدوياً. لن يتم فتح أي صفقات جديدة حتى يتم تفعيله يدوياً.'
-            : '⏸️ Bot manually paused. No new positions will open until manually resumed.',
+            ? 'تم إيقاف البوت يدوياً. لن يتم فتح أي صفقات جديدة حتى يتم تفعيله يدوياً.'
+            : 'Bot manually paused. No new positions will open until manually resumed.',
           mode: executionModeRef.current === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'PAPER',
         };
         addBotLog(stopLog);
@@ -1945,7 +1945,7 @@ export const App: React.FC = () => {
       id: `reset-alert-${Date.now()}`,
       timestamp: Date.now(),
       type: 'SYSTEM',
-      title: language === 'ar' ? 'إعادة ضبط شاملة للمنصة 🔄' : language === 'fr' ? 'Réinitialisation Totale Réussie 🔄' : 'Full Platform Reset 🔄',
+      title: language === 'ar' ? 'إعادة ضبط شاملة للمنصة' : language === 'fr' ? 'Réinitialisation Totale Réussie' : 'Full Platform Reset',
       body: language === 'ar'
         ? 'تم تصفير المحفظة بنجاح إلى 1,000 USDT ومسح جميع الصفقات والسجلات وإيقاف تشغيل الاستراتيجيات.'
         : language === 'fr'
@@ -1981,8 +1981,8 @@ export const App: React.FC = () => {
         'SL',
         priceToUse,
         isArabicLang
-          ? `✂️ تقليص تلقائي للصفقة الزائدة للالتزام بحد الصفقات الأقصى (${maxTrades})`
-          : `✂️ Auto-trimmed excess trade to enforce max open slots limit (${maxTrades})`,
+          ? `تقليص تلقائي للصفقة الزائدة للالتزام بحد الصفقات الأقصى (${maxTrades})`
+          : `Auto-trimmed excess trade to enforce max open slots limit (${maxTrades})`,
         pos.id
       );
     }
@@ -2115,8 +2115,8 @@ export const App: React.FC = () => {
           amountUsdt: 0,
           pnlUsdt: todayRealizedLoss,
           reason: isArabicLang 
-            ? `🛑 تفعيل قاطع الحماية (Circuit Breaker): تجاوزت خسائر اليوم -${Math.abs(todayRealizedLoss).toFixed(2)}$ (${botConfig.dailyDrawdownLimitPercent}%). تم إيقاف البوت لحماية رأس المال.` 
-            : `🛑 Circuit Breaker Tripped: Max daily loss limit (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) reached. Bot paused to protect capital.`,
+            ? `تفعيل قاطع الحماية (Circuit Breaker): تجاوزت خسائر اليوم -${Math.abs(todayRealizedLoss).toFixed(2)}$ (${botConfig.dailyDrawdownLimitPercent}%). تم إيقاف البوت لحماية رأس المال.` 
+            : `Circuit Breaker Tripped: Max daily loss limit (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) reached. Bot paused to protect capital.`,
           mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
         };
         addBotLog(cbLog);
@@ -2830,8 +2830,8 @@ export const App: React.FC = () => {
         return {
           success: true,
           message: isArabicLang
-            ? `✅ تم تنفيذ أمر ${side} بنجاح على بايننس! (رقم الأمر: ${order.orderId})`
-            : `✅ Ordre ${side} exécuté avec succès sur Binance ! (ID: ${order.orderId})`,
+            ? `تم تنفيذ أمر ${side} بنجاح على بايننس! (رقم الأمر: ${order.orderId})`
+            : `Ordre ${side} exécuté avec succès sur Binance ! (ID: ${order.orderId})`,
         };
       } else {
         return {
@@ -3158,11 +3158,11 @@ export const App: React.FC = () => {
                   const maxTrades = botConfigRef.current.maxOpenTrades || 3;
                   if (modePositions.length >= maxTrades) {
                     const msg = language === 'ar'
-                      ? `🛑 تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                      : `🛑 Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                      ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
+                      : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
                     const rejectAlert: PushAlert = {
                       id: `alert-manual-max-${Date.now()}`,
-                      title: language === 'ar' ? '⚠️ تم رفض فتح الصفقة (الحد الأقصى)' : '⚠️ Trade Rejected (Max Limit)',
+                      title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
                       body: msg,
                       timestamp: Date.now(),
                       type: 'SYSTEM',
@@ -3184,11 +3184,11 @@ export const App: React.FC = () => {
                   const maxTrades = botConfigRef.current.maxOpenTrades || 3;
                   if (modePositions.length >= maxTrades) {
                     const msg = language === 'ar'
-                      ? `🛑 تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                      : `🛑 Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                      ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
+                      : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
                     const rejectAlert: PushAlert = {
                       id: `alert-manual-max-${Date.now()}`,
-                      title: language === 'ar' ? '⚠️ تم رفض فتح الصفقة (الحد الأقصى)' : '⚠️ Trade Rejected (Max Limit)',
+                      title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
                       body: msg,
                       timestamp: Date.now(),
                       type: 'SYSTEM',

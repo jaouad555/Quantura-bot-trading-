@@ -110,7 +110,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#10b981',
       antennaColor: '#10b981',
       badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      title: isArabic ? 'نشط ورابح 🚀' : isEn ? 'Profitable & Hyped 🚀' : 'En Profit & Euphorique 🚀',
+      title: isArabic ? 'نشط ورابح' : isEn ? 'Profitable & Active' : 'En Profit & Actif',
       desc: isArabic ? `أرباح إيجابية (+${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)` : `Trades en gains (+${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)`,
     },
     BULLISH: {
@@ -121,7 +121,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#22c55e',
       antennaColor: '#22c55e',
       badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      title: isArabic ? 'زخم صاعد قوي 🐂' : isEn ? 'Bullish Momentum 🐂' : 'Momentum Haussier 🐂',
+      title: isArabic ? 'زخم صاعد قوي' : isEn ? 'Bullish Momentum' : 'Momentum Haussier',
       desc: isArabic ? 'رصد اتجاه صاعد وفرص شراء' : 'Détection de flux acheteur',
     },
     BEARISH: {
@@ -132,7 +132,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#f97316',
       antennaColor: '#f97316',
       badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      title: isArabic ? 'ضغط بيعي / هبوط 🐻' : isEn ? 'Bearish Market 🐻' : 'Pression Vendeuse 🐻',
+      title: isArabic ? 'ضغط بيعي / هبوط' : isEn ? 'Bearish Market' : 'Pression Vendeuse',
       desc: isArabic ? 'حذر ومراقبة مستويات الدعم والبيع' : 'Surveillance des supports & shorts',
     },
     ANGRY: {
@@ -143,7 +143,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#f43f5e',
       antennaColor: '#f43f5e',
       badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-      title: isArabic ? 'غاضب تحت الضغط 😤' : isEn ? 'Drawdown & Furious 😤' : 'En Perte & Furieux 😤',
+      title: isArabic ? 'تراجع تحت المراقبة' : isEn ? 'Drawdown Alert' : 'Alerte Drawdown',
       desc: isArabic ? `تراجع في الصفقات (-${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)` : `Drawdown en cours (-${Math.abs(floatingPnlUsdt || floatingPnlPercent).toFixed(2)}$)`,
     },
     SCANNING: {
@@ -154,7 +154,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#06b6d4',
       antennaColor: '#06b6d4',
       badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-      title: isArabic ? 'مسح كمي نشط ⚡' : isEn ? 'AI Scanning ⚡' : 'Analyse Quant IA ⚡',
+      title: isArabic ? 'مسح كمي نشط' : isEn ? 'AI Scanning' : 'Analyse Quant IA',
       desc: isArabic ? 'مراقبة المؤشرات وحساب الاحتماليات' : 'Calcul des probabilités de marché',
     },
     SLEEPING: {
@@ -165,7 +165,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#475569',
       antennaColor: '#64748b',
       badgeBg: 'bg-slate-800 text-slate-400 border-slate-700',
-      title: isArabic ? 'في وضع السكون 💤' : isEn ? 'Standby 💤' : 'En Veille 💤',
+      title: isArabic ? 'في وضع السكون' : isEn ? 'Standby' : 'En Veille',
       desc: isArabic ? 'البوت متوقف عن التداول' : 'Bot en pause',
     },
     SURPRISED: {
@@ -176,7 +176,7 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#f59e0b',
       antennaColor: '#f59e0b',
       badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      title: isArabic ? 'متفاعل بذكاء 💡' : isEn ? 'Surprised! 💡' : 'Interactif ! 💡',
+      title: isArabic ? 'متفاعل بذكاء' : isEn ? 'Interactive' : 'Interactif',
       desc: isArabic ? 'استجابة سريعة للمس' : 'Réponse interactive',
     },
   }[currentMood];
@@ -198,15 +198,11 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
         )}
 
         {currentMood === 'HAPPY' && (
-          <span className="absolute -top-2.5 -right-1 text-xs animate-pulse">
-            ✨
-          </span>
+          <span className="absolute -top-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
         )}
 
         {currentMood === 'ANGRY' && (
-          <span className="absolute -top-2.5 -right-1 text-xs animate-bounce">
-            💢
-          </span>
+          <span className="absolute -top-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping" />
         )}
 
         {/* ULTRA-SMART MECHA AI ROBOT HEAD SVG */}

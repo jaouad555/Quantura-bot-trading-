@@ -21,10 +21,10 @@ export const translations: Record<Language, any> = {
     },
 
     decisions: {
-      LONG: 'ACHAT (LONG 🟢)',
-      SHORT: 'VENTE (SHORT 🔴)',
-      WAIT: 'ATTENTE (WAIT 🟡)',
-      NO_TRADE: 'AUCUN TRADE (NO TRADE ⚪)',
+      LONG: 'ACHAT (LONG)',
+      SHORT: 'VENTE (SHORT)',
+      WAIT: 'ATTENTE (WAIT)',
+      NO_TRADE: 'AUCUN TRADE (NO TRADE)',
     },
 
     regimes: {
@@ -47,8 +47,8 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'Moteur Quantitatif & Bot Auto ⚡',
-      globalScanner: 'Scanner Global du Marché 🌐',
+      autoBot: 'Moteur Quantitatif & Bot Auto',
+      globalScanner: 'Scanner Global du Marché',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Carnet & Dérivés',
       chart: 'Graphique Live',
@@ -287,10 +287,10 @@ export const translations: Record<Language, any> = {
     },
 
     decisions: {
-      LONG: 'شراء (LONG 🟢)',
-      SHORT: 'بيع (SHORT 🔴)',
-      WAIT: 'انتظار (WAIT 🟡)',
-      NO_TRADE: 'لا توجد صفقة (NO TRADE ⚪)',
+      LONG: 'شراء (LONG)',
+      SHORT: 'بيع (SHORT)',
+      WAIT: 'انتظار (WAIT)',
+      NO_TRADE: 'لا توجد صفقة (NO TRADE)',
     },
 
     regimes: {
@@ -313,8 +313,8 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'المنصة والإشارة',
-      autoBot: 'البوت الكمي والآلي ⚡',
-      globalScanner: 'رادار ومسّاح السوق الشامل 🌐',
+      autoBot: 'البوت الكمي والآلي',
+      globalScanner: 'رادار ومسّاح السوق الشامل',
       mtf: 'تعدد الأطر الزمنية (MTF)',
       market: 'الدفتر والمشتقات',
       chart: 'الرسم البياني المباشر',
@@ -553,10 +553,10 @@ export const translations: Record<Language, any> = {
     },
 
     decisions: {
-      LONG: 'BUY (LONG 🟢)',
-      SHORT: 'SELL (SHORT 🔴)',
-      WAIT: 'WAIT (NEUTRAL 🟡)',
-      NO_TRADE: 'NO TRADE (UNCERTAIN ⚪)',
+      LONG: 'BUY (LONG)',
+      SHORT: 'SELL (SHORT)',
+      WAIT: 'WAIT (NEUTRAL)',
+      NO_TRADE: 'NO TRADE (UNCERTAIN)',
     },
 
     regimes: {
@@ -579,8 +579,8 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'AI Quant Engine & Bot ⚡',
-      globalScanner: 'Global Market Scanner 🌐',
+      autoBot: 'AI Quant Engine & Bot',
+      globalScanner: 'Global Market Scanner',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Order Book & Derivatives',
       chart: 'Live Chart',
