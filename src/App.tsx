@@ -742,6 +742,7 @@ export const App: React.FC = () => {
   const lastClosedTimesBySymbolRef = useRef<Record<string, number>>({});
   const lastEmittedAlertKeyRef = useRef<Record<string, string>>({});
   const lastEmittedAlertTimeRef = useRef<Record<string, number>>({});
+  const processedScannerSignalIdsRef = useRef<Set<string>>(new Set());
   const lastTradedSignalKeyRef = useRef<string>('');
   const lastBotActionTimeRef = useRef<number>(0);
 
@@ -750,11 +751,12 @@ export const App: React.FC = () => {
     (plan: AIAnalysisResult, isUserInitiated: boolean = false, overrideSymbol?: string) => {
       if (!plan || !isAuthenticatedRef.current) return;
 
-      const tf = plan.recommendedTimeframe || '1h';
+      const tf = plan.recommendedTimeframe || (botConfigRef.current?.timeframe !== 'AUTO' ? botConfigRef.current?.timeframe : '1h') || '1h';
       const isArabic = language === 'ar';
       const isEn = language === 'en';
       const sym = overrideSymbol || selectedSymbolRef.current;
       const pairName = formatPairName(sym);
+      const strategyLabel = plan.marketRegime ? ` [${plan.marketRegime}]` : '';
 
       // Deduplication key: decision + symbol + timeframe + strategy regime
       // We normalize the key by symbol, direction and regime to avoid microscopic price ticks breaking deduplication
@@ -781,22 +783,22 @@ export const App: React.FC = () => {
 
       if (plan.decision === 'LONG') {
         title = isArabic
-          ? `[${pairName}] توصية صفقة شراء (BUY / LONG) • ${tf}`
+          ? `[${pairName}] توصية صفقة شراء (BUY / LONG)${strategyLabel} • ${tf}`
           : isEn
-          ? `[${pairName}] BUY Signal (LONG) • ${tf}`
-          : `[${pairName}] Signal ACHAT (LONG) • ${tf}`;
+          ? `[${pairName}] BUY Signal (LONG)${strategyLabel} • ${tf}`
+          : `[${pairName}] Signal ACHAT (LONG)${strategyLabel} • ${tf}`;
       } else if (plan.decision === 'SHORT') {
         title = isArabic
-          ? `[${pairName}] توصية صفقة بيع (SELL / SHORT) • ${tf}`
+          ? `[${pairName}] توصية صفقة بيع (SELL / SHORT)${strategyLabel} • ${tf}`
           : isEn
-          ? `[${pairName}] SELL Signal (SHORT) • ${tf}`
-          : `[${pairName}] Signal VENTE (SHORT) • ${tf}`;
+          ? `[${pairName}] SELL Signal (SHORT)${strategyLabel} • ${tf}`
+          : `[${pairName}] Signal VENTE (SHORT)${strategyLabel} • ${tf}`;
       } else {
         title = isArabic
-          ? `[${pairName}] تنبيه مراقبة عادي (WAIT) • ${tf}`
+          ? `[${pairName}] تنبيه مراقبة عادي (WAIT)${strategyLabel} • ${tf}`
           : isEn
-          ? `[${pairName}] Market Notice (WAIT) • ${tf}`
-          : `[${pairName}] Alerte Marché (ATTENTE) • ${tf}`;
+          ? `[${pairName}] Market Notice (WAIT)${strategyLabel} • ${tf}`
+          : `[${pairName}] Alerte Marché (ATTENTE)${strategyLabel} • ${tf}`;
       }
 
       const marketTypeNote = plan.decision === 'LONG'
@@ -2493,27 +2495,54 @@ export const App: React.FC = () => {
           
           // Check for strong signals to alert across all scanned pairs
           if (data && data.symbolStates) {
+            const userActivePresets = botConfigRef.current?.activePresets || [];
+            const isMultiPairEnabled = botConfigRef.current?.multiPairScanning ?? true;
+            const currentSelected = (selectedSymbolRef.current || '').toUpperCase();
+
             Object.values(data.symbolStates).forEach((state: any) => {
               if (
                 state &&
                 state.symbol &&
                 state.confidence >= minConfidenceThresholdRef.current &&
-                (state.lastSignal === 'LONG' || state.lastSignal === 'SHORT' || state.signalDirection === 'LONG' || state.signalDirection === 'SHORT')
+                (state.signalDirection === 'LONG' || state.signalDirection === 'SHORT')
               ) {
-                const signalDecision = (state.lastSignal === 'LONG' || state.lastSignal === 'SHORT') ? state.lastSignal : state.signalDirection;
+                // If multi-pair scanning is disabled, only alert for the currently selected symbol
+                if (!isMultiPairEnabled && state.symbol.toUpperCase() !== currentSelected) {
+                  return;
+                }
+
+                // If user activated specific strategies, only alert for signals from those strategies
+                if (userActivePresets.length > 0 && state.strategyId && !userActivePresets.includes(state.strategyId)) {
+                  return;
+                }
+
+                // Deduplicate signal instances by unique timestamp/id to prevent repetitive notification spam
+                const signalUid = `${state.symbol}_${state.strategyId || state.strategyName || 'MGR'}_${state.signalDirection}_${state.signalTimestamp || state.lastAnalyzed}`;
+                if (processedScannerSignalIdsRef.current.has(signalUid)) {
+                  return;
+                }
+                processedScannerSignalIdsRef.current.add(signalUid);
+                if (processedScannerSignalIdsRef.current.size > 200) {
+                  const firstKey = processedScannerSignalIdsRef.current.values().next().value;
+                  if (firstKey) processedScannerSignalIdsRef.current.delete(firstKey);
+                }
+
+                const signalDecision = state.signalDirection;
                 const entryP = state.price || 0;
                 const isLong = signalDecision === 'LONG';
-                const slP = isLong ? entryP * 0.985 : entryP * 1.015;
-                const tp1P = isLong ? entryP * 1.015 : entryP * 0.985;
-                const tp2P = isLong ? entryP * 1.03 : entryP * 0.97;
-                const tp3P = isLong ? entryP * 1.05 : entryP * 0.95;
+                const tf = state.timeframe || (botConfigRef.current?.timeframe !== 'AUTO' ? botConfigRef.current?.timeframe : '1h') || '1h';
+                const slP = state.stopLoss || (isLong ? entryP * 0.985 : entryP * 1.015);
+                const tp1P = state.tp1 || (isLong ? entryP * 1.015 : entryP * 0.985);
+                const tp2P = state.tp2 || (isLong ? entryP * 1.03 : entryP * 0.97);
+                const tp3P = state.tp3 || (isLong ? entryP * 1.05 : entryP * 0.95);
 
-                const descText = `[${state.strategyName || 'Multi-Pair Scanner'}] ${signalDecision} signal detected on ${state.symbol}`;
+                const stratName = state.strategyName || 'Market Scanner';
+                const descText = state.reason || `[${stratName}] ${signalDecision} signal detected on ${state.symbol} (${tf})`;
                 const scannerAlertPlan: any = {
                   decision: signalDecision,
                   confidence: state.confidence,
-                  marketRegime: state.strategyName || 'TRENDING_BULLISH',
-                  recommendedTimeframe: '15m',
+                  marketRegime: stratName,
+                  recommendedTimeframe: tf,
                   currentPrice: entryP,
                   entryZone: { min: entryP * 0.998, max: entryP * 1.002, ideal: entryP },
                   targets: { tp1: tp1P, tp2: tp2P, tp3: tp3P },
@@ -2524,7 +2553,7 @@ export const App: React.FC = () => {
                     ar: descText,
                     en: descText,
                   },
-                  generatedAt: Date.now(),
+                  generatedAt: state.signalTimestamp || Date.now(),
                 };
 
                 pushNewAlert(scannerAlertPlan as AIAnalysisResult, false, state.symbol);
@@ -2535,7 +2564,7 @@ export const App: React.FC = () => {
       } catch (err) {}
     }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pushNewAlert]);
 
 
   // 1. Initialize WebSocket streaming and periodic polling

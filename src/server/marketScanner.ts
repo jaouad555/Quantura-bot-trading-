@@ -19,6 +19,8 @@ export interface SymbolState {
   lastSignal?: string;
   signalDirection?: 'LONG' | 'SHORT' | 'WAIT';
   strategyName?: string;
+  strategyId?: string;
+  timeframe?: string;
   confidence?: number;
   lastError?: string;
   price?: number;
@@ -29,6 +31,12 @@ export interface SymbolState {
   indicators?: any;
   mtfConfluence?: any;
   marketStructure?: any;
+  stopLoss?: number;
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  signalTimestamp?: number;
+  reason?: string;
 }
 
 // Global Scanner State
@@ -133,7 +141,10 @@ async function analyzeSymbol(
     }
 
     // 1. Fetch Market Data via internal API
-    const timeframe = config.timeframe && config.timeframe !== 'AUTO' ? config.timeframe : '1h';
+    const targetStrategyTf = activeStrategies[0]?.timeframe;
+    const timeframe = config.timeframe && config.timeframe !== 'AUTO' 
+      ? config.timeframe 
+      : (targetStrategyTf || '1h');
     const devMode = process.env.NODE_ENV !== 'production';
     const apiUrl = `http://127.0.0.1:3000/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`;
     
@@ -156,6 +167,7 @@ async function analyzeSymbol(
       indicators: data.indicators,
       mtfConfluence: data.mtfConfluence,
       marketStructure: data.indicators?.marketStructure,
+      timeframe: timeframe,
       lastError: undefined,
     };
 
@@ -163,6 +175,7 @@ async function analyzeSymbol(
     const isBotTradingEnabled = !!config.enabled;
 
     // 2. Generate Signals ONLY if Active Strategies exist
+    let foundActiveSignal = false;
     if (activeStrategies.length > 0) {
       for (const strategy of activeStrategies) {
         if (!strategyManager.isStrategyActive(strategy.id)) {
@@ -183,10 +196,19 @@ async function analyzeSymbol(
           continue;
         }
 
+        foundActiveSignal = true;
         scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
         scannerState.symbolStates[normSymbol].signalDirection = stratSignal.decision;
+        scannerState.symbolStates[normSymbol].strategyId = stratSignal.strategyId;
         scannerState.symbolStates[normSymbol].strategyName = stratSignal.strategyName;
+        scannerState.symbolStates[normSymbol].timeframe = stratSignal.timeframe || timeframe;
         scannerState.symbolStates[normSymbol].confidence = stratSignal.confidence;
+        scannerState.symbolStates[normSymbol].stopLoss = stratSignal.stopLoss;
+        scannerState.symbolStates[normSymbol].tp1 = stratSignal.tp1;
+        scannerState.symbolStates[normSymbol].tp2 = stratSignal.tp2;
+        scannerState.symbolStates[normSymbol].tp3 = stratSignal.tp3;
+        scannerState.symbolStates[normSymbol].signalTimestamp = stratSignal.timestamp || Date.now();
+        scannerState.symbolStates[normSymbol].reason = stratSignal.reason;
 
         // 3. Execution Logic - Gated by bot.enabled
         const minConfidence = config.minConfidence || 65;
@@ -196,6 +218,11 @@ async function analyzeSymbol(
           }
         }
       }
+    }
+
+    // If no active signal was found in this cycle, clear obsolete trigger state so we don't spam alerts
+    if (!foundActiveSignal) {
+      scannerState.symbolStates[normSymbol].signalDirection = undefined;
     }
 
   } catch (error: any) {

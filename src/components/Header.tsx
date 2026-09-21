@@ -712,10 +712,10 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance, Positions, Scanner, Chart, AI, Backtest, Heatmap, Portfolio, Panic, Risk, Fullscreen & Settings */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/70 bg-slate-950/80">
-        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full overflow-x-auto no-scrollbar">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
           
-          {/* Left: Complete Analytical & Execution Suite */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+          {/* Left: Complete Analytical & Execution Suite (Scrollable smoothly on very small screens) */}
+          <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-0.5">
             {/* Connection Status Badge */}
             {getConnectionBadge()}
 
@@ -787,7 +787,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
                 <span>{openPositionsCount}</span>
-                <span className="hidden sm:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
               </button>
             )}
 
@@ -804,7 +804,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : isFrench ? 'Radar Global Scanner' : 'Global Market Scanner'}
               >
                 <Radar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'globalScanner' ? 'text-cyan-400 animate-spin' : 'text-cyan-400/80'}`} strokeWidth={2} />
-                <span className="hidden sm:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
               </button>
             )}
 
@@ -821,7 +821,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : isFrench ? 'Graphique en direct (Chart)' : 'Live Chart'}
               >
                 <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-                <span className="hidden sm:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
               </button>
             )}
 
@@ -838,7 +838,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : isFrench ? 'Analyse IA Quantitative' : 'AI Quant Analysis'}
               >
                 <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
-                <span className="hidden sm:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
               </button>
             )}
 
@@ -863,7 +863,7 @@ export const Header: React.FC<HeaderProps> = ({
               }
             >
               <Cpu className={`w-3.5 h-3.5 shrink-0 ${aiStatus.geminiConfigured ? 'text-purple-400 animate-pulse' : aiStatus.qwenConfigured ? 'text-indigo-400 animate-pulse' : 'text-amber-400'}`} strokeWidth={2} />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 {aiStatus.geminiConfigured && aiStatus.qwenConfigured ? (
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -874,20 +874,20 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : aiStatus.geminiConfigured ? (
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="font-bold text-purple-200">Gemini 2.5</span>
+                    <span className="font-bold text-purple-200">Gemini</span>
                   </div>
                 ) : aiStatus.qwenConfigured ? (
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                    <span className="font-bold text-cyan-200">Qwen 2.5</span>
+                    <span className="font-bold text-cyan-200">Qwen</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    <span className="font-bold text-amber-200">Quant Core</span>
+                    <span className="font-bold text-amber-200">Quant</span>
                   </div>
                 )}
-                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden xl:inline">
+                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden 2xl:inline">
                   {aiStatus.latencyMs}ms
                 </span>
               </div>
@@ -906,7 +906,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : isFrench ? 'Simulateur Backtest' : 'Backtest Simulator'}
               >
                 <FlaskConical className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
-                <span className="hidden md:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
               </button>
             )}
 
@@ -923,7 +923,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : isFrench ? 'Heatmap du Marché' : 'Market Heatmap'}
               >
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
-                <span className="hidden md:inline">{isArabic ? 'السوق' : 'Market'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'السوق' : 'Market'}</span>
               </button>
             )}
 
@@ -940,13 +940,13 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : isFrench ? 'Gestion du Portefeuille' : 'Risk & Portfolio Management'}
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" strokeWidth={2} />
-                <span className="hidden md:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
+                <span className="hidden xl:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
               </button>
             )}
           </div>
 
-          {/* Right: Panic Emergency Button, Institutional Risk Engine, Fullscreen, Settings */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+          {/* Right: Panic Emergency Button, Institutional Risk Engine, Fullscreen, Help, Settings (Always pinned and visible) */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 pl-1">
             {/* Emergency Panic Close Button */}
             {onPanicCloseAll && openPositionsCount > 0 && (
               <button
@@ -975,7 +975,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title={isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Management Engine'}
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2} />
-                <span className="hidden sm:inline">{isArabic ? 'المخاطر' : 'Risk'}</span>
+                <span className="hidden md:inline">{isArabic ? 'المخاطر' : 'Risk'}</span>
               </button>
             )}
 
