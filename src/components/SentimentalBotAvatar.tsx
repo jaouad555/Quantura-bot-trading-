@@ -121,8 +121,8 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#22c55e',
       antennaColor: '#22c55e',
       badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      title: isArabic ? 'زخم صاعد قوي' : isEn ? 'Bullish Momentum' : 'Momentum Haussier',
-      desc: isArabic ? 'رصد اتجاه صاعد وفرص شراء' : 'Détection de flux acheteur',
+      title: isArabic ? 'اتجاه صاعد (Bullish)' : isEn ? 'Bullish Trend' : 'Tendance Haussière',
+      desc: isArabic ? 'رصد اتجاه عام صاعد وتدفق شرائي' : 'Détection de tendance haussière & flux acheteur',
     },
     BEARISH: {
       border: 'border-amber-500/70 shadow-[0_0_24px_rgba(245,158,11,0.4)]',
@@ -132,8 +132,8 @@ export const SentimentalBotAvatar: React.FC<SentimentalBotAvatarProps> = ({
       ledGlow: '#f97316',
       antennaColor: '#f97316',
       badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      title: isArabic ? 'ضغط بيعي / هبوط' : isEn ? 'Bearish Market' : 'Pression Vendeuse',
-      desc: isArabic ? 'حذر ومراقبة مستويات الدعم والبيع' : 'Surveillance des supports & shorts',
+      title: isArabic ? 'اتجاه هابط (Bearish)' : isEn ? 'Bearish Trend' : 'Tendance Baissière',
+      desc: isArabic ? 'رصد اتجاه هابط وضغط بيعي' : 'Surveillance de tendance baissière & shorts',
     },
     ANGRY: {
       border: 'border-rose-500/80 shadow-[0_0_26px_rgba(244,63,94,0.45)] animate-pulse',
