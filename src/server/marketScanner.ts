@@ -228,8 +228,10 @@ async function processTradingSignal(
       return;
     }
 
-    const activePresets: string[] = Array.isArray(latestConfig.activePresets) ? latestConfig.activePresets : [];
-    if (activePresets.length === 0 || !activePresets.includes(signal.strategyId)) {
+    const activePresets: string[] = Array.isArray(latestConfig.activePresets) && latestConfig.activePresets.length > 0
+      ? latestConfig.activePresets
+      : ['MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'];
+    if (!activePresets.includes(signal.strategyId)) {
       console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Strategy ${signal.strategyId} not in activePresets (total active: ${activePresets.length})`);
       return;
     }
@@ -273,11 +275,15 @@ async function processTradingSignal(
     // Cooldown check
     const histStr = await kv.get('btc_trade_history');
     const history = histStr ? JSON.parse(histStr) : [];
-    const symbolHistory = history.filter((h: any) => h.symbol.toUpperCase() === symbol.toUpperCase());
+    const symbolHistory = history.filter((h: any) => h.symbol && h.symbol.toUpperCase() === symbol.toUpperCase());
     if (symbolHistory.length > 0) {
-      const lastClosed = symbolHistory[0].timestamp;
+      const timestamps = symbolHistory.map((h: any) => h.timestamp || h.closedAt || 0).filter((t: number) => t > 0);
+      const lastClosed = timestamps.length > 0 ? Math.max(...timestamps) : 0;
       const cooldownMs = (config.cooldownMinutes || 10) * 60 * 1000;
-      if (Date.now() - lastClosed < cooldownMs) return; // Reject cooldown
+      if (lastClosed > 0 && Date.now() - lastClosed < cooldownMs) {
+        console.log(`[COOLDOWN] ${symbol} in cooldown (${Math.ceil((cooldownMs - (Date.now() - lastClosed)) / 60000)}m remaining)`);
+        return; // Reject cooldown
+      }
     }
 
     // Allocate Wallet

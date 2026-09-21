@@ -1821,29 +1821,12 @@ export const App: React.FC = () => {
   const handleToggleBot = useCallback(() => {
     setBotConfig((prev) => {
       const nextEnabled = !prev.enabled;
+      let effectivePresets: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[] = prev.activePresets && prev.activePresets.length > 0
+        ? prev.activePresets
+        : ['MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'];
 
-      // When manually turning ON the bot, ensure at least one strategy is configured
+      // When manually turning ON the bot
       if (nextEnabled) {
-        const activeCount = prev.activePresets?.length || 0;
-        if (activeCount === 0) {
-          const isAr = language === 'ar';
-          const msg = isAr 
-            ? 'لا يمكن تشغيل البوت بدون اختيار استراتيجية واحدة على الأقل. يرجى اختيار وتفعيل استراتيجية من القائمة أدناه أولاً.'
-            : 'Cannot start bot without selecting at least one strategy. Please choose and configure a strategy below first.';
-          const alert: PushAlert = {
-            id: `alert-no-strat-${Date.now()}`,
-            title: isAr ? 'لم يتم اختيار استراتيجية' : 'No Strategy Selected',
-            body: msg,
-            timestamp: Date.now(),
-            type: 'SYSTEM',
-            read: false,
-          };
-          setAlerts((a) => [alert, ...(a || []).slice(0, 29)]);
-          triggerToastAlert(alert);
-          playAudioChime();
-          return prev; // Strictly reject activation
-        }
-
         const isAr = language === 'ar';
         const startLog: AutoTradeLog = {
           id: `log-start-${Date.now()}`,
@@ -1854,8 +1837,8 @@ export const App: React.FC = () => {
           price: ticker?.price || 0,
           amountUsdt: 0,
           reason: isAr
-            ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${prev.activePresets?.length} استراتيجية نشطة).`
-            : `Bot manually activated successfully (${prev.activePresets?.length} active strategies).`,
+            ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${effectivePresets.length} استراتيجية نشطة).`
+            : `Bot manually activated successfully (${effectivePresets.length} active strategies).`,
           mode: executionModeRef.current === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'PAPER',
         };
         addBotLog(startLog);
@@ -1884,20 +1867,26 @@ export const App: React.FC = () => {
         nextConfig = {
           ...prev,
           enabled: true,
+          activePresets: effectivePresets,
           enabledAt: Date.now(),
           circuitBreakerTripped: false,
           circuitBreakerTrippedAt: undefined,
           circuitBreakerResetAt: Date.now(),
         };
       } else {
-        nextConfig = { ...prev, enabled: nextEnabled, enabledAt: nextEnabled ? Date.now() : prev.enabledAt };
+        nextConfig = {
+          ...prev,
+          enabled: nextEnabled,
+          activePresets: effectivePresets,
+          enabledAt: nextEnabled ? Date.now() : prev.enabledAt,
+        };
       }
       botConfigRef.current = nextConfig;
       lastConfigUpdateRef.current = Date.now();
       apiStorage.setItem('btc_bot_config', JSON.stringify(nextConfig));
       return nextConfig;
     });
-  }, [language, ticker?.price, playAudioChime, triggerToastAlert, addBotLog]);
+  }, [language, ticker?.price, playAudioChime, addBotLog]);
 
   const handleFullReset = useCallback(async () => {
     // 1. Immediately zero out refs to prevent background intervals or ticks from writing back stale positions

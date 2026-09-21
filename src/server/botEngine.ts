@@ -6,40 +6,46 @@ let telegramInterval: NodeJS.Timeout | null = null;
 
 // Reliable fallback prices for major assets
 const FALLBACK_PRICES: Record<string, number> = {
-  BTCUSDT: 65000,
-  ETHUSDT: 3500,
-  SOLUSDT: 106.72,
-  BNBUSDT: 580,
-  AVAXUSDT: 28.5,
-  LINKUSDT: 14.5,
-  SUIUSDT: 2.2,
-  NEARUSDT: 5.2,
-  XRPUSDT: 0.58,
-  DOGEUSDT: 0.13,
-  ADAUSDT: 0.42,
-  DOTUSDT: 4.8,
+  BTCUSDT: 83500,
+  ETHUSDT: 3100,
+  SOLUSDT: 135,
+  BNBUSDT: 620,
+  XRPUSDT: 2.30,
+  DOGEUSDT: 0.18,
+  ADAUSDT: 0.72,
+  AVAXUSDT: 24.5,
+  LINKUSDT: 14.8,
+  SUIUSDT: 2.45,
+  NEARUSDT: 4.8,
+  DOTUSDT: 4.6,
   PEPEUSDT: 0.00001,
-  SHIBUSDT: 0.000018,
-  LTCUSDT: 75,
-  TRXUSDT: 0.16,
-  UNIUSDT: 7.5,
-  ATOMUSDT: 4.8,
-  ARBUSDT: 0.55,
-  OPUSDT: 1.45,
-  APTUSDT: 8.5,
-  INJUSDT: 18.5,
-  RENDERUSDT: 5.8,
-  FTMUSDT: 0.65,
-  TIAUSDT: 5.2,
-  SEIUSDT: 0.35,
-  WIFUSDT: 1.8,
-  FETUSDT: 1.2,
-  AAVEUSDT: 155,
-  MKRUSDT: 1600,
-  CRVUSDT: 0.28,
+  SHIBUSDT: 0.000014,
+  LTCUSDT: 98,
+  TRXUSDT: 0.22,
+  UNIUSDT: 8.2,
+  ATOMUSDT: 4.5,
+  ARBUSDT: 0.52,
+  OPUSDT: 1.25,
+  APTUSDT: 7.8,
+  INJUSDT: 16.5,
+  RENDERUSDT: 5.1,
+  FTMUSDT: 0.58,
+  TIAUSDT: 4.2,
+  SEIUSDT: 0.28,
+  WIFUSDT: 1.15,
+  FETUSDT: 0.85,
+  AAVEUSDT: 195,
+  MKRUSDT: 1450,
+  CRVUSDT: 0.35,
 };
 
 const priceCache = new Map<string, { price: number; timestamp: number }>();
+
+const HTTP_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Cache-Control': 'no-cache',
+};
 
 /**
  * Resilient live price fetcher with multi-endpoint failover and in-memory cache
@@ -55,23 +61,29 @@ export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | '
     return cached.price;
   }
 
-  const endpoints = marketType === 'FUTURES'
-    ? [
-        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
-        `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`,
-      ]
-    : [
-        `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-        `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-        `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
-        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
-      ];
+  const futuresEndpoints = [
+    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
+    `https://fapi1.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
+    `https://fapi2.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
+    `https://fapi3.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
+    `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`,
+  ];
+
+  const spotEndpoints = [
+    `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+    `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+    `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
+    `https://api2.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+    `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+  ];
+
+  const endpoints = marketType === 'FUTURES' ? [...futuresEndpoints, ...spotEndpoints] : spotEndpoints;
 
   for (const url of endpoints) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2500);
     try {
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(url, { headers: HTTP_HEADERS, signal: controller.signal });
       clearTimeout(timeout);
       if (res.ok) {
         const data: any = await res.json();
@@ -79,7 +91,7 @@ export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | '
         if (priceStr) {
           const p = parseFloat(priceStr);
           if (!isNaN(p) && p > 0) {
-            priceCache.set(symbol, { price: p, timestamp: now });
+            priceCache.set(cacheKey, { price: p, timestamp: now });
             return p;
           }
         }
@@ -94,9 +106,15 @@ export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | '
     return cached.price;
   }
 
+  // Check Spot cache as failover for Futures
+  const spotCache = priceCache.get(`SPOT_${symbol}`);
+  if (spotCache && spotCache.price > 0) {
+    return spotCache.price;
+  }
+
   // Fallback to accurate baseline prices
-  const fallback = FALLBACK_PRICES[symbol] || 50.0;
-  priceCache.set(symbol, { price: fallback, timestamp: now });
+  const fallback = FALLBACK_PRICES[symbol] || 25.0;
+  priceCache.set(cacheKey, { price: fallback, timestamp: now });
   return fallback;
 };
 

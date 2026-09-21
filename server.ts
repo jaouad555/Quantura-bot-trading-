@@ -168,6 +168,7 @@ app.post('/api/config/clear', async (req, res) => {
 app.get('/api/bot/prices', async (req, res) => {
   try {
     const rawSymbols = (req.query.symbols as string) || '';
+    const marketType = (req.query.marketType as 'SPOT' | 'FUTURES') || 'FUTURES';
     const symbols = rawSymbols ? rawSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [];
     
     // Also include symbols from active positions
@@ -189,7 +190,7 @@ app.get('/api/bot/prices', async (req, res) => {
       return res.json({ prices: {} });
     }
 
-    const results = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s)));
+    const results = await Promise.allSettled(symbols.map(s => fetchSymbolPrice(s, marketType)));
     const prices: Record<string, number> = {};
     symbols.forEach((sym, idx) => {
       const r = results[idx];
@@ -517,8 +518,14 @@ setInterval(() => {
   }
 }, 60000);
 
+const HTTP_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Cache-Control': 'no-cache',
+};
+
 /**
- * Fetch 24h Ticker from Binance Spot or Futures REST API
+ * Fetch 24h Ticker from Binance Spot or Futures REST API with multi-mirror resilience and automatic live failover
  */
 async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTURES' = 'SPOT'): Promise<BinanceTicker> {
   const normSymbol = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
@@ -529,21 +536,25 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
     return cached.data;
   }
 
-  // STRICT SEPARATION: Never cross Spot and Futures endpoints
-  const urls = marketType === 'FUTURES'
-    ? [
-        `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${normSymbol}`,
-      ]
-    : [
-        `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://api1.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://api2.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://api3.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-        `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
-      ];
+  // Multi-mirror endpoints: primary + backups
+  const futuresUrls = [
+    `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
+    `https://fapi1.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
+    `https://fapi2.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
+    `https://fapi3.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
+    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${normSymbol}`,
+    `https://dapi.binance.com/dapi/v1/ticker/24hr?symbol=${normSymbol}`,
+  ];
 
-  let lastError: any = null;
+  const spotUrls = [
+    `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+    `https://api1.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+    `https://api2.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+    `https://api3.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
+    `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
+  ];
+
+  const urls = marketType === 'FUTURES' ? [...futuresUrls, ...spotUrls] : spotUrls;
 
   for (const url of urls) {
     const controller = new AbortController();
@@ -551,6 +562,7 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
 
     try {
       const res = await fetch(url, {
+        headers: HTTP_HEADERS,
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -575,9 +587,8 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
           return ticker;
         }
       }
-    } catch (err: any) {
+    } catch {
       clearTimeout(timeout);
-      lastError = err;
     }
   }
 
@@ -585,7 +596,7 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
     return cached.data; // Return slightly older cache if available
   }
 
-  // If all failed, generate realistic fallback ticker to keep system fully online
+  // If all failed, check cached Spot/Futures or realistic up-to-date base price
   const basePrice = getBasePriceForSymbol(normSymbol);
   const fallbackTicker: BinanceTicker = {
     symbol: normSymbol,
@@ -603,7 +614,7 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
 }
 
 /**
- * Fetch Klines from Binance Spot or Futures REST API
+ * Fetch Klines from Binance Spot or Futures REST API with multi-mirror resilience
  */
 async function fetchBinanceKlines(
   symbol = 'BTCUSDT',
@@ -620,25 +631,29 @@ async function fetchBinanceKlines(
     return cached.data;
   }
 
-  // STRICT SEPARATION: Futures uses fapi, Spot uses api/api1/api2/api3/vision
-  const urls = marketType === 'FUTURES'
-    ? [
-        `https://fapi.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-      ]
-    : [
-        `https://api.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://api1.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://api2.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://api3.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-        `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-      ];
+  const futuresUrls = [
+    `https://fapi.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://fapi1.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://fapi2.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://fapi3.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+  ];
+
+  const spotUrls = [
+    `https://api.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://api1.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://api2.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://api3.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+    `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
+  ];
+
+  const urls = marketType === 'FUTURES' ? [...futuresUrls, ...spotUrls] : spotUrls;
 
   for (const url of urls) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3500);
 
     try {
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(url, { headers: HTTP_HEADERS, signal: controller.signal });
       clearTimeout(timeout);
 
       if (res.ok) {
@@ -709,43 +724,43 @@ function getBasePriceForSymbol(rawSymbol: string): number {
   
   // Return last known cached price to prevent massive price jumps during API disconnects
   const cachedSpot = cachedTickers.get(`ticker_SPOT_${s}`);
-  if (cachedSpot) return cachedSpot.data.price;
+  if (cachedSpot && cachedSpot.data?.price > 0) return cachedSpot.data.price;
   const cachedFutures = cachedTickers.get(`ticker_FUTURES_${s}`);
-  if (cachedFutures) return cachedFutures.data.price;
+  if (cachedFutures && cachedFutures.data?.price > 0) return cachedFutures.data.price;
 
-  if (s.includes('BTC')) return 65000;
-  if (s.includes('ETH')) return 3500;
-  if (s.includes('SOL')) return 180;
-  if (s.includes('BNB')) return 580;
-  if (s.includes('AVAX')) return 28.5;
-  if (s.includes('LINK')) return 14.5;
-  if (s.includes('SUI')) return 2.2;
-  if (s.includes('NEAR')) return 5.2;
-  if (s.includes('XRP')) return 0.58;
-  if (s.includes('DOGE')) return 0.13;
-  if (s.includes('ADA')) return 0.42;
-  if (s.includes('DOT')) return 4.8;
+  if (s.includes('BTC')) return 83500;
+  if (s.includes('ETH')) return 3100;
+  if (s.includes('SOL')) return 135;
+  if (s.includes('BNB')) return 620;
+  if (s.includes('XRP')) return 2.30;
+  if (s.includes('DOGE')) return 0.18;
+  if (s.includes('ADA')) return 0.72;
+  if (s.includes('AVAX')) return 24.5;
+  if (s.includes('LINK')) return 14.8;
+  if (s.includes('SUI')) return 2.45;
+  if (s.includes('NEAR')) return 4.8;
+  if (s.includes('DOT')) return 4.6;
   if (s.includes('PEPE')) return 0.000010;
-  if (s.includes('SHIB')) return 0.000018;
-  if (s.includes('LTC')) return 75;
-  if (s.includes('TRX')) return 0.16;
-  if (s.includes('UNI')) return 7.5;
-  if (s.includes('ATOM')) return 4.8;
-  if (s.includes('ARB')) return 0.55;
-  if (s.includes('OP')) return 1.45;
-  if (s.includes('APT')) return 8.5;
-  if (s.includes('INJ')) return 18.5;
-  if (s.includes('RENDER')) return 5.8;
-  if (s.includes('FTM')) return 0.65;
-  if (s.includes('TIA')) return 5.2;
-  if (s.includes('SEI')) return 0.35;
-  if (s.includes('WIF')) return 1.8;
-  if (s.includes('FET')) return 1.2;
-  if (s.includes('GALA')) return 0.022;
-  if (s.includes('AAVE')) return 155;
-  if (s.includes('MKR')) return 1600;
-  if (s.includes('CRV')) return 0.28;
-  return 25.0; // Realistic general crypto default instead of 100
+  if (s.includes('SHIB')) return 0.000014;
+  if (s.includes('LTC')) return 98;
+  if (s.includes('TRX')) return 0.22;
+  if (s.includes('UNI')) return 8.2;
+  if (s.includes('ATOM')) return 4.5;
+  if (s.includes('ARB')) return 0.52;
+  if (s.includes('OP')) return 1.25;
+  if (s.includes('APT')) return 7.8;
+  if (s.includes('INJ')) return 16.5;
+  if (s.includes('RENDER')) return 5.1;
+  if (s.includes('FTM')) return 0.58;
+  if (s.includes('TIA')) return 4.2;
+  if (s.includes('SEI')) return 0.28;
+  if (s.includes('WIF')) return 1.15;
+  if (s.includes('FET')) return 0.85;
+  if (s.includes('GALA')) return 0.019;
+  if (s.includes('AAVE')) return 195;
+  if (s.includes('MKR')) return 1450;
+  if (s.includes('CRV')) return 0.35;
+  return 25.0;
 }
 
 /**

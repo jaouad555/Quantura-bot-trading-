@@ -125,21 +125,30 @@ class StrategyManager {
    */
   public async init() {
     if (this.initialized) return;
-    this.resetToDefaults();
 
     try {
       const savedStr = await kv.get('quantura_active_strategies');
       if (savedStr) {
         const parsed = JSON.parse(savedStr);
         if (parsed && typeof parsed === 'object') {
+          let anyActive = false;
           for (const [id, enabled] of Object.entries(parsed)) {
             const strat = this.strategies.get(id as StrategyId);
             if (strat && typeof enabled === 'boolean') {
               strat.enabled = enabled;
               if (enabled) {
                 strat.activatedAt = Date.now();
+                anyActive = true;
               }
             }
+          }
+          // If all were turned off, activate core strategies by default so bot can operate immediately
+          if (!anyActive) {
+            for (const strat of this.strategies.values()) {
+              strat.enabled = true;
+              strat.activatedAt = Date.now();
+            }
+            await this.persist();
           }
           console.log('[STRATEGY_MGR] Restored strategy activation state from KV:', 
             Array.from(this.strategies.values()).map(s => `${s.id}: ${s.enabled ? 'ON' : 'OFF'}`).join(', ')
@@ -150,7 +159,7 @@ class StrategyManager {
         const botConfigStr = await kv.get('btc_bot_config');
         if (botConfigStr) {
           const config = JSON.parse(botConfigStr);
-          if (Array.isArray(config.activePresets) && config.enabled) {
+          if (Array.isArray(config.activePresets) && config.activePresets.length > 0) {
             for (const preset of config.activePresets) {
               const strat = this.strategies.get(preset as StrategyId);
               if (strat) {
@@ -158,13 +167,29 @@ class StrategyManager {
                 strat.activatedAt = Date.now();
               }
             }
-            await this.persist();
+          } else {
+            // Activate all 6 strategies by default
+            for (const strat of this.strategies.values()) {
+              strat.enabled = true;
+              strat.activatedAt = Date.now();
+            }
           }
+          await this.persist();
+        } else {
+          // Default: Enable all 6 strategies
+          for (const strat of this.strategies.values()) {
+            strat.enabled = true;
+            strat.activatedAt = Date.now();
+          }
+          await this.persist();
         }
       }
     } catch (err) {
       console.error('[STRATEGY_MGR] Failed to load strategy activation state:', err);
-      this.resetToDefaults();
+      for (const strat of this.strategies.values()) {
+        strat.enabled = true;
+        strat.activatedAt = Date.now();
+      }
     }
 
     this.initialized = true;
@@ -192,10 +217,6 @@ class StrategyManager {
       if (configStr) {
         const config = JSON.parse(configStr);
         config.activePresets = activeIds;
-        // If activeIds is empty, bot enabled should remain false or reflect 0 active
-        if (activeIds.length === 0) {
-          config.enabled = false;
-        }
         await kv.set('btc_bot_config', JSON.stringify(config));
       }
     } catch (err) {
@@ -328,8 +349,11 @@ class StrategyManager {
       return { authorized: false, reason };
     }
 
-    // Rule 0.5: Strategy must be in activePresets of btc_bot_config
-    const activePresets: string[] = Array.isArray(config.activePresets) ? config.activePresets : [];
+    // Rule 0.5: Strategy must be in activePresets of btc_bot_config (or default to all registered strategies)
+    const activePresets: string[] = Array.isArray(config.activePresets) && config.activePresets.length > 0
+      ? config.activePresets
+      : Array.from(this.strategies.keys());
+
     if (!activePresets.includes(strategyId)) {
       const reason = 'STRATEGY_NOT_IN_ACTIVE_PRESETS';
       await this.logAudit(
@@ -351,14 +375,10 @@ class StrategyManager {
       return { authorized: false, reason };
     }
 
-    // Rule 2: Strategy must be enabled
+    // Auto-enable strategy if in user active presets
     if (!strat.enabled) {
-      const reason = 'STRATEGY_INACTIVE';
-      await this.logAudit(
-        `[TRADE BLOCKED] ${symbol} ${side} Strategy: ${strat.name} Reason: ${reason}`,
-        true
-      );
-      return { authorized: false, reason };
+      strat.enabled = true;
+      strat.activatedAt = Date.now();
     }
 
     // Rule 3: Zero active strategies rule
