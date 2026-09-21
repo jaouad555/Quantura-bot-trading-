@@ -839,67 +839,167 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     const livePnlUsdt = metrics.usdt;
     const lev = activePosition.leverage || 1;
     const isFutures = (activePosition.marketType || 'FUTURES') === 'FUTURES';
+    const isLong = activePosition.decision === 'LONG';
+
+    // Emotion Determination (Winning, Losing, or Neutral / Equilibrium)
+    const isWinning = liveRoePercent > 0.05 || livePnlUsdt > 0.05;
+    const isLosing = liveRoePercent < -0.05 || livePnlUsdt < -0.05;
+    const isNeutral = !isWinning && !isLosing;
+
+    // Elapsed time calculation
+    const elapsedMinutes = activePosition.openedAt
+      ? Math.max(1, Math.floor((Date.now() - activePosition.openedAt) / 60000))
+      : 1;
+    const timeFormatted = elapsedMinutes < 60
+      ? (isArabic ? `منذ ${elapsedMinutes} دقيقة` : `${elapsedMinutes}m ago`)
+      : (isArabic ? `منذ ${Math.floor(elapsedMinutes / 60)} س ${elapsedMinutes % 60} د` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}m ago`);
+
+    // Emotion Visual Theme & Aura
+    const emotionConfig = isWinning
+      ? {
+          themeName: isArabic ? 'حالة النشوة والانتصار' : (isEn ? 'Euphoric Gains Mode' : 'Mode Euphorie & Gains'),
+          badgeText: isArabic ? '🚀 رابحة ومؤمنة' : '🚀 WINNING & SCALING',
+          whisper: isArabic
+            ? 'أداء ممتاز! الصفقة في مسار صاعد متوافق مع الزخم الكمي، تم حجز الأرباح وتأمين رأس المال.'
+            : (isEn ? 'Strong momentum confluence! Capital protected with progressive target scaling.' : 'Excellente dynamique! Capital sécurisé avec prise de profit progressive.'),
+          cardShell: 'border-emerald-500/50 bg-gradient-to-b from-emerald-950/30 via-slate-900/95 to-slate-950 shadow-[0_0_35px_rgba(16,185,129,0.18)] hover:border-emerald-400/70',
+          topAura: 'bg-emerald-500/25',
+          bannerBg: 'bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-emerald-500/10 border-emerald-400/40 text-emerald-300',
+          directionBadge: 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50 shadow-[0_0_16px_rgba(16,185,129,0.3)]',
+          roeColor: 'text-emerald-400',
+          roeBg: 'bg-emerald-950/70 border-emerald-500/40 shadow-[0_0_16px_rgba(16,185,129,0.25)]',
+          accentColor: 'emerald',
+        }
+      : isLosing
+      ? {
+          themeName: isArabic ? 'وضع درع الحماية والمخاطر' : (isEn ? 'Capital Shield Mode' : 'Mode Bouclier & Risque'),
+          badgeText: isArabic ? '🛡️ تحت حماية الوقف' : '🛡️ GUARDED / DRAWDOWN',
+          whisper: isArabic
+            ? 'تراجع تصحيحي مؤقت ضمن الحدود الآمنة. محرك إدارة المخاطر يراقب مستوى الوقف بدقة لحماية المحفظة.'
+            : (isEn ? 'Controlled pullback within safety parameters. Risk engine strictly guarding stop loss.' : 'Repli contrôlé dans les tolérances. Le moteur de risque surveille le Stop Loss.'),
+          cardShell: 'border-rose-500/50 bg-gradient-to-b from-rose-950/30 via-slate-900/95 to-slate-950 shadow-[0_0_35px_rgba(244,63,94,0.18)] hover:border-rose-400/70',
+          topAura: 'bg-rose-500/25',
+          bannerBg: 'bg-gradient-to-r from-rose-500/20 via-amber-500/15 to-rose-500/10 border-rose-400/40 text-rose-300',
+          directionBadge: 'bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.3)]',
+          roeColor: 'text-rose-400',
+          roeBg: 'bg-rose-950/70 border-rose-500/40 shadow-[0_0_16px_rgba(244,63,94,0.25)]',
+          accentColor: 'rose',
+        }
+      : {
+          themeName: isArabic ? 'حالة التوازن الكمي ورصد الأهداف' : (isEn ? 'Quantum Equilibrium' : 'Équilibre Quantique'),
+          badgeText: isArabic ? '🧠 توازن وتأسيس' : '🧠 EQUILIBRIUM',
+          whisper: isArabic
+            ? 'الصفقة في مرحلة بناء السيولة بعد نقطة الدخول، المسار مستقر والهدف الأول قيد الرصد المباشر.'
+            : (isEn ? 'Position consolidating near entry. Real-time target tracking active.' : 'Position en stabilisation près de l\'entrée. Cibles sous surveillance active.'),
+          cardShell: 'border-cyan-500/40 bg-gradient-to-b from-cyan-950/25 via-slate-900/95 to-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.14)] hover:border-cyan-400/60',
+          topAura: 'bg-cyan-500/20',
+          bannerBg: 'bg-gradient-to-r from-cyan-500/20 via-indigo-500/15 to-cyan-500/10 border-cyan-400/40 text-cyan-300',
+          directionBadge: 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-[0_0_16px_rgba(6,182,212,0.3)]',
+          roeColor: 'text-cyan-300',
+          roeBg: 'bg-cyan-950/70 border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.2)]',
+          accentColor: 'cyan',
+        };
+
+    // Calculate journey progress (0% to 100%)
+    const targetHigh = activePosition.tp3 || (activePosition.tp2 ? activePosition.tp2 * 1.02 : activePosition.entryPrice * 1.05);
+    const stopLow = activePosition.stopLoss;
+    let journeyProgressPct = 50;
+    if (isLong && targetHigh > stopLow) {
+      journeyProgressPct = Math.min(100, Math.max(0, ((metrics.currentP - stopLow) / (targetHigh - stopLow)) * 100));
+    } else if (!isLong && stopLow > targetHigh) {
+      journeyProgressPct = Math.min(100, Math.max(0, ((stopLow - metrics.currentP) / (stopLow - targetHigh)) * 100));
+    }
 
     return (
-      <div key={activePosition.id} className="bg-slate-900 border border-cyan-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-        {/* Glow Header Accent */}
-        <div className={`absolute top-0 left-0 right-0 h-1 ${
-          activePosition.decision === 'LONG' ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-rose-500 to-amber-500'
-        }`} />
+      <div 
+        key={activePosition.id} 
+        className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 transition-all duration-300 border relative overflow-hidden group ${emotionConfig.cardShell}`}
+      >
+        {/* Futuristic Ambient Top Light Aura */}
+        <div className={`absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-28 blur-3xl pointer-events-none rounded-full ${emotionConfig.topAura}`} />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl font-bold flex items-center gap-1.5 text-xs ${
-              activePosition.decision === 'LONG'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10'
-                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-lg shadow-rose-500/10'
-            }`}>
-              {activePosition.decision === 'LONG' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              <span>
-                {isFutures 
-                  ? `${lev}x ${activePosition.decision}` 
-                  : (activePosition.decision === 'LONG' ? (isArabic ? 'شراء فوري (Spot BUY)' : 'SPOT BUY') : (isArabic ? 'بيع فوري (Spot SELL)' : 'SPOT SELL'))} {activePosition.symbol}
+        {/* Top Emotion & Status Intelligence Banner Pill (Matching Strategy Card Header) */}
+        <div className={`mb-4 px-3 py-1.5 rounded-xl ${emotionConfig.bannerBg} text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-sm relative z-10`}>
+          <div className="flex items-center gap-2">
+            {isWinning ? (
+              <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse shrink-0" />
+            ) : isLosing ? (
+              <ShieldAlert className="w-4 h-4 text-rose-300 shrink-0" />
+            ) : (
+              <Activity className="w-4 h-4 text-cyan-300 shrink-0" />
+            )}
+            <span className="tracking-wide">{emotionConfig.themeName}</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/30 border border-white/10 text-white font-bold">
+              {emotionConfig.badgeText}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-[11px] font-mono">
+            {activePosition.isTrailingActive && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>{isArabic ? 'الوقف المتحرك نشط' : 'Trailing SL'}</span>
+              </span>
+            )}
+            <span className="text-slate-300 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-cyan-400" />
+              <span>{timeFormatted}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Hero Header Section */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-800/80 relative z-10">
+          {/* Left: Direction Badge, Symbol, Strategy & Margin Details */}
+          <div className="flex items-start sm:items-center gap-3.5">
+            {/* 3D-styled Glowing Direction Badge */}
+            <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border shrink-0 transition-transform group-hover:scale-105 ${emotionConfig.directionBadge}`}>
+              {isLong ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-rose-400" />}
+              <span className="text-[9px] font-black font-mono tracking-tighter uppercase mt-0.5">
+                {activePosition.decision}
               </span>
             </div>
 
-            <div>
-              <div className="flex items-center flex-wrap gap-2 mb-0.5">
-                <span className="text-xs text-cyan-400 font-bold">
-                  {isFutures 
-                    ? (isArabic ? `عقد آجل #${index + 1}` : (isEn ? `Futures Contract #${index + 1}` : `Contrat Futures #${index + 1}`))
-                    : (isArabic ? `صفقة تداول فوري #${index + 1}` : (isEn ? `Spot Trade #${index + 1}` : `Ordre Spot #${index + 1}`))}
-                </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h3 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
+                  <span>{activePosition.symbol}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                </h3>
+
                 {isFutures ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
-                    {activePosition.marginMode || 'ISOLATED'}
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-cyan-950 text-cyan-300 border border-cyan-800 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    <span>{lev}x {activePosition.marginMode || 'ISOLATED'}</span>
                   </span>
                 ) : (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/60">
-                    {isArabic ? 'تداول فوري (1x Spot)' : 'SPOT (1x)'}
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-emerald-950 text-emerald-300 border border-emerald-700/60">
+                    {isArabic ? 'تداول فوري (1x Spot)' : 'SPOT 1x'}
                   </span>
                 )}
+
                 {activePosition.strategyName && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-800/90 text-cyan-300 border border-slate-700">
                     {activePosition.strategyName}
                   </span>
                 )}
-                {activePosition.isTrailingActive && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    <span>{isArabic ? 'الوقف المتحرك نشط' : 'Trailing SL'}</span>
-                  </span>
-                )}
+                
+                <span className="text-[10px] font-mono text-slate-500">
+                  #{index + 1}
+                </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-400 font-mono">
                 <span>
-                  {isFutures ? (isArabic ? `الهامش المودع:` : `Margin:`) : (isArabic ? `قيمة الأصل المشتري:` : `Purchased Value:`)} <strong className="text-white font-mono">${metrics.margin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong>
+                  {isFutures ? (isArabic ? 'الهامش المودع:' : 'Margin:') : (isArabic ? 'قيمة الشراء:' : 'Cost:')}{' '}
+                  <strong className="text-white font-bold">${metrics.margin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong>
                 </span>
                 {isFutures && (
                   <>
-                    <span className="text-slate-600">|</span>
+                    <span className="text-slate-700">•</span>
                     <span>
-                      {isArabic ? `حجم العقد الإجمالي:` : `Notional Size:`} <strong className="text-cyan-300 font-mono">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lev}x)</strong>
+                      {isArabic ? 'حجم العقد الإجمالي:' : 'Notional Size:'}{' '}
+                      <strong className="text-cyan-300 font-bold">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </span>
                   </>
                 )}
@@ -907,159 +1007,232 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <span className="text-[11px] text-slate-400 block">{isFutures ? (isArabic ? 'العائد على الهامش (ROE %)' : 'Return on Equity (ROE)') : (isArabic ? 'ربح / خسارة الصفقة' : 'Spot PnL')}</span>
-              <div className={`text-base sm:text-lg font-mono font-bold flex items-center justify-end gap-1 ${
-                liveRoePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}>
-                {liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}% {isFutures ? 'ROE' : ''}
-                <span className="text-xs opacity-90 font-mono">
-                  ({livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                </span>
+          {/* Right: Live ROE Counter & Net PnL Hero Pill */}
+          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+            <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end justify-center min-w-[150px] ${emotionConfig.roeBg}`}>
+              <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-slate-400 block">
+                {isFutures ? (isArabic ? 'العائد على الهامش (ROE)' : 'Live Return (ROE)') : (isArabic ? 'ربح / خسارة الصفقة' : 'Spot Return')}
+              </span>
+              <div className={`text-lg sm:text-xl font-mono font-black flex items-center gap-1.5 ${emotionConfig.roeColor}`}>
+                <span>{liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}%</span>
+                {isFutures && <span className="text-xs font-bold opacity-80">ROE</span>}
               </div>
+              <span className="text-xs font-mono font-bold text-slate-300">
+                {livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+              </span>
             </div>
+
+            {/* Quick Action Close Button */}
             <button
+              type="button"
               onClick={() => onManualClosePosition(activePosition.id)}
-              className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition shadow-lg shadow-rose-500/10 cursor-pointer"
+              className="h-12 px-4 rounded-xl font-mono font-bold text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 hover:border-rose-400 shadow-lg shadow-rose-500/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
               title={isFutures ? 'Close Futures Position' : 'Sell Spot Asset'}
             >
-              {isFutures ? (isArabic ? 'إغلاق فوري للعقد' : 'Close Position') : (isArabic ? 'بيع فوري للسبوت' : 'Sell Spot')}
+              <Power className="w-4 h-4 text-rose-400" />
+              <span className="hidden sm:inline">
+                {isFutures ? (isArabic ? 'إغلاق فوري' : 'Close') : (isArabic ? 'بيع فوري' : 'Sell')}
+              </span>
             </button>
           </div>
         </div>
 
-        {/* Stepper Progress & Protection Gauge */}
-        <div className="my-5 space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-300 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{isFutures ? (isArabic ? 'مسار الأهداف ومستويات الوقف والتصفية' : 'Futures Targets & Liquidation Guard') : (isArabic ? 'مسار الأهداف وحماية رأس المال' : 'Spot Targets & Capital Guard')}</span>
+        {/* Sentimental Bot Live Commentary Box (Whisper) */}
+        <div className="my-4 px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs flex items-center gap-3 relative z-10">
+          <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+            <Bot className="w-3.5 h-3.5" />
+          </div>
+          <p className="text-slate-300 text-[11px] sm:text-xs leading-relaxed">
+            <span className="text-cyan-400 font-bold font-mono mr-1.5">
+              {isArabic ? '[رؤية المحرك الذكي]:' : '[AI Engine Insight]:'}
             </span>
-            <span className="text-[11px] text-cyan-300 font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-              {activePosition.lastAction || 'Active'}
+            {emotionConfig.whisper}
+          </p>
+        </div>
+
+        {/* Dynamic Journey Progress Track */}
+        <div className="mb-4 space-y-1.5 relative z-10">
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+            <span className="flex items-center gap-1 text-rose-400">
+              <ShieldAlert className="w-3 h-3" />
+              <span>SL: ${formatCoinPrice(activePosition.stopLoss, activePosition.symbol)}</span>
+            </span>
+            <span className="text-slate-300 font-bold">
+              {isArabic ? 'مسار الأهداف اللحظي' : 'Real-Time Target Trajectory'}
+            </span>
+            <span className="flex items-center gap-1 text-emerald-400 font-bold">
+              <Target className="w-3 h-3" />
+              <span>TP3: ${formatCoinPrice(targetHigh, activePosition.symbol)}</span>
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
-            {/* 1. Entry & Live Price */}
-            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
-                <span>{isArabic ? 'الدخول / الحالي' : 'Entry / Current'}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-              </div>
-              <div className="font-bold text-white font-mono">${formatCoinPrice(activePosition.entryPrice, activePosition.symbol)}</div>
-              <div className="text-[10px] text-cyan-300 font-mono mt-0.5 flex items-center justify-between">
-                <span>${formatCoinPrice(metrics.currentP, activePosition.symbol)}</span>
-                <span className="text-slate-400">{isFutures ? `$${metrics.margin.toFixed(0)} Mgn` : '1x Spot'}</span>
-              </div>
-            </div>
-
-            {/* 2. TP1 */}
-            <div className={`p-2.5 rounded-xl border transition ${
-              activePosition.tp1Hit 
-                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
-                : 'bg-slate-950 border-slate-800 text-slate-300'
-            }`}>
-              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
-                <span>1. TP1 (50%)</span>
-                {activePosition.tp1Hit ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Target className="w-3 h-3 text-slate-500" />}
-              </div>
-              <div className="font-bold font-mono">${formatCoinPrice(activePosition.tp1, activePosition.symbol)}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
-                {activePosition.tp1Hit ? (isArabic ? 'جني 50% ونقل SL' : '50% Secured') : (isArabic ? 'جني نصف العقد' : 'Scale 50%')}
-              </div>
-            </div>
-
-            {/* 3. TP2 */}
-            <div className={`p-2.5 rounded-xl border transition ${
-              activePosition.tp2Hit 
-                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
-                : 'bg-slate-950 border-slate-800 text-slate-300'
-            }`}>
-              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
-                <span>2. TP2 (50% reste)</span>
-                {activePosition.tp2Hit ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Target className="w-3 h-3 text-slate-500" />}
-              </div>
-              <div className="font-bold font-mono">${formatCoinPrice(activePosition.tp2, activePosition.symbol)}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
-                {activePosition.tp2Hit ? (isArabic ? 'تم بنجاح' : 'Hit') : (isArabic ? 'الهدف الثاني' : 'Target 2')}
-              </div>
-            </div>
-
-            {/* 4. TP3 (Max Target / Runner) */}
-            <div className={`p-2.5 rounded-xl border transition ${
-              activePosition.tp3Hit 
-                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
-                : 'bg-slate-950 border-slate-800 text-slate-300'
-            }`}>
-              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
-                <span>3. TP3 (Max)</span>
-                {activePosition.tp3Hit ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Target className="w-3 h-3 text-purple-400" />}
-              </div>
-              <div className="font-bold font-mono text-purple-200">
-                ${formatCoinPrice(activePosition.tp3 || (activePosition.tp2 ? activePosition.tp2 * 1.02 : activePosition.entryPrice * 1.05), activePosition.symbol)}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
-                {activePosition.tp3Hit ? (isArabic ? 'الهدف الأقصى' : 'Max Hit') : (isArabic ? 'الهدف الأقصى' : 'Final Target')}
-              </div>
-            </div>
-
-            {/* 5. Stop Loss / Trailing Stop */}
-            <div className={`p-2.5 rounded-xl border ${
-              activePosition.isTrailingActive 
-                ? 'bg-amber-950/30 border-amber-500/40 text-amber-300' 
-                : 'bg-slate-950 border-rose-500/30'
-            }`}>
-              <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
-                <span>
-                  {activePosition.isTrailingActive 
-                    ? (isArabic ? 'الوقف المتحرك' : 'Trailing SL')
-                    : (activePosition.tp1Hit ? 'Breakeven' : (isArabic ? 'وقف الخسارة' : 'Stop Loss'))}
-                </span>
-                {activePosition.isTrailingActive ? <Zap className="w-3 h-3 text-amber-400" /> : <ShieldAlert className="w-3 h-3 text-rose-400" />}
-              </div>
-              <div className="font-bold text-rose-300 font-mono">${formatCoinPrice(activePosition.stopLoss, activePosition.symbol)}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
-                {activePosition.isTrailingActive
-                  ? (isArabic ? 'أرباح مؤمنة' : 'Locked')
-                  : activePosition.tp1Hit 
-                  ? (isArabic ? '0$ مخاطرة' : 'Risk-Free') 
-                  : (isArabic ? 'حماية' : 'SL')}
-              </div>
-            </div>
-
-            {/* 6. Liquidation Price Level (Futures) OR Spot Asset Security (Spot) */}
-            {isFutures ? (
-              <div className="bg-rose-950/20 border border-rose-500/40 p-2.5 rounded-xl text-rose-200">
-                <div className="flex items-center justify-between text-rose-400 text-[10px] mb-0.5 font-bold">
-                  <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
-                  <ShieldAlert className="w-3 h-3 text-rose-400 animate-pulse" />
-                </div>
-                <div className="font-bold text-white font-mono">
-                  {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
-                </div>
-                <div className="text-[10px] text-rose-300 mt-0.5 font-mono">
-                  {metrics.distanceToLiqPct !== null 
-                    ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% away`)
-                    : (isArabic ? 'آمن جداً' : 'Safe')}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-emerald-950/25 border border-emerald-500/40 p-2.5 rounded-xl text-emerald-200">
-                <div className="flex items-center justify-between text-emerald-400 text-[10px] mb-0.5 font-bold">
-                  <span>{isArabic ? 'حماية السبوت' : (isEn ? 'Spot Security' : 'Sécurité Spot')}</span>
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                </div>
-                <div className="font-bold text-emerald-300 font-mono text-xs">
-                  {isArabic ? 'بدون تصفية (0% Liq)' : '100% Asset Ownership'}
-                </div>
-                <div className="text-[10px] text-emerald-400/90 mt-0.5 font-sans">
-                  {isArabic ? 'أصل مملوك بالكامل' : (isEn ? 'No Liquidation Risk' : 'Sans Liquidation')}
-                </div>
-              </div>
-            )}
+          <div className="w-full h-2 rounded-full bg-slate-950 border border-slate-800 overflow-hidden relative p-0.5">
+            <div 
+              className={`h-full rounded-full transition-all duration-500 ${
+                isWinning 
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' 
+                  : isLosing 
+                  ? 'bg-gradient-to-r from-rose-600 to-amber-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' 
+                  : 'bg-gradient-to-r from-indigo-500 to-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+              }`}
+              style={{ width: `${Math.max(5, Math.min(100, journeyProgressPct))}%` }}
+            />
           </div>
+        </div>
+
+        {/* Bento Grid: 6 Critical Metric Holographic Capsules */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs relative z-10">
+          {/* 1. Entry & Current Market Price */}
+          <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800/90 hover:border-slate-700 transition">
+            <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
+              <span className="font-medium">{isArabic ? 'الدخول / الحالي' : 'Entry / Current'}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+            </div>
+            <div className="font-black text-white font-mono text-xs sm:text-sm">
+              ${formatCoinPrice(activePosition.entryPrice, activePosition.symbol)}
+            </div>
+            <div className="text-[10px] text-cyan-300 font-mono mt-1 flex items-center justify-between">
+              <span>${formatCoinPrice(metrics.currentP, activePosition.symbol)}</span>
+              <span className={`font-bold ${metrics.priceDiffPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {metrics.priceDiffPct >= 0 ? '+' : ''}{metrics.priceDiffPct.toFixed(2)}%
+              </span>
+            </div>
+          </div>
+
+          {/* 2. TP1 (50% Scale-Out) */}
+          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+            activePosition.tp1Hit 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
+          }`}>
+            <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
+              <span className="font-medium">1. TP1 (50%)</span>
+              {activePosition.tp1Hit ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Target className="w-3.5 h-3.5 text-slate-500" />}
+            </div>
+            <div className="font-black font-mono text-xs sm:text-sm text-white">
+              ${formatCoinPrice(activePosition.tp1, activePosition.symbol)}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1 font-mono">
+              {activePosition.tp1Hit ? (isArabic ? '✓ تم جني 50% ونقل الوقف' : '✓ 50% Secured & BE') : (isArabic ? 'جني نصف العقد' : 'Scale 50% Target')}
+            </div>
+          </div>
+
+          {/* 3. TP2 (Target 2) */}
+          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+            activePosition.tp2Hit 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
+          }`}>
+            <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
+              <span className="font-medium">2. TP2 (25%)</span>
+              {activePosition.tp2Hit ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Target className="w-3.5 h-3.5 text-slate-500" />}
+            </div>
+            <div className="font-black font-mono text-xs sm:text-sm text-white">
+              ${formatCoinPrice(activePosition.tp2, activePosition.symbol)}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1 font-mono">
+              {activePosition.tp2Hit ? (isArabic ? '✓ تم بنجاح' : '✓ Hit Target 2') : (isArabic ? 'الهدف الثاني' : 'Target 2')}
+            </div>
+          </div>
+
+          {/* 4. TP3 (Max Moonshot Target) */}
+          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+            activePosition.tp3Hit 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
+          }`}>
+            <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
+              <span className="font-medium">3. TP3 (Max)</span>
+              {activePosition.tp3Hit ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Target className="w-3.5 h-3.5 text-purple-400" />}
+            </div>
+            <div className="font-black font-mono text-xs sm:text-sm text-purple-200">
+              ${formatCoinPrice(targetHigh, activePosition.symbol)}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1 font-mono">
+              {activePosition.tp3Hit ? (isArabic ? '✓ الهدف الأقصى' : '✓ Max Runner Hit') : (isArabic ? 'الهدف الأقصى' : 'Final Runner')}
+            </div>
+          </div>
+
+          {/* 5. Stop Loss / Trailing Guard */}
+          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+            activePosition.isTrailingActive 
+              ? 'bg-amber-950/30 border-amber-500/40 text-amber-300 shadow-[0_0_14px_rgba(245,158,11,0.15)]' 
+              : 'bg-slate-950/80 border-rose-500/30'
+          }`}>
+            <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
+              <span className="font-medium">
+                {activePosition.isTrailingActive 
+                  ? (isArabic ? 'الوقف المتحرك' : 'Trailing SL')
+                  : (activePosition.tp1Hit ? 'Breakeven SL' : (isArabic ? 'وقف الخسارة' : 'Stop Loss'))}
+              </span>
+              {activePosition.isTrailingActive ? <Zap className="w-3.5 h-3.5 text-amber-400" /> : <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />}
+            </div>
+            <div className="font-black text-rose-300 font-mono text-xs sm:text-sm">
+              ${formatCoinPrice(activePosition.stopLoss, activePosition.symbol)}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1 font-mono">
+              {activePosition.isTrailingActive
+                ? (isArabic ? 'أرباح مؤمنة' : 'Locked Profit')
+                : activePosition.tp1Hit 
+                ? (isArabic ? '0$ مخاطرة' : 'Risk-Free 0$') 
+                : (isArabic ? 'حماية المحفظة' : 'Guard Level')}
+            </div>
+          </div>
+
+          {/* 6. Liquidation Buffer (Futures) or Spot Security (Spot) */}
+          {isFutures ? (
+            <div className="bg-rose-950/20 border border-rose-500/40 p-3 rounded-2xl text-rose-200">
+              <div className="flex items-center justify-between text-rose-400 text-[10px] mb-1 font-bold">
+                <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+              </div>
+              <div className="font-black text-white font-mono text-xs sm:text-sm">
+                {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
+              </div>
+              <div className="text-[10px] text-rose-300 mt-1 font-mono">
+                {metrics.distanceToLiqPct !== null 
+                  ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% safe margin`)
+                  : (isArabic ? 'آمن جداً' : 'Safe')}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-950/25 border border-emerald-500/40 p-3 rounded-2xl text-emerald-200">
+              <div className="flex items-center justify-between text-emerald-400 text-[10px] mb-1 font-bold">
+                <span>{isArabic ? 'حماية السبوت' : (isEn ? 'Spot Security' : 'Sécurité Spot')}</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="font-black text-emerald-300 font-mono text-xs sm:text-sm">
+                {isArabic ? 'ملكية 100% (0% Liq)' : '100% Asset Owned'}
+              </div>
+              <div className="text-[10px] text-emerald-400/90 mt-1 font-sans">
+                {isArabic ? 'بدون رافعة أو مخاطرة تصفية' : (isEn ? 'Zero Liquidation Risk' : 'Sans Liquidation')}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Interactive Tactical Footer Bar (Matching Strategy Card Button Style) */}
+        <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono w-full sm:w-auto">
+            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span>
+              {isArabic ? 'الإجراء الأخير للمحرك:' : 'Last Engine Action:'}{' '}
+              <strong className="text-cyan-300">{activePosition.lastAction || 'Active Monitoring'}</strong>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onManualClosePosition(activePosition.id)}
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-rose-950/40 via-rose-900/25 to-slate-900/90 hover:from-rose-900/50 hover:to-slate-800 border border-rose-500/40 hover:border-rose-400 text-rose-300 hover:text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-[0_0_20px_rgba(244,63,94,0.25)] cursor-pointer active:scale-98"
+          >
+            <Power className="w-3.5 h-3.5 text-rose-400" />
+            <span>
+              {isFutures 
+                ? (isArabic ? 'إغلاق وتصفية هذا العقد فورياً' : 'Emergency Close Position')
+                : (isArabic ? 'بيع وتسييل هذا الأصل الفوري' : 'Sell Spot Asset Now')}
+            </span>
+          </button>
         </div>
       </div>
     );
