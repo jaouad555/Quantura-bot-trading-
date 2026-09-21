@@ -800,7 +800,11 @@ export interface RiskAuditLogEntry {
   drawdownPercent: number;
   dailyLossPercent: number;
   volatilityRegime?: VolatilityRegime;
+}export interface AIStatusInfo {
+  status: string;
+  provider: 'gemini' | 'qwen' | 'deterministic';
+  geminiConfigured: boolean;
+  qwenConfigured: boolean;
+  activeModel: string;
 }
-
-
 

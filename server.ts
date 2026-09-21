@@ -1,9 +1,40 @@
 console.log("Starting Quantura Server...");
+import 'dotenv/config';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+
+// Resilient .env loader to ensure environment variables are ALWAYS loaded on all VPS environments
+function loadEnvFallback() {
+  const envPaths = [
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), '../.env'),
+    path.join(process.cwd(), 'bot', '.env'),
+  ];
+  for (const p of envPaths) {
+    if (fs.existsSync(p)) {
+      try {
+        const content = fs.readFileSync(p, 'utf8');
+        content.split('\n').forEach(line => {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+            const idx = trimmed.indexOf('=');
+            const key = trimmed.substring(0, idx).trim();
+            const val = trimmed.substring(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+            if (key && !process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        });
+      } catch {
+        // silent fallback
+      }
+    }
+  }
+}
+loadEnvFallback();
 
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
@@ -1427,10 +1458,12 @@ app.post('/api/binance/batch-historical-klines', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// AI Status & Health Endpoint
+// AI Status & Key Configuration Endpoint
 // -------------------------------------------------------------
 app.get('/api/ai/status', (req, res) => {
-  const hasGeminiKey = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  loadEnvFallback();
+  const key = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
+  const hasGeminiKey = !!(key && key !== 'MY_GEMINI_API_KEY' && key !== 'YOUR_KEY_HERE');
   const hasQwenKey = !!(process.env.QWEN_API_KEY && process.env.QWEN_API_KEY !== 'YOUR_QWEN_API_KEY');
   const provider = hasGeminiKey ? 'gemini' : (hasQwenKey ? 'qwen' : 'deterministic');
   res.json({
@@ -1440,6 +1473,42 @@ app.get('/api/ai/status', (req, res) => {
     qwenConfigured: hasQwenKey,
     activeModel: hasGeminiKey ? 'gemini-2.5-flash' : (hasQwenKey ? 'qwen-2.5-32b' : 'quant-deterministic'),
   });
+});
+
+app.post('/api/config/gemini-key', (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 10) {
+      return res.status(400).json({ error: 'Valid Gemini API key required' });
+    }
+    const cleanKey = apiKey.trim();
+    process.env.GEMINI_API_KEY = cleanKey;
+    geminiClient = new GoogleGenAI({ apiKey: cleanKey });
+
+    // Persist to .env file on disk
+    const envPath = path.join(process.cwd(), '.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+      if (envContent.includes('GEMINI_API_KEY=')) {
+        envContent = envContent.replace(/GEMINI_API_KEY=.*/g, `GEMINI_API_KEY=${cleanKey}`);
+      } else {
+        envContent += `\nGEMINI_API_KEY=${cleanKey}\n`;
+      }
+    } else {
+      envContent = `GEMINI_API_KEY=${cleanKey}\n`;
+    }
+    fs.writeFileSync(envPath, envContent, 'utf8');
+
+    return res.json({
+      success: true,
+      message: 'GEMINI_API_KEY set and saved to .env successfully',
+      geminiConfigured: true,
+      provider: 'gemini',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to save key' });
+  }
 });
 
 // -------------------------------------------------------------

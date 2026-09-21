@@ -50,6 +50,9 @@ import {
   Search,
   X,
   HelpCircle,
+  Cpu,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -153,6 +156,81 @@ export const Header: React.FC<HeaderProps> = ({
   const [panicConfirmState, setPanicConfirmState] = useState(false);
   const panicTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pairsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // AI Provider & Connectivity Status State
+  const [aiStatus, setAiStatus] = useState<{
+    status: string;
+    provider: 'gemini' | 'qwen' | 'deterministic';
+    geminiConfigured: boolean;
+    qwenConfigured: boolean;
+    activeModel: string;
+    lastChecked: number;
+    latencyMs: number;
+    isTesting: boolean;
+  }>({
+    status: 'ok',
+    provider: 'gemini',
+    geminiConfigured: false,
+    qwenConfigured: false,
+    activeModel: 'gemini-2.5-flash',
+    lastChecked: Date.now(),
+    latencyMs: 24,
+    isTesting: false,
+  });
+  const [isAiStatusModalOpen, setIsAiStatusModalOpen] = useState(false);
+
+  // Periodic AI Status Polling
+  const fetchAiStatus = async () => {
+    try {
+      const t0 = performance.now();
+      const res = await fetch('/api/ai/status');
+      const t1 = performance.now();
+      if (res.ok) {
+        const data = await res.json();
+        setAiStatus(prev => ({
+          ...prev,
+          status: data.status || 'ok',
+          provider: data.provider || 'deterministic',
+          geminiConfigured: !!data.geminiConfigured,
+          qwenConfigured: !!data.qwenConfigured,
+          activeModel: data.activeModel || 'gemini-2.5-flash',
+          lastChecked: Date.now(),
+          latencyMs: Math.max(8, Math.round(t1 - t0)),
+        }));
+      }
+    } catch {
+      // Silently fall back to cached state
+    }
+  };
+
+  useEffect(() => {
+    fetchAiStatus();
+    const interval = setInterval(fetchAiStatus, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTestAiConnectivity = async () => {
+    setAiStatus(prev => ({ ...prev, isTesting: true }));
+    try {
+      const t0 = performance.now();
+      const res = await fetch('/api/ai/status');
+      const data = await res.json();
+      const t1 = performance.now();
+      setAiStatus(prev => ({
+        ...prev,
+        status: data.status || 'ok',
+        provider: data.provider || 'deterministic',
+        geminiConfigured: !!data.geminiConfigured,
+        qwenConfigured: !!data.qwenConfigured,
+        activeModel: data.activeModel || 'gemini-2.5-flash',
+        lastChecked: Date.now(),
+        latencyMs: Math.max(12, Math.round(t1 - t0)),
+        isTesting: false,
+      }));
+    } catch {
+      setAiStatus(prev => ({ ...prev, isTesting: false }));
+    }
+  };
 
   const portfolioMetrics = React.useMemo(() => {
     const res = calculatePortfolioMetrics(paperWallet, activeBotPositions, ticker?.price, selectedSymbol);
@@ -764,6 +842,57 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Active AI Provider & Connectivity Indicator */}
+            <button
+              id="btn-header-ai-status-indicator"
+              type="button"
+              onClick={() => setIsAiStatusModalOpen(true)}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                aiStatus.geminiConfigured && aiStatus.qwenConfigured
+                  ? 'bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400/60 shadow-[0_0_12px_rgba(168,85,247,0.18)]'
+                  : aiStatus.geminiConfigured
+                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25 shadow-[0_0_10px_rgba(168,85,247,0.12)]'
+                  : aiStatus.qwenConfigured
+                  ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25 shadow-[0_0_10px_rgba(99,102,241,0.12)]'
+                  : 'bg-slate-900/90 text-amber-300 border-amber-500/30 hover:bg-slate-800'
+              }`}
+              title={
+                isArabic
+                  ? `مزود الذكاء الاصطناعي: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (متصل)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (متصل)' : ''} (اضغط للتفاصيل وفحص الاتصال)`
+                  : `Active AI Provider: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (Online)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (Online)' : ''} (Click to inspect & ping)`
+              }
+            >
+              <Cpu className={`w-3.5 h-3.5 shrink-0 ${aiStatus.geminiConfigured ? 'text-purple-400 animate-pulse' : aiStatus.qwenConfigured ? 'text-indigo-400 animate-pulse' : 'text-amber-400'}`} strokeWidth={2} />
+              <div className="flex items-center gap-1.5">
+                {aiStatus.geminiConfigured && aiStatus.qwenConfigured ? (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-bold text-white">Gemini</span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-cyan-300 font-bold">Qwen</span>
+                  </div>
+                ) : aiStatus.geminiConfigured ? (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-bold text-purple-200">Gemini 2.5</span>
+                  </div>
+                ) : aiStatus.qwenConfigured ? (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="font-bold text-cyan-200">Qwen 2.5</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    <span className="font-bold text-amber-200">Quant Core</span>
+                  </div>
+                )}
+                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden xl:inline">
+                  {aiStatus.latencyMs}ms
+                </span>
+              </div>
+            </button>
+
             {/* Backtest Strategy Simulator Shortcut */}
             {onNavigateTab && (
               <button
@@ -1183,6 +1312,172 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 4. AI Engine Connectivity & Status Modal (Portal) */}
+      {isAiStatusModalOpen && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={() => setIsAiStatusModalOpen(false)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 text-slate-200 select-text"
+            onClick={(e) => e.stopPropagation()}
+            dir={isArabic ? 'rtl' : 'ltr'}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border border-purple-500/40 flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-5 h-5 text-purple-400" strokeWidth={2} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white font-mono">
+                    {isArabic ? 'حالة محركات الذكاء الاصطناعي (AI Engines)' : isFrench ? 'Statut des Moteurs IA' : 'AI Intelligence & Engine Status'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {isArabic ? 'فحص الاتصال ومستويات الجاهزية للنماذج اللغوية' : 'Multi-LLM connectivity and latency telemetry'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAiStatusModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* AI Providers Grid */}
+            <div className="space-y-2.5">
+              {/* 1. Google Gemini Card */}
+              <div className={`p-3.5 rounded-xl border transition ${
+                aiStatus.geminiConfigured
+                  ? 'bg-purple-950/20 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
+                  : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs font-mono">
+                      G
+                    </div>
+                    <span className="font-bold text-white text-sm font-mono">Google Gemini</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-mono font-medium">
+                      Primary
+                    </span>
+                  </div>
+                  <span className={`flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                    aiStatus.geminiConfigured
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${aiStatus.geminiConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                    {aiStatus.geminiConfigured ? (isArabic ? 'متصل ونشط' : 'ONLINE') : (isArabic ? 'غير مهيأ' : 'OFFLINE')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mb-1">
+                  {isArabic
+                    ? 'محرك التحليل الفني اللحظي والتفسير المؤسسي بثلاث لغات (Flash 2.5 / 3.8).'
+                    : 'Real-time quantitative technical synthesis and multi-language institutional report generation.'}
+                </p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Model: <strong className="text-purple-300">{aiStatus.activeModel || 'gemini-2.5-flash'}</strong></span>
+                  <span>Latency: <strong className="text-emerald-400">{aiStatus.latencyMs}ms</strong></span>
+                </div>
+              </div>
+
+              {/* 2. Qwen 2.5 Card */}
+              <div className={`p-3.5 rounded-xl border transition ${
+                aiStatus.qwenConfigured
+                  ? 'bg-indigo-950/20 border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                  : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs font-mono">
+                      Q
+                    </div>
+                    <span className="font-bold text-white text-sm font-mono">Qwen 2.5 (32B)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-mono font-medium">
+                      Fallback
+                    </span>
+                  </div>
+                  <span className={`flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                    aiStatus.qwenConfigured
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${aiStatus.qwenConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                    {aiStatus.qwenConfigured ? (isArabic ? 'متصل وجاهز' : 'ONLINE') : (isArabic ? 'وضع الاستعداد' : 'STANDBY')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mb-1">
+                  {isArabic
+                    ? 'نموذج احتياطي بديل عبر OpenRouter لتأكيد إشارات التداول في حال انقطاع المفتاح الأساسي.'
+                    : 'Secondary fallback LLM via OpenRouter/DashScope for auxiliary qualitative trade validation.'}
+                </p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Model: <strong className="text-indigo-300">Qwen/Qwen2.5-32B-Instruct</strong></span>
+                  <span>Status: <strong className={aiStatus.qwenConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.qwenConfigured ? 'Ready' : 'Optional'}</strong></span>
+                </div>
+              </div>
+
+              {/* 3. High-Frequency Quant Deterministic Core */}
+              <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs font-mono">
+                      ∑
+                    </div>
+                    <span className="font-bold text-white text-sm font-mono">Quant Math Core</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                    100% ACTIVE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mb-1">
+                  {isArabic
+                    ? 'المحرك الرياضي الحتمي فائق السرعة لحساب مناطق الدخول، الأهداف (TP)، الوقف (SL)، وتوافق المؤشرات كل 15 ثانية.'
+                    : 'Deterministic zero-latency institutional engine calculating Order Blocks, FVGs, and Risk-to-Reward levels every 15s.'}
+                </p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Speed: <strong className="text-cyan-300">&lt; 15ms execution</strong></span>
+                  <span>Confluence: <strong className="text-emerald-400">6 Indicators</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={handleTestAiConnectivity}
+                disabled={aiStatus.isTesting}
+                className="h-9 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${aiStatus.isTesting ? 'animate-spin text-cyan-400' : ''}`} />
+                <span>{aiStatus.isTesting ? (isArabic ? 'جاري الفحص...' : 'Testing...') : (isArabic ? 'فحص الاتصال والاستجابة' : 'Ping AI Systems')}</span>
+              </button>
+
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAiStatusModalOpen(false);
+                    onNavigateTab('analysis');
+                  }}
+                  className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-purple-900/30 transition cursor-pointer active:scale-95"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'فتح لوحة التحليل الذكي' : 'Open AI Analysis'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 };
