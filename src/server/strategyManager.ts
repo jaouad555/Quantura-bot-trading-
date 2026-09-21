@@ -131,65 +131,37 @@ class StrategyManager {
       if (savedStr) {
         const parsed = JSON.parse(savedStr);
         if (parsed && typeof parsed === 'object') {
-          let anyActive = false;
           for (const [id, enabled] of Object.entries(parsed)) {
             const strat = this.strategies.get(id as StrategyId);
             if (strat && typeof enabled === 'boolean') {
               strat.enabled = enabled;
               if (enabled) {
                 strat.activatedAt = Date.now();
-                anyActive = true;
               }
             }
-          }
-          // If all were turned off, activate core strategies by default so bot can operate immediately
-          if (!anyActive) {
-            for (const strat of this.strategies.values()) {
-              strat.enabled = true;
-              strat.activatedAt = Date.now();
-            }
-            await this.persist();
           }
           console.log('[STRATEGY_MGR] Restored strategy activation state from KV:', 
             Array.from(this.strategies.values()).map(s => `${s.id}: ${s.enabled ? 'ON' : 'OFF'}`).join(', ')
           );
         }
       } else {
-        // Double-check if btc_bot_config has activePresets
+        // Fallback: check if btc_bot_config has activePresets
         const botConfigStr = await kv.get('btc_bot_config');
         if (botConfigStr) {
           const config = JSON.parse(botConfigStr);
-          if (Array.isArray(config.activePresets) && config.activePresets.length > 0) {
-            for (const preset of config.activePresets) {
-              const strat = this.strategies.get(preset as StrategyId);
-              if (strat) {
-                strat.enabled = true;
+          if (Array.isArray(config.activePresets)) {
+            const activeSet = new Set(config.activePresets);
+            for (const strat of this.strategies.values()) {
+              strat.enabled = activeSet.has(strat.id);
+              if (strat.enabled) {
                 strat.activatedAt = Date.now();
               }
             }
-          } else {
-            // Activate all 6 strategies by default
-            for (const strat of this.strategies.values()) {
-              strat.enabled = true;
-              strat.activatedAt = Date.now();
-            }
           }
-          await this.persist();
-        } else {
-          // Default: Enable all 6 strategies
-          for (const strat of this.strategies.values()) {
-            strat.enabled = true;
-            strat.activatedAt = Date.now();
-          }
-          await this.persist();
         }
       }
     } catch (err) {
       console.error('[STRATEGY_MGR] Failed to load strategy activation state:', err);
-      for (const strat of this.strategies.values()) {
-        strat.enabled = true;
-        strat.activatedAt = Date.now();
-      }
     }
 
     this.initialized = true;
@@ -349,10 +321,10 @@ class StrategyManager {
       return { authorized: false, reason };
     }
 
-    // Rule 0.5: Strategy must be in activePresets of btc_bot_config (or default to all registered strategies)
-    const activePresets: string[] = Array.isArray(config.activePresets) && config.activePresets.length > 0
+    // Rule 0.5: Strategy must be in activePresets of btc_bot_config
+    const activePresets: string[] = Array.isArray(config.activePresets)
       ? config.activePresets
-      : Array.from(this.strategies.keys());
+      : this.getActiveStrategies().map(s => s.id);
 
     if (!activePresets.includes(strategyId)) {
       const reason = 'STRATEGY_NOT_IN_ACTIVE_PRESETS';

@@ -1825,7 +1825,7 @@ export const App: React.FC = () => {
       const nextEnabled = !prev.enabled;
       let effectivePresets: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[] = prev.activePresets && prev.activePresets.length > 0
         ? prev.activePresets
-        : ['MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'];
+        : ['MOMENTUM'];
 
       // When manually turning ON the bot
       if (nextEnabled) {

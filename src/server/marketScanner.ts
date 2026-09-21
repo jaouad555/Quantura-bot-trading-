@@ -76,10 +76,10 @@ export async function scanAllPairs() {
     const config = configStr ? JSON.parse(configStr) : {};
     
     // Auto-sync strategyManager if activePresets are specified in bot config
-    if (Array.isArray(config.activePresets) && config.activePresets.length > 0) {
+    if (Array.isArray(config.activePresets)) {
       const activeSet = new Set(config.activePresets);
       for (const strat of strategyManager.getAllStrategies()) {
-        const shouldEnable = !!config.enabled && activeSet.has(strat.id);
+        const shouldEnable = activeSet.has(strat.id);
         if (strat.enabled !== shouldEnable) {
           strat.enabled = shouldEnable;
           strat.activatedAt = shouldEnable ? (strat.activatedAt || Date.now()) : undefined;
@@ -255,9 +255,9 @@ async function processTradingSignal(
       return;
     }
 
-    const activePresets: string[] = Array.isArray(latestConfig.activePresets) && latestConfig.activePresets.length > 0
+    const activePresets: string[] = Array.isArray(latestConfig.activePresets)
       ? latestConfig.activePresets
-      : ['MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'];
+      : strategyManager.getActiveStrategies().map(s => s.id);
     if (!activePresets.includes(signal.strategyId)) {
       console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Strategy ${signal.strategyId} not in activePresets (total active: ${activePresets.length})`);
       return;

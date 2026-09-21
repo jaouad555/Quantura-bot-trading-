@@ -387,7 +387,6 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   }, [activeSignal]);
 
   // Sync strategy activation states on mount with authoritative backend StrategyManager
-  // AND automatically match & select the optimal strategy if none is selected or if autoAdaptive is enabled!
   useEffect(() => {
     fetch('/api/strategies')
       .then((res) => res.json())
@@ -400,24 +399,26 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
               onUpdateConfig({
                 activePresets: backendActive,
-                ...(backendActive.length === 0 && botConfig.enabled ? { enabled: false } : {}),
               });
             }
-          } else if (current.length === 0 || botConfig.autoAdaptiveStrategy) {
-            // Auto-select optimal strategy matching market conditions immediately upon user entry!
+          } else if (current.length > 0) {
+            // Push local user presets to backend so backend is aware
+            const stratMap: Record<string, boolean> = {};
+            current.forEach((id) => { stratMap[id] = true; });
+            fetch('/api/strategies/set', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ strategies: stratMap }),
+            }).catch(() => {});
+          } else if (botConfig.autoAdaptiveStrategy) {
             handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
           }
-        } else if ((!botConfig.activePresets || botConfig.activePresets.length === 0) || botConfig.autoAdaptiveStrategy) {
-          handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
         }
       })
       .catch((err) => {
         console.warn('[AutoTradingBot] Could not fetch backend strategies:', err);
-        if ((!botConfig.activePresets || botConfig.activePresets.length === 0) || botConfig.autoAdaptiveStrategy) {
-          handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
-        }
       });
-  }, [marketAnalysisData.topStrategyId]);
+  }, []);
 
   const handleSelectOptimalStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
     const isFutures = botConfig.marketType === 'FUTURES';

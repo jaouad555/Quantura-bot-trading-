@@ -157,7 +157,7 @@ app.post('/api/config', async (req, res) => {
           if (Array.isArray(parsed.activePresets)) {
             const activeSet = new Set(parsed.activePresets);
             for (const strat of strategyManager.getAllStrategies()) {
-              const shouldEnable = !!parsed.enabled && activeSet.has(strat.id);
+              const shouldEnable = activeSet.has(strat.id);
               if (strat.enabled !== shouldEnable) {
                 strat.enabled = shouldEnable;
                 strat.activatedAt = shouldEnable ? (strat.activatedAt || Date.now()) : undefined;
