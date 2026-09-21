@@ -712,327 +712,319 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 2. MIDDLE BAR (الشريط الثاني): Capital, Wallet, Binance, Positions, Scanner, Chart, AI, Backtest, Heatmap, Portfolio, Panic, Risk, Fullscreen & Settings */}
       <div className="w-full max-w-full px-2 sm:px-3 py-1.5 border-b border-slate-800/70 bg-slate-950/80">
-        <div className="flex items-center justify-between gap-1 sm:gap-2 w-full max-w-full">
-          
-          {/* Left: Complete Analytical & Execution Suite (Scrollable smoothly on very small screens) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-0.5">
-            {/* Connection Status Badge */}
-            {getConnectionBadge()}
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar w-full max-w-full py-0.5">
+          {/* Connection Status Badge */}
+          {getConnectionBadge()}
 
-            {/* Paper Wallet Virtual Balance / Total Portfolio Equity */}
-            {onOpenCustomBalanceModal && (
-              <button
-                type="button"
-                onClick={onOpenCustomBalanceModal}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  portfolioMetrics.totalNetPnl > 0
-                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-                    : portfolioMetrics.totalNetPnl < 0
-                    ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 hover:border-amber-500/60'
-                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50'
-                }`}
-                title={
-                  isArabic
-                    ? `إجمالي قيمة المحفظة: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
-                    : `Total Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
-                }
-              >
-                <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-                <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-                {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
-                  <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
-                    portfolioMetrics.totalNetPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
-                  }`}>
-                    {portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}${portfolioMetrics.totalNetPnl.toFixed(1)}
-                  </span>
-                )}
-                <span className="text-[9px] text-emerald-400/80 font-normal hidden sm:inline">USDT</span>
-              </button>
-            )}
-
-            {/* Binance API / Live Button */}
-            {onOpenBinanceModal && (
-              <button
-                type="button"
-                onClick={onOpenBinanceModal}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  executionMode === 'BINANCE_LIVE'
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
-                    : binanceConfig?.isConnected
-                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
-                    : 'bg-slate-900/80 text-amber-300 border-slate-800 hover:bg-slate-800'
-                }`}
-                title={executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}
-              >
-                <Key className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : binanceConfig?.isConnected ? 'text-cyan-400' : 'text-amber-400'}`} strokeWidth={2} />
-                <span className="hidden xs:inline">
-                  {executionMode === 'BINANCE_LIVE' ? 'Live' : binanceConfig?.isConnected ? 'API' : 'Binance'}
-                </span>
-              </button>
-            )}
-
-            {/* Active Trades / Open Positions Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('autoBot')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  openPositionsCount > 0
-                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
-                    : activeTab === 'autoBot'
-                    ? 'bg-slate-800 text-indigo-300 border-indigo-500/40'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : isFrench ? 'Positions ouvertes et Bot' : 'Open Positions & Bot'}
-              >
-                <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
-                <span>{openPositionsCount}</span>
-                <span className="hidden xl:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
-              </button>
-            )}
-
-            {/* Global Market Scanner Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('globalScanner')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'globalScanner'
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : isFrench ? 'Radar Global Scanner' : 'Global Market Scanner'}
-              >
-                <Radar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'globalScanner' ? 'text-cyan-400 animate-spin' : 'text-cyan-400/80'}`} strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
-              </button>
-            )}
-
-            {/* Live Chart Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('chart')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'chart'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-emerald-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : isFrench ? 'Graphique en direct (Chart)' : 'Live Chart'}
-              >
-                <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
-              </button>
-            )}
-
-            {/* AI Quant Analysis Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('analysis')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'analysis'
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : isFrench ? 'Analyse IA Quantitative' : 'AI Quant Analysis'}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
-              </button>
-            )}
-
-            {/* Active AI Provider & Connectivity Indicator */}
+          {/* Paper Wallet Virtual Balance / Total Portfolio Equity */}
+          {onOpenCustomBalanceModal && (
             <button
-              id="btn-header-ai-status-indicator"
               type="button"
-              onClick={() => setIsAiStatusModalOpen(true)}
+              onClick={onOpenCustomBalanceModal}
               className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                aiStatus.geminiConfigured && aiStatus.qwenConfigured
-                  ? 'bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400/60 shadow-[0_0_12px_rgba(168,85,247,0.18)]'
-                  : aiStatus.geminiConfigured
-                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25 shadow-[0_0_10px_rgba(168,85,247,0.12)]'
-                  : aiStatus.qwenConfigured
-                  ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25 shadow-[0_0_10px_rgba(99,102,241,0.12)]'
-                  : 'bg-slate-900/90 text-amber-300 border-amber-500/30 hover:bg-slate-800'
+                portfolioMetrics.totalNetPnl > 0
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                  : portfolioMetrics.totalNetPnl < 0
+                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 hover:border-amber-500/60'
+                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50'
               }`}
               title={
                 isArabic
-                  ? `مزود الذكاء الاصطناعي: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (متصل)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (متصل)' : ''} (اضغط للتفاصيل وفحص الاتصال)`
-                  : `Active AI Provider: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (Online)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (Online)' : ''} (Click to inspect & ping)`
+                  ? `إجمالي قيمة المحفظة: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
+                  : `Total Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
               }
             >
-              <Cpu className={`w-3.5 h-3.5 shrink-0 ${aiStatus.geminiConfigured ? 'text-purple-400 animate-pulse' : aiStatus.qwenConfigured ? 'text-indigo-400 animate-pulse' : 'text-amber-400'}`} strokeWidth={2} />
-              <div className="flex items-center gap-1">
-                {aiStatus.geminiConfigured && aiStatus.qwenConfigured ? (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="font-bold text-white">Gemini</span>
-                    <span className="text-slate-500">+</span>
-                    <span className="text-cyan-300 font-bold">Qwen</span>
-                  </div>
-                ) : aiStatus.geminiConfigured ? (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="font-bold text-purple-200">Gemini</span>
-                  </div>
-                ) : aiStatus.qwenConfigured ? (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                    <span className="font-bold text-cyan-200">Qwen</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    <span className="font-bold text-amber-200">Quant</span>
-                  </div>
-                )}
-                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden 2xl:inline">
-                  {aiStatus.latencyMs}ms
+              <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+              <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+              {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
+                <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
+                  portfolioMetrics.totalNetPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
+                }`}>
+                  {portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}${portfolioMetrics.totalNetPnl.toFixed(1)}
                 </span>
-              </div>
-            </button>
-
-            {/* Backtest Strategy Simulator Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('backtest')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'backtest'
-                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : isFrench ? 'Simulateur Backtest' : 'Backtest Simulator'}
-              >
-                <FlaskConical className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
-              </button>
-            )}
-
-            {/* Market Heatmap Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('market')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'market'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : isFrench ? 'Heatmap du Marché' : 'Market Heatmap'}
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'السوق' : 'Market'}</span>
-              </button>
-            )}
-
-            {/* Capital & Portfolio Risk Manager Shortcut */}
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('riskWallet')}
-                className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                  activeTab === 'riskWallet'
-                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-teal-300 hover:bg-slate-800'
-                }`}
-                title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : isFrench ? 'Gestion du Portefeuille' : 'Risk & Portfolio Management'}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" strokeWidth={2} />
-                <span className="hidden xl:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
-              </button>
-            )}
-          </div>
-
-          {/* Right: Panic Emergency Button, Institutional Risk Engine, Fullscreen, Help, Settings (Always pinned and visible) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 pl-1">
-            {/* Emergency Panic Close Button */}
-            {onPanicCloseAll && openPositionsCount > 0 && (
-              <button
-                id="btn-header-panic-close"
-                type="button"
-                onClick={handlePanicClick}
-                className={`h-8 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
-                  panicConfirmState
-                    ? 'bg-rose-600 text-white border-rose-400 animate-pulse shadow-md shadow-rose-900/50'
-                    : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/40 text-rose-300'
-                }`}
-                title={isArabic ? 'إغلاق طوارئ فوري لكافة الصفقات لحماية الرصيد' : isFrench ? 'Fermeture d\'urgence de toutes les positions' : 'Emergency Panic Close All Positions'}
-              >
-                <AlertOctagon className="w-3.5 h-3.5 text-rose-300 shrink-0" strokeWidth={2} />
-                <span>{panicConfirmState ? (isArabic ? 'تأكيد؟' : isFrench ? 'Confirmer?' : 'Confirm?') : (isArabic ? 'طوارئ' : 'Panic')}</span>
-              </button>
-            )}
-
-            {/* Risk Engine Button */}
-            {onOpenRiskModal && (
-              <button
-                id="btn-header-risk-modal"
-                type="button"
-                onClick={onOpenRiskModal}
-                className="h-8 px-2 sm:px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95"
-                title={isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Management Engine'}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2} />
-                <span className="hidden md:inline">{isArabic ? 'المخاطر' : 'Risk'}</span>
-              </button>
-            )}
-
-            {/* Plein Écran / Fullscreen Button */}
-            <button
-              id="btn-header-fullscreen"
-              type="button"
-              onClick={handleToggleFullscreen}
-              className={`h-8 w-8 rounded-xl border flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95 ${
-                isFullscreen || displayMode === 'fullscreen'
-                  ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-sm ring-1 ring-cyan-500/30'
-                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
-              }`}
-              title={
-                isFullscreen || displayMode === 'fullscreen'
-                  ? (isArabic ? 'إنهاء وضع ملء الشاشة' : isFrench ? 'Quitter le plein écran' : 'Exit Fullscreen')
-                  : (isArabic ? 'وضع ملء الشاشة (Plein écran)' : isFrench ? 'Mode Plein écran (Fullscreen)' : 'Fullscreen Mode')
-              }
-              aria-label="Plein écran Fullscreen"
-            >
-              {isFullscreen || displayMode === 'fullscreen' ? (
-                <Minimize className="w-3.5 h-3.5 text-cyan-400 animate-in zoom-in-75 duration-150" strokeWidth={2} />
-              ) : (
-                <Maximize className="w-3.5 h-3.5" strokeWidth={2} />
               )}
+              <span className="text-[9px] text-emerald-400/80 font-normal hidden sm:inline">USDT</span>
             </button>
+          )}
 
-            {/* Quick Start / Help Guide Button */}
-            {onOpenHelp && (
-              <button
-                id="btn-header-help-guide"
-                type="button"
-                onClick={onOpenHelp}
-                className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 shadow-xs"
-                title={isArabic ? 'دليل الاستخدام والبدء السريع (Quick Start & Help)' : isFrench ? 'Guide & Démarrage Rapide' : 'Quick Start & Help Guide'}
-                aria-label="Help Guide"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} />
-                <span className="text-[11px] font-bold font-mono hidden sm:inline">
-                  {isArabic ? 'دليل البدء' : 'Guide'}
-                </span>
-              </button>
-            )}
-
-            {/* Settings Button */}
+          {/* Binance API / Live Button */}
+          {onOpenBinanceModal && (
             <button
-              id="btn-header-settings"
               type="button"
-              onClick={onOpenSettings}
-              className="h-8 w-8 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'الإعدادات واللغات' : isFrench ? 'Paramètres & Langues' : 'Settings & Languages'}
-              aria-label="Settings"
+              onClick={onOpenBinanceModal}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                executionMode === 'BINANCE_LIVE'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
+                  : binanceConfig?.isConnected
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
+                  : 'bg-slate-900/80 text-amber-300 border-slate-800 hover:bg-slate-800'
+              }`}
+              title={executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}
             >
-              <Settings className="w-3.5 h-3.5" strokeWidth={2} />
+              <Key className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : binanceConfig?.isConnected ? 'text-cyan-400' : 'text-amber-400'}`} strokeWidth={2} />
+              <span className="hidden xs:inline">
+                {executionMode === 'BINANCE_LIVE' ? 'Live' : binanceConfig?.isConnected ? 'API' : 'Binance'}
+              </span>
             </button>
-          </div>
+          )}
 
+          {/* Active Trades / Open Positions Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('autoBot')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                openPositionsCount > 0
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
+                  : activeTab === 'autoBot'
+                  ? 'bg-slate-800 text-indigo-300 border-indigo-500/40'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : isFrench ? 'Positions ouvertes et Bot' : 'Open Positions & Bot'}
+            >
+              <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
+              <span>{openPositionsCount}</span>
+              <span className="hidden xl:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
+            </button>
+          )}
+
+          {/* Global Market Scanner Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('globalScanner')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'globalScanner'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-cyan-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'رادار السوق الشامل (Global Scanner)' : isFrench ? 'Radar Global Scanner' : 'Global Market Scanner'}
+            >
+              <Radar className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'globalScanner' ? 'text-cyan-400 animate-spin' : 'text-cyan-400/80'}`} strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'الرادار' : 'Radar'}</span>
+            </button>
+          )}
+
+          {/* Live Chart Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('chart')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'chart'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-emerald-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'الرسم البياني المباشر (Live Chart)' : isFrench ? 'Graphique en direct (Chart)' : 'Live Chart'}
+            >
+              <LineChart className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'الشارت' : 'Chart'}</span>
+            </button>
+          )}
+
+          {/* AI Quant Analysis Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('analysis')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'analysis'
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-purple-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'التحليل الذكي والنموذج الكمي (AI Quant Analysis)' : isFrench ? 'Analyse IA Quantitative' : 'AI Quant Analysis'}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'الذكاء' : 'AI'}</span>
+            </button>
+          )}
+
+          {/* Active AI Provider & Connectivity Indicator */}
+          <button
+            id="btn-header-ai-status-indicator"
+            type="button"
+            onClick={() => setIsAiStatusModalOpen(true)}
+            className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+              aiStatus.geminiConfigured && aiStatus.qwenConfigured
+                ? 'bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400/60 shadow-[0_0_12px_rgba(168,85,247,0.18)]'
+                : aiStatus.geminiConfigured
+                ? 'bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25 shadow-[0_0_10px_rgba(168,85,247,0.12)]'
+                : aiStatus.qwenConfigured
+                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25 shadow-[0_0_10px_rgba(99,102,241,0.12)]'
+                : 'bg-slate-900/90 text-amber-300 border-amber-500/30 hover:bg-slate-800'
+            }`}
+            title={
+              isArabic
+                ? `مزود الذكاء الاصطناعي: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (متصل)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (متصل)' : ''} (اضغط للتفاصيل وفحص الاتصال)`
+                : `Active AI Provider: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (Online)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (Online)' : ''} (Click to inspect & ping)`
+            }
+          >
+            <Cpu className={`w-3.5 h-3.5 shrink-0 ${aiStatus.geminiConfigured ? 'text-purple-400 animate-pulse' : aiStatus.qwenConfigured ? 'text-indigo-400 animate-pulse' : 'text-amber-400'}`} strokeWidth={2} />
+            <div className="flex items-center gap-1">
+              {aiStatus.geminiConfigured && aiStatus.qwenConfigured ? (
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-bold text-white">Gemini</span>
+                  <span className="text-slate-500">+</span>
+                  <span className="text-cyan-300 font-bold">Qwen</span>
+                </div>
+              ) : aiStatus.geminiConfigured ? (
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-bold text-purple-200">Gemini</span>
+                </div>
+              ) : aiStatus.qwenConfigured ? (
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  <span className="font-bold text-cyan-200">Qwen</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span className="font-bold text-amber-200">Quant</span>
+                </div>
+              )}
+              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden 2xl:inline">
+                {aiStatus.latencyMs}ms
+              </span>
+            </div>
+          </button>
+
+          {/* Backtest Strategy Simulator Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('backtest')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'backtest'
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-indigo-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'محاكي الاستراتيجيات والفحص التاريخي' : isFrench ? 'Simulateur Backtest' : 'Backtest Simulator'}
+            >
+              <FlaskConical className="w-3.5 h-3.5 text-indigo-400 shrink-0" strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'باك تست' : 'Backtest'}</span>
+            </button>
+          )}
+
+          {/* Market Heatmap Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('market')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'market'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-amber-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'خريطة السوق وحرارة العملات (Market Heatmap)' : isFrench ? 'Heatmap du Marché' : 'Market Heatmap'}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'السوق' : 'Market'}</span>
+            </button>
+          )}
+
+          {/* Capital & Portfolio Risk Manager Shortcut */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('riskWallet')}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'riskWallet'
+                  ? 'bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-teal-300 hover:bg-slate-800'
+              }`}
+              title={isArabic ? 'إدارة المحفظة وحماية رأس المال (Risk & Portfolio)' : isFrench ? 'Gestion du Portefeuille' : 'Risk & Portfolio Management'}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" strokeWidth={2} />
+              <span className="hidden xl:inline">{isArabic ? 'المحفظة' : 'Portfolio'}</span>
+            </button>
+          )}
+
+          {/* Emergency Panic Close Button */}
+          {onPanicCloseAll && openPositionsCount > 0 && (
+            <button
+              id="btn-header-panic-close"
+              type="button"
+              onClick={handlePanicClick}
+              className={`h-8 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 ${
+                panicConfirmState
+                  ? 'bg-rose-600 text-white border-rose-400 animate-pulse shadow-md shadow-rose-900/50'
+                  : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/40 text-rose-300'
+              }`}
+              title={isArabic ? 'إغلاق طوارئ فوري لكافة الصفقات لحماية الرصيد' : isFrench ? 'Fermeture d\'urgence de toutes les positions' : 'Emergency Panic Close All Positions'}
+            >
+              <AlertOctagon className="w-3.5 h-3.5 text-rose-300 shrink-0" strokeWidth={2} />
+              <span>{panicConfirmState ? (isArabic ? 'تأكيد؟' : isFrench ? 'Confirmer?' : 'Confirm?') : (isArabic ? 'طوارئ' : 'Panic')}</span>
+            </button>
+          )}
+
+          {/* Risk Engine Button */}
+          {onOpenRiskModal && (
+            <button
+              id="btn-header-risk-modal"
+              type="button"
+              onClick={onOpenRiskModal}
+              className="h-8 px-2 sm:px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95"
+              title={isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Management Engine'}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2} />
+              <span className="hidden md:inline">{isArabic ? 'المخاطر' : 'Risk'}</span>
+            </button>
+          )}
+
+          {/* Plein Écran / Fullscreen Button */}
+          <button
+            id="btn-header-fullscreen"
+            type="button"
+            onClick={handleToggleFullscreen}
+            className={`h-8 w-8 rounded-xl border flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95 ${
+              isFullscreen || displayMode === 'fullscreen'
+                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-sm ring-1 ring-cyan-500/30'
+                : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
+            }`}
+            title={
+              isFullscreen || displayMode === 'fullscreen'
+                ? (isArabic ? 'إنهاء وضع ملء الشاشة' : isFrench ? 'Quitter le plein écran' : 'Exit Fullscreen')
+                : (isArabic ? 'وضع ملء الشاشة (Plein écran)' : isFrench ? 'Mode Plein écran (Fullscreen)' : 'Fullscreen Mode')
+            }
+            aria-label="Plein écran Fullscreen"
+          >
+            {isFullscreen || displayMode === 'fullscreen' ? (
+              <Minimize className="w-3.5 h-3.5 text-cyan-400 animate-in zoom-in-75 duration-150" strokeWidth={2} />
+            ) : (
+              <Maximize className="w-3.5 h-3.5" strokeWidth={2} />
+            )}
+          </button>
+
+          {/* Quick Start / Help Guide Button */}
+          {onOpenHelp && (
+            <button
+              id="btn-header-help-guide"
+              type="button"
+              onClick={onOpenHelp}
+              className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/25 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 shadow-xs"
+              title={isArabic ? 'دليل الاستخدام والبدء السريع (Quick Start & Help)' : isFrench ? 'Guide & Démarrage Rapide' : 'Quick Start & Help Guide'}
+              aria-label="Help Guide"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-cyan-400" strokeWidth={2} />
+              <span className="text-[11px] font-bold font-mono hidden sm:inline">
+                {isArabic ? 'دليل البدء' : 'Guide'}
+              </span>
+            </button>
+          )}
+
+          {/* Settings Button */}
+          <button
+            id="btn-header-settings"
+            type="button"
+            onClick={onOpenSettings}
+            className="h-8 w-8 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 cursor-pointer active:scale-95"
+            title={isArabic ? 'الإعدادات واللغات' : isFrench ? 'Paramètres & Langues' : 'Settings & Languages'}
+            aria-label="Settings"
+          >
+            <Settings className="w-3.5 h-3.5" strokeWidth={2} />
+          </button>
         </div>
       </div>
 
