@@ -355,6 +355,46 @@ export const App: React.FC = () => {
     }
   });
 
+  const [executionMode, setExecutionMode] = useState<TradingExecutionMode>(() => {
+    try {
+      const saved = apiStorage.getItem('trading_execution_mode');
+      return (saved as TradingExecutionMode) || 'PAPER';
+    } catch {
+      return 'PAPER';
+    }
+  });
+
+  // Fetch live Binance account balances (Futures / Spot)
+  const fetchLiveBinanceBalance = useCallback(async () => {
+    try {
+      const res = await fetch('/api/binance/account');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success) {
+        setBinanceConfig(prev => ({
+          ...prev,
+          isConnected: true,
+          useTestnet: data.useTestnet !== undefined ? data.useTestnet : prev.useTestnet,
+          marketType: data.marketType || prev.marketType,
+          accountInfo: {
+            balances: data.balances || [],
+            canTrade: data.canTrade ?? true,
+            canWithdraw: data.canWithdraw ?? false,
+            canDeposit: data.canDeposit ?? true,
+            updateTime: data.updateTime || Date.now(),
+            accountType: data.accountType || 'FUTURES',
+            makerCommission: data.makerCommission || 0,
+            takerCommission: data.takerCommission || 0,
+            freeUsdt: Number(data.freeUsdt || 0),
+            totalUsdtEquity: Number(data.totalUsdtEquity || data.freeUsdt || 0),
+          }
+        }));
+      }
+    } catch (err) {
+      console.warn('Error polling Binance live balance:', err);
+    }
+  }, []);
+
   // Securely load config status from backend
   useEffect(() => {
     fetch('/api/config/binance')
@@ -369,22 +409,29 @@ export const App: React.FC = () => {
             marketType: data.marketType,
             isConnected: true
           }));
+          // Fetch balance immediately upon detecting configured credentials
+          fetchLiveBinanceBalance();
         } else {
            setBinanceConfig(prev => ({ ...prev, isConnected: false, apiKey: '', apiSecret: '' }));
         }
       })
       .catch(console.error);
-  }, []);
+  }, [fetchLiveBinanceBalance]);
 
+  // Periodic live account balance polling when connected or in live mode
+  useEffect(() => {
+    if (!binanceConfig.isConnected && executionMode !== 'BINANCE_LIVE') return;
+    
+    // Initial fetch
+    fetchLiveBinanceBalance();
+    
+    const interval = setInterval(() => {
+      fetchLiveBinanceBalance();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [binanceConfig.isConnected, executionMode, fetchLiveBinanceBalance]);
 
-  const [executionMode, setExecutionMode] = useState<TradingExecutionMode>(() => {
-    try {
-      const saved = apiStorage.getItem('trading_execution_mode');
-      return (saved as TradingExecutionMode) || 'PAPER';
-    } catch {
-      return 'PAPER';
-    }
-  });
 
   const [isBinanceModalOpen, setIsBinanceModalOpen] = useState(false);
   const [isCustomBalanceModalOpen, setIsCustomBalanceModalOpen] = useState(false);
@@ -2327,10 +2374,13 @@ export const App: React.FC = () => {
       tf: Timeframe = timeframeRef.current,
       sym: string = selectedSymbolRef.current,
       mt: MarketType = botConfigRef.current?.marketType || 'FUTURES',
-      forceAnalysis: boolean = false
+      forceAnalysis: boolean = false,
+      isManual: boolean = false
     ) => {
       const currentReqId = ++fetchRequestIdRef.current;
-      setIsRefreshing(true);
+      if (isManual) {
+        setIsRefreshing(true);
+      }
       try {
         const res = await fetch(
           `/api/binance/market-data?symbol=${sym}&timeframe=${tf}&devMode=${isDeveloperModeRef.current}&marketType=${mt}`
@@ -2361,7 +2411,7 @@ export const App: React.FC = () => {
       } catch (err) {
         console.warn('Error fetching market data from server:', err);
       } finally {
-        if (currentReqId === fetchRequestIdRef.current) {
+        if (currentReqId === fetchRequestIdRef.current && isManual) {
           setIsRefreshing(false);
         }
       }

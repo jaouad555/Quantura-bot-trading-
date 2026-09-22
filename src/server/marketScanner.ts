@@ -140,16 +140,32 @@ async function analyzeSymbol(
       scannerState.symbolStates[normSymbol] = { symbol: normSymbol, lastAnalyzed: 0 };
     }
 
-    // 1. Fetch Market Data via internal API
+    // 1. Fetch Market Data via internal API with dynamic port support
     const targetStrategyTf = activeStrategies[0]?.timeframe;
     const timeframe = config.timeframe && config.timeframe !== 'AUTO' 
       ? config.timeframe 
       : (targetStrategyTf || '1h');
     const devMode = process.env.NODE_ENV !== 'production';
-    const apiUrl = `http://127.0.0.1:3000/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`;
+    const serverPort = process.env.PORT || 3000;
+    const endpointsToTry = [
+      `http://127.0.0.1:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`,
+      `http://localhost:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`
+    ];
     
-    const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error(`Market data fetch failed: ${res.statusText}`);
+    let res: any = null;
+    for (const url of endpointsToTry) {
+      try {
+        const attempt = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (attempt.ok) {
+          res = attempt;
+          break;
+        }
+      } catch (e) {
+        // try next endpoint
+      }
+    }
+    
+    if (!res || !res.ok) throw new Error(`Market data fetch failed on port ${serverPort}`);
     
     const data = await res.json();
     if (!data || !data.ticker || !data.indicators) throw new Error('Invalid market data payload');

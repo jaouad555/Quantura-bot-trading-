@@ -228,13 +228,71 @@ export const sendServerTelegramNotification = async (text: string) => {
 };
 
 
-// Add helper to fetch binance config
+// SECURE BINANCE CONFIGURATION & ENCRYPTION
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_secret_key_quantura_2026';
+const IV_LENGTH = 16;
+
+function decryptSecret(text: string): string {
+  if (!text) return text;
+  try {
+    const textParts = text.split(':');
+    if (textParts.length !== 2) return text;
+    const iv = Buffer.from(textParts[0], 'hex');
+    const encryptedText = Buffer.from(textParts[1], 'hex');
+    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substring(0, 32);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch (e) {
+    return text;
+  }
+}
+
+// Add helper to fetch binance config from KV or process.env
 const getBinanceConfig = async () => {
-  const apiKey = await kv.get('app_binance_api_key');
-  const apiSecret = await kv.get('app_binance_api_secret');
-  const useTestnet = await kv.get('app_binance_use_testnet') === 'true';
-  const marketType = (await kv.get('app_binance_market_type')) || 'FUTURES';
-  return { apiKey, apiSecret, useTestnet, marketType, isConnected: !!(apiKey && apiSecret) };
+  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
+  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
+  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
+  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+
+  const storedStr = await kv.get('binance_api_config');
+  if (storedStr) {
+    try {
+      const parsed = JSON.parse(storedStr);
+      const effectiveKey = parsed.apiKey || envApiKey;
+      const effectiveSecret = decryptSecret(parsed.apiSecret) || envApiSecret;
+      if (effectiveKey && effectiveSecret) {
+        return {
+          apiKey: effectiveKey,
+          apiSecret: effectiveSecret,
+          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envUseTestnet,
+          marketType: (parsed.marketType || envMarketType) as 'SPOT' | 'FUTURES',
+          isConnected: true,
+        };
+      }
+    } catch(e) {}
+  }
+
+  const legacyApiKey = await kv.get('app_binance_api_key');
+  const legacyApiSecret = await kv.get('app_binance_api_secret');
+  if (legacyApiKey && legacyApiSecret) {
+    const useTestnet = (await kv.get('app_binance_use_testnet')) === 'true';
+    const marketType = ((await kv.get('app_binance_market_type')) || 'FUTURES') as 'SPOT' | 'FUTURES';
+    return { apiKey: legacyApiKey, apiSecret: legacyApiSecret, useTestnet, marketType, isConnected: true };
+  }
+
+  if (envApiKey && envApiSecret) {
+    return {
+      apiKey: envApiKey,
+      apiSecret: envApiSecret,
+      useTestnet: envUseTestnet,
+      marketType: envMarketType,
+      isConnected: true,
+    };
+  }
+
+  return { apiKey: '', apiSecret: '', useTestnet: false, marketType: 'FUTURES', isConnected: false };
 };
 
 

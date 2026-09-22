@@ -1721,19 +1721,38 @@ function decryptSecret(text) {
 }
 
 app.get('/api/config/binance', async (req, res) => {
+  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
+  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
+  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
+  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      return res.json({
-        configured: !!(parsed.apiKey && parsed.apiSecret),
-        apiKeyPrefix: parsed.apiKey ? parsed.apiKey.substring(0, 4) + '...' : '',
-        useTestnet: parsed.useTestnet !== false,
-        marketType: parsed.marketType || 'SPOT'
-      });
+      const effectiveKey = parsed.apiKey || envApiKey;
+      const effectiveSecret = decryptSecret(parsed.apiSecret) || envApiSecret;
+      if (effectiveKey && effectiveSecret) {
+        return res.json({
+          configured: true,
+          apiKeyPrefix: effectiveKey.substring(0, 4) + '...',
+          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envUseTestnet,
+          marketType: parsed.marketType || envMarketType
+        });
+      }
     } catch(e) {}
   }
-  return res.json({ configured: false, useTestnet: true, marketType: 'SPOT' });
+
+  if (envApiKey && envApiSecret) {
+    return res.json({
+      configured: true,
+      apiKeyPrefix: envApiKey.substring(0, 4) + '...',
+      useTestnet: envUseTestnet,
+      marketType: envMarketType
+    });
+  }
+
+  return res.json({ configured: false, useTestnet: false, marketType: 'FUTURES' });
 });
 
 app.post('/api/config/binance', async (req, res) => {
@@ -1787,10 +1806,15 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
   const headerTestnet = req.headers['x-binance-testnet'] === 'true';
   const headerMarketType = req.headers['x-binance-market-type'] as 'SPOT' | 'FUTURES';
 
-  const bodyKey = req.body?.apiKey;
-  const bodySecret = req.body?.apiSecret;
-  const bodyTestnet = req.body?.useTestnet === true;
-  const bodyMarketType = req.body?.marketType;
+  const bodyKey = req.body?.apiKey || (req.query?.apiKey as string);
+  const bodySecret = req.body?.apiSecret || (req.query?.apiSecret as string);
+  const bodyTestnet = req.body?.useTestnet === true || req.query?.useTestnet === 'true';
+  const bodyMarketType = req.body?.marketType || (req.query?.marketType as 'SPOT' | 'FUTURES');
+
+  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
+  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
+  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
+  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
 
   let dbKey = '';
   let dbSecret = '';
@@ -1808,10 +1832,10 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
     } catch(e) {}
   }
 
-  const apiKey = headerKey || (bodyKey && bodyKey.includes('...') ? dbKey : bodyKey) || dbKey || process.env.BINANCE_API_KEY || '';
-  const apiSecret = headerSecret || (bodySecret && bodySecret !== '****************' ? bodySecret : dbSecret) || process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || '';
-  const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : process.env.BINANCE_USE_TESTNET === 'true');
-  const marketType = headerMarketType || bodyMarketType || dbMarketType || 'SPOT';
+  const apiKey = headerKey || (bodyKey && bodyKey.includes('...') ? (dbKey || envApiKey) : bodyKey) || dbKey || envApiKey;
+  const apiSecret = headerSecret || (bodySecret && bodySecret !== '****************' ? bodySecret : (dbSecret || envApiSecret)) || dbSecret || envApiSecret;
+  const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : envUseTestnet);
+  const marketType = headerMarketType || bodyMarketType || dbMarketType || envMarketType || 'FUTURES';
 
   return { apiKey, apiSecret, useTestnet, marketType: marketType as any };
 }
@@ -1828,10 +1852,7 @@ function createBinanceSignature(queryString: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(queryString).digest('hex');
 }
 
-/**
- * 1. Test Connection & Fetch Binance Account Balances
- */
-app.post('/api/binance/account', async (req, res) => {
+async function handleBinanceAccountFetch(req: express.Request, res: express.Response) {
   const startTime = Date.now();
   try {
     const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
@@ -1942,7 +1963,13 @@ app.post('/api/binance/account', async (req, res) => {
       latencyMs: Date.now() - startTime,
     });
   }
-});
+}
+
+/**
+ * 1. Test Connection & Fetch Binance Account Balances (GET & POST)
+ */
+app.get('/api/binance/account', handleBinanceAccountFetch);
+app.post('/api/binance/account', handleBinanceAccountFetch);
 
 // =====================================================
 // QUANTURA RISK MANAGEMENT ENGINE REST API ENDPOINTS
