@@ -115,8 +115,45 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
       setTestResult(null);
       setModeError(null);
       setOrderFeedback(null);
+
+      // Auto-refresh account status and live balance on modal open
+      fetch('/api/binance/account')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const accountInfo: BinanceAccountInfo = {
+              canTrade: data.canTrade,
+              canWithdraw: data.canWithdraw,
+              canDeposit: data.canDeposit,
+              accountType: data.accountType,
+              makerCommission: data.makerCommission,
+              takerCommission: data.takerCommission,
+              updateTime: data.updateTime,
+              balances: data.balances,
+              totalUsdtEquity: data.totalUsdtEquity,
+              freeUsdt: data.freeUsdt,
+            };
+            setTestResult({
+              success: true,
+              message: isArabic
+                ? `الحساب متصل بنجاح مع بايننس (${data.marketType || 'SPOT'}) | الاستجابة: ${data.latencyMs}ms`
+                : isEn
+                ? `Account connected with Binance (${data.marketType || 'SPOT'}) | Latency: ${data.latencyMs}ms`
+                : `Compte connecté à Binance (${data.marketType || 'SPOT'}) | Latence : ${data.latencyMs}ms`,
+              accountInfo,
+              latencyMs: data.latencyMs,
+            });
+            onSaveConfig({
+              ...activeBinanceConfig,
+              isConnected: true,
+              accountInfo,
+              marketType: data.marketType || activeBinanceConfig.marketType,
+            });
+          }
+        })
+        .catch(() => {});
     }
-  }, [isOpen, activeBinanceConfig]);
+  }, [isOpen, activeBinanceConfig.isConnected]);
 
   if (!isOpen) return null;
 
@@ -482,12 +519,44 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 </div>
                 <div className="text-[10px] text-slate-400 mt-1 font-sans flex items-center justify-between">
                   <span>Total: ${(activeAccount?.totalUsdtEquity ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span className={activeBinanceConfig.isConnected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                    {activeBinanceConfig.isConnected ? (isArabic ? '● متصل' : isEn ? '● Connected' : '● Connecté') : (isArabic ? '○ غير متصل' : isEn ? '○ Not Connected' : '○ Non Connecté')}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={activeBinanceConfig.isConnected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                      {activeBinanceConfig.isConnected ? (isArabic ? '● متصل' : isEn ? '● Connected' : '● Connecté') : (isArabic ? '○ غير متصل' : isEn ? '○ Not Connected' : '○ Non Connecté')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleTestAndSave(false)}
+                      disabled={isTesting}
+                      className="p-1 text-slate-400 hover:text-white rounded bg-slate-800 hover:bg-slate-700 transition"
+                      title={isArabic ? 'تحديث الرصيد فوراً' : 'Actualiser le solde'}
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${isTesting ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* VPS / SSH Verification Guide */}
+          <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-xs font-mono">
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span className="flex items-center gap-1.5 font-bold text-slate-200">
+                <Server className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isArabic ? 'فحص الاتصال عبر SSH / السيرفر' : 'Vérification via SSH / VPS'}</span>
+              </span>
+              <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                curl localhost:3000
+              </span>
+            </div>
+            <div className="bg-black/60 p-2 rounded text-[10px] text-slate-300 select-all overflow-x-auto border border-slate-800/80">
+              <code>curl -s http://localhost:3000/api/binance/account</code>
+            </div>
+            <p className="text-[10px] text-slate-400 font-sans">
+              {isArabic
+                ? 'إذا أدخلت المفاتيح في ملف .env بالخادم، شغّل الأمر أعلاه عبر SSH للتحقق المباشر من الاتصال والرصيد.'
+                : 'Si vous avez configuré vos clés dans le fichier .env de votre VPS, exécutez la commande ci-dessus en SSH pour tester le compte.'}
+            </p>
           </div>
 
           {/* 2. Security Best Practices Box */}

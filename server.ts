@@ -1729,35 +1729,73 @@ function decryptSecret(text) {
   }
 }
 
+function getEnvBinanceCredentials() {
+  const apiKey = (
+    process.env.BINANCE_API_KEY ||
+    process.env.BINANCE_KEY ||
+    process.env.BINANCE_APIKEY ||
+    process.env.BINANCE_PUBLIC_KEY ||
+    process.env.BINANCE_API ||
+    process.env.API_KEY ||
+    process.env.VITE_BINANCE_API_KEY ||
+    process.env.VITE_BINANCE_KEY ||
+    ''
+  ).trim();
+
+  const apiSecret = (
+    process.env.BINANCE_SECRET_KEY ||
+    process.env.BINANCE_API_SECRET ||
+    process.env.BINANCE_SECRET ||
+    process.env.BINANCE_APISECRET ||
+    process.env.BINANCE_PRIVATE_KEY ||
+    process.env.API_SECRET ||
+    process.env.SECRET_KEY ||
+    process.env.VITE_BINANCE_SECRET_KEY ||
+    process.env.VITE_BINANCE_API_SECRET ||
+    process.env.VITE_BINANCE_SECRET ||
+    ''
+  ).trim();
+
+  const useTestnet =
+    process.env.BINANCE_USE_TESTNET === 'true' ||
+    process.env.BINANCE_TESTNET === 'true' ||
+    process.env.USE_TESTNET === 'true';
+
+  const marketType = (
+    (process.env.BINANCE_MARKET_TYPE || process.env.MARKET_TYPE || 'SPOT').toUpperCase() === 'FUTURES'
+      ? 'FUTURES'
+      : 'SPOT'
+  ) as 'SPOT' | 'FUTURES';
+
+  return { apiKey, apiSecret, useTestnet, marketType };
+}
+
 app.get('/api/config/binance', async (req, res) => {
-  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
-  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
-  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
-  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+  const envCreds = getEnvBinanceCredentials();
 
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      const effectiveKey = parsed.apiKey || envApiKey;
-      const effectiveSecret = decryptSecret(parsed.apiSecret) || envApiSecret;
+      const effectiveKey = (parsed.apiKey || envCreds.apiKey || '').trim();
+      const effectiveSecret = (decryptSecret(parsed.apiSecret) || envCreds.apiSecret || '').trim();
       if (effectiveKey && effectiveSecret) {
         return res.json({
           configured: true,
-          apiKeyPrefix: effectiveKey.substring(0, 4) + '...',
-          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envUseTestnet,
-          marketType: parsed.marketType || envMarketType
+          apiKeyPrefix: effectiveKey.length > 8 ? effectiveKey.substring(0, 6) + '...' + effectiveKey.slice(-4) : effectiveKey.substring(0, 4) + '...',
+          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet,
+          marketType: parsed.marketType || envCreds.marketType
         });
       }
     } catch(e) {}
   }
 
-  if (envApiKey && envApiSecret) {
+  if (envCreds.apiKey && envCreds.apiSecret) {
     return res.json({
       configured: true,
-      apiKeyPrefix: envApiKey.substring(0, 4) + '...',
-      useTestnet: envUseTestnet,
-      marketType: envMarketType
+      apiKeyPrefix: envCreds.apiKey.length > 8 ? envCreds.apiKey.substring(0, 6) + '...' + envCreds.apiKey.slice(-4) : envCreds.apiKey.substring(0, 4) + '...',
+      useTestnet: envCreds.useTestnet,
+      marketType: envCreds.marketType
     });
   }
 
@@ -1770,18 +1808,26 @@ app.post('/api/config/binance', async (req, res) => {
     return res.status(400).json({ error: 'API Key and Secret are required' });
   }
   
-  let finalSecret = apiSecret;
-  let finalKey = apiKey;
+  let finalSecret = String(apiSecret).trim();
+  let finalKey = String(apiKey).trim();
   
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      if (apiSecret === '****************') finalSecret = decryptSecret(parsed.apiSecret);
-      if (apiKey.includes('...')) finalKey = parsed.apiKey;
+      if (finalSecret === '****************' || finalSecret.includes('***')) finalSecret = decryptSecret(parsed.apiSecret);
+      if (finalKey.includes('...')) finalKey = parsed.apiKey;
     } catch(e) {}
   }
   
+  const envCreds = getEnvBinanceCredentials();
+  if (finalSecret === '****************' || finalSecret.includes('***')) {
+    finalSecret = envCreds.apiSecret || finalSecret;
+  }
+  if (finalKey.includes('...')) {
+    finalKey = envCreds.apiKey || finalKey;
+  }
+
   const secureConfig = {
     apiKey: finalKey,
     apiSecret: encryptSecret(finalSecret),
@@ -1801,7 +1847,6 @@ app.delete('/api/config/binance', async (req, res) => {
 // BINANCE LIVE TRADING & ACCOUNT API INTEGRATION
 // -------------------------------------------------------------
 
-
 interface BinanceAuthData {
   apiKey: string;
   apiSecret: string;
@@ -1810,20 +1855,17 @@ interface BinanceAuthData {
 }
 
 async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData> {
-  const headerKey = req.headers['x-binance-api-key'] as string;
-  const headerSecret = req.headers['x-binance-api-secret'] as string;
+  const headerKey = (req.headers['x-binance-api-key'] as string || '').trim();
+  const headerSecret = (req.headers['x-binance-api-secret'] as string || '').trim();
   const headerTestnet = req.headers['x-binance-testnet'] === 'true';
   const headerMarketType = req.headers['x-binance-market-type'] as 'SPOT' | 'FUTURES';
 
-  const bodyKey = req.body?.apiKey || (req.query?.apiKey as string);
-  const bodySecret = req.body?.apiSecret || (req.query?.apiSecret as string);
+  const bodyKey = (req.body?.apiKey || (req.query?.apiKey as string) || '').trim();
+  const bodySecret = (req.body?.apiSecret || (req.query?.apiSecret as string) || '').trim();
   const bodyTestnet = req.body?.useTestnet === true || req.query?.useTestnet === 'true';
   const bodyMarketType = req.body?.marketType || (req.query?.marketType as 'SPOT' | 'FUTURES');
 
-  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
-  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
-  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
-  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+  const envCreds = getEnvBinanceCredentials();
 
   let dbKey = '';
   let dbSecret = '';
@@ -1834,17 +1876,17 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      dbKey = parsed.apiKey || '';
-      dbSecret = decryptSecret(parsed.apiSecret) || '';
+      dbKey = (parsed.apiKey || '').trim();
+      dbSecret = (decryptSecret(parsed.apiSecret) || '').trim();
       dbTestnet = parsed.useTestnet;
       dbMarketType = parsed.marketType;
     } catch(e) {}
   }
 
-  const apiKey = headerKey || (bodyKey && bodyKey.includes('...') ? (dbKey || envApiKey) : bodyKey) || dbKey || envApiKey;
-  const apiSecret = headerSecret || (bodySecret && bodySecret !== '****************' ? bodySecret : (dbSecret || envApiSecret)) || dbSecret || envApiSecret;
-  const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : envUseTestnet);
-  const marketType = headerMarketType || bodyMarketType || dbMarketType || envMarketType || 'FUTURES';
+  const apiKey = headerKey || (bodyKey && bodyKey.includes('...') ? (dbKey || envCreds.apiKey) : bodyKey) || dbKey || envCreds.apiKey;
+  const apiSecret = headerSecret || (bodySecret && (bodySecret === '****************' || bodySecret.includes('***')) ? (dbSecret || envCreds.apiSecret) : bodySecret) || dbSecret || envCreds.apiSecret;
+  const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : envCreds.useTestnet);
+  const marketType = headerMarketType || bodyMarketType || dbMarketType || envCreds.marketType || 'SPOT';
 
   return { apiKey, apiSecret, useTestnet, marketType: marketType as any };
 }

@@ -249,50 +249,88 @@ function decryptSecret(text: string): string {
   }
 }
 
+function getEnvBinanceCredentials() {
+  const apiKey = (
+    process.env.BINANCE_API_KEY ||
+    process.env.BINANCE_KEY ||
+    process.env.BINANCE_APIKEY ||
+    process.env.BINANCE_PUBLIC_KEY ||
+    process.env.BINANCE_API ||
+    process.env.API_KEY ||
+    process.env.VITE_BINANCE_API_KEY ||
+    process.env.VITE_BINANCE_KEY ||
+    ''
+  ).trim();
+
+  const apiSecret = (
+    process.env.BINANCE_SECRET_KEY ||
+    process.env.BINANCE_API_SECRET ||
+    process.env.BINANCE_SECRET ||
+    process.env.BINANCE_APISECRET ||
+    process.env.BINANCE_PRIVATE_KEY ||
+    process.env.API_SECRET ||
+    process.env.SECRET_KEY ||
+    process.env.VITE_BINANCE_SECRET_KEY ||
+    process.env.VITE_BINANCE_API_SECRET ||
+    process.env.VITE_BINANCE_SECRET ||
+    ''
+  ).trim();
+
+  const useTestnet =
+    process.env.BINANCE_USE_TESTNET === 'true' ||
+    process.env.BINANCE_TESTNET === 'true' ||
+    process.env.USE_TESTNET === 'true';
+
+  const marketType = (
+    (process.env.BINANCE_MARKET_TYPE || process.env.MARKET_TYPE || 'SPOT').toUpperCase() === 'FUTURES'
+      ? 'FUTURES'
+      : 'SPOT'
+  ) as 'SPOT' | 'FUTURES';
+
+  return { apiKey, apiSecret, useTestnet, marketType };
+}
+
 // Add helper to fetch binance config from KV or process.env
 const getBinanceConfig = async () => {
-  const envApiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_KEY || process.env.VITE_BINANCE_API_KEY || '';
-  const envApiSecret = process.env.BINANCE_SECRET_KEY || process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET || process.env.VITE_BINANCE_API_SECRET || '';
-  const envUseTestnet = process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
-  const envMarketType = (process.env.BINANCE_MARKET_TYPE?.toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+  const envCreds = getEnvBinanceCredentials();
 
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      const effectiveKey = parsed.apiKey || envApiKey;
-      const effectiveSecret = decryptSecret(parsed.apiSecret) || envApiSecret;
+      const effectiveKey = (parsed.apiKey || envCreds.apiKey || '').trim();
+      const effectiveSecret = (decryptSecret(parsed.apiSecret) || envCreds.apiSecret || '').trim();
       if (effectiveKey && effectiveSecret) {
         return {
           apiKey: effectiveKey,
           apiSecret: effectiveSecret,
-          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envUseTestnet,
-          marketType: (parsed.marketType || envMarketType) as 'SPOT' | 'FUTURES',
+          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet,
+          marketType: (parsed.marketType || envCreds.marketType) as 'SPOT' | 'FUTURES',
           isConnected: true,
         };
       }
     } catch(e) {}
   }
 
-  const legacyApiKey = await kv.get('app_binance_api_key');
-  const legacyApiSecret = await kv.get('app_binance_api_secret');
+  const legacyApiKey = (await kv.get('app_binance_api_key') || '').trim();
+  const legacyApiSecret = (await kv.get('app_binance_api_secret') || '').trim();
   if (legacyApiKey && legacyApiSecret) {
     const useTestnet = (await kv.get('app_binance_use_testnet')) === 'true';
-    const marketType = ((await kv.get('app_binance_market_type')) || 'FUTURES') as 'SPOT' | 'FUTURES';
+    const marketType = ((await kv.get('app_binance_market_type')) || 'SPOT') as 'SPOT' | 'FUTURES';
     return { apiKey: legacyApiKey, apiSecret: legacyApiSecret, useTestnet, marketType, isConnected: true };
   }
 
-  if (envApiKey && envApiSecret) {
+  if (envCreds.apiKey && envCreds.apiSecret) {
     return {
-      apiKey: envApiKey,
-      apiSecret: envApiSecret,
-      useTestnet: envUseTestnet,
-      marketType: envMarketType,
+      apiKey: envCreds.apiKey,
+      apiSecret: envCreds.apiSecret,
+      useTestnet: envCreds.useTestnet,
+      marketType: envCreds.marketType,
       isConnected: true,
     };
   }
 
-  return { apiKey: '', apiSecret: '', useTestnet: false, marketType: 'FUTURES', isConnected: false };
+  return { apiKey: '', apiSecret: '', useTestnet: false, marketType: 'SPOT', isConnected: false };
 };
 
 
