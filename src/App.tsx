@@ -364,6 +364,13 @@ export const App: React.FC = () => {
     }
   });
 
+  const handleSetExecutionMode = useCallback((mode: TradingExecutionMode) => {
+    setExecutionMode(mode);
+    try {
+      apiStorage.setItem('trading_execution_mode', mode);
+    } catch {}
+  }, []);
+
   // Fetch live Binance account balances (Futures / Spot)
   const fetchLiveBinanceBalance = useCallback(async () => {
     try {
@@ -3580,14 +3587,12 @@ export const App: React.FC = () => {
           language={language}
           onSaveConfig={(newConfig) => {
             setBinanceConfig(newConfig);
-            if (newConfig.isLiveModeEnabled) {
-              setExecutionMode('BINANCE_LIVE');
-            } else {
-              setExecutionMode('PAPER');
+            if (newConfig.isLiveModeEnabled !== undefined) {
+              handleSetExecutionMode(newConfig.isLiveModeEnabled ? 'BINANCE_LIVE' : 'PAPER');
             }
           }}
-          onToggleExecutionMode={(mode) => setExecutionMode(mode)}
-          onToggleMode={(mode) => setExecutionMode(mode)}
+          onToggleExecutionMode={(mode) => handleSetExecutionMode(mode)}
+          onToggleMode={(mode) => handleSetExecutionMode(mode)}
           onExecuteManualBinanceOrder={handleExecuteManualBinanceOrder}
           onExecuteManualTrade={handleExecuteManualBinanceOrder}
         />

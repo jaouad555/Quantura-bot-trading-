@@ -42,7 +42,7 @@ import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect } from './src/server/botEngine';
-import { startMarketScanner, scannerState, scanAllPairs } from './src/server/marketScanner';
+import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider } from './src/server/marketScanner';
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
@@ -1239,6 +1239,133 @@ app.post('/api/scanner/scan-now', async (req, res) => {
   }
 });
 
+// DIRECT IN-PROCESS MARKET DATA FETCHER (FOR BOT, SCANNER & API)
+export async function getMarketDataDirect(
+  symbol = 'BTCUSDT',
+  timeframe: Timeframe = '1h',
+  marketType: 'SPOT' | 'FUTURES' = 'FUTURES',
+  isDevMode = false
+): Promise<MarketDataResponse> {
+  const normSymbol = (symbol || 'BTCUSDT').toUpperCase();
+  const [tickerResult, klinesResult, orderBookResult, derivativesResult, mtfResult] =
+    await Promise.allSettled([
+      fetchBinanceTicker(normSymbol, marketType),
+      fetchBinanceKlines(normSymbol, timeframe, 350, marketType),
+      fetchBinanceOrderBook(normSymbol, marketType),
+      marketType === 'FUTURES' ? fetchBinanceDerivatives(normSymbol) : Promise.resolve(null),
+      fetchMultiTimeframeConfluence(normSymbol, marketType),
+    ]);
+
+  if (tickerResult.status === 'rejected' || klinesResult.status === 'rejected') {
+    const errorMsg =
+      tickerResult.status === 'rejected'
+        ? (tickerResult as PromiseRejectedResult).reason?.message
+        : (klinesResult as PromiseRejectedResult).reason?.message;
+
+    console.warn(`Falling back to synthetic data for ${normSymbol} due to: ${errorMsg}`);
+    
+    const numCandles = 350;
+    const syntheticKlines: KlineCandle[] = [];
+    const nowTs = Math.floor(Date.now() / 1000);
+    let tfSeconds = 3600;
+    if (timeframe === '5m') tfSeconds = 5 * 60;
+    else if (timeframe === '15m') tfSeconds = 15 * 60;
+    else if (timeframe === '30m') tfSeconds = 30 * 60;
+    else if (timeframe === '1h') tfSeconds = 3600;
+    else if (timeframe === '4h') tfSeconds = 4 * 3600;
+    else if (timeframe === '1d') tfSeconds = 24 * 3600;
+    else if (timeframe === '1w') tfSeconds = 7 * 24 * 3600;
+
+    let currentPrice = getBasePriceForSymbol(normSymbol);
+    for (let i = numCandles - 1; i >= 0; i--) {
+      const time = nowTs - (i * tfSeconds);
+      const open = currentPrice;
+      const volatility = currentPrice * 0.005;
+      const close = open + (Math.random() - 0.5) * volatility;
+      const high = Math.max(open, close) + Math.random() * volatility;
+      const low = Math.min(open, close) - Math.random() * volatility;
+      const volume = Math.random() * 1000 + 100;
+      
+      syntheticKlines.push({
+        time,
+        open: Math.round(open * 1000000) / 1000000,
+        high: Math.round(high * 1000000) / 1000000,
+        low: Math.round(low * 1000000) / 1000000,
+        close: Math.round(close * 1000000) / 1000000,
+        volume: Math.round(volume * 100) / 100,
+      });
+      currentPrice = close;
+    }
+    
+    const latestClose = syntheticKlines[syntheticKlines.length - 1].close;
+    const firstClose = syntheticKlines[0].close;
+    const change = latestClose - firstClose;
+    const changePct = (change / firstClose) * 100;
+    const syntheticTicker: BinanceTicker = {
+      symbol: normSymbol,
+      price: latestClose,
+      priceChange24h: change,
+      priceChangePercent24h: changePct,
+      volume24h: Math.random() * 50000 + 10000,
+      quoteVolume24h: Math.random() * 50000000 + 10000000,
+      high24h: Math.max(...syntheticKlines.map((k) => k.high)),
+      low24h: Math.min(...syntheticKlines.map((k) => k.low)),
+      updatedAt: Date.now(),
+    };
+
+    const syntheticIndicators = calculateTechnicalIndicators(syntheticKlines);
+    const syntheticRegime = detectMarketRegime(syntheticIndicators, syntheticTicker.price);
+
+    return {
+      status: 'ONLINE',
+      errorMessage: `Mode Démo : API Binance bloquée (${errorMsg}). Données synthétiques utilisées.`,
+      ticker: syntheticTicker,
+      timeframe,
+      klines: syntheticKlines,
+      indicators: syntheticIndicators,
+      orderBook: null,
+      derivatives: null,
+      marketRegime: syntheticRegime,
+      mtfConfluence: null,
+      updatedAt: Date.now(),
+      isDeveloperMode: true,
+    };
+  }
+
+  const ticker = (tickerResult as PromiseFulfilledResult<BinanceTicker>).value;
+  const klines = (klinesResult as PromiseFulfilledResult<KlineCandle[]>).value;
+  const orderBook =
+    orderBookResult.status === 'fulfilled'
+      ? (orderBookResult as PromiseFulfilledResult<OrderBookSummary>).value
+      : null;
+  const derivatives =
+    derivativesResult.status === 'fulfilled'
+      ? (derivativesResult as PromiseFulfilledResult<DerivativesData>).value
+      : null;
+  const { allTimeframes, mtfConfluence } =
+    mtfResult.status === 'fulfilled'
+      ? (mtfResult as PromiseFulfilledResult<any>).value
+      : { allTimeframes: {}, mtfConfluence: null };
+
+  const indicators = calculateTechnicalIndicators(klines);
+  const marketRegime = detectMarketRegime(indicators, ticker.price);
+
+  return {
+    status: 'ONLINE',
+    ticker,
+    timeframe,
+    klines,
+    indicators,
+    orderBook,
+    derivatives,
+    marketRegime,
+    mtfConfluence,
+    allTimeframes,
+    updatedAt: Date.now(),
+    isDeveloperMode: isDevMode,
+  };
+}
+
 // API ROUTE 1: GET /api/binance/market-data
 // -------------------------------------------------------------
 app.get('/api/binance/market-data', async (req, res) => {
@@ -1248,126 +1375,8 @@ app.get('/api/binance/market-data', async (req, res) => {
     const marketType = (req.query.marketType as 'SPOT' | 'FUTURES') === 'FUTURES' ? 'FUTURES' : 'SPOT';
     const isDevMode = req.query.devMode === 'true';
 
-    // Parallel fetch of primary data
-    const [tickerResult, klinesResult, orderBookResult, derivativesResult, mtfResult] =
-      await Promise.allSettled([
-        fetchBinanceTicker(symbol, marketType),
-        fetchBinanceKlines(symbol, timeframe, 350, marketType),
-        fetchBinanceOrderBook(symbol, marketType),
-        marketType === 'FUTURES' ? fetchBinanceDerivatives(symbol) : Promise.resolve(null),
-        fetchMultiTimeframeConfluence(symbol, marketType),
-      ]);
-
-    if (tickerResult.status === 'rejected' || klinesResult.status === 'rejected') {
-      const errorMsg =
-        tickerResult.status === 'rejected'
-          ? (tickerResult as PromiseRejectedResult).reason?.message
-          : (klinesResult as PromiseRejectedResult).reason?.message;
-
-      console.warn(`Falling back to synthetic data due to: ${errorMsg}`);
-      
-      const numCandles = 350;
-      const syntheticKlines: KlineCandle[] = [];
-      const nowTs = Math.floor(Date.now() / 1000);
-      let tfSeconds = 3600;
-      if (timeframe === '5m') tfSeconds = 5 * 60;
-      else if (timeframe === '15m') tfSeconds = 15 * 60;
-      else if (timeframe === '30m') tfSeconds = 30 * 60;
-      else if (timeframe === '1h') tfSeconds = 3600;
-      else if (timeframe === '4h') tfSeconds = 4 * 3600;
-      else if (timeframe === '1d') tfSeconds = 24 * 3600;
-      else if (timeframe === '1w') tfSeconds = 7 * 24 * 3600;
-
-      let currentPrice = getBasePriceForSymbol(symbol);
-      for (let i = numCandles - 1; i >= 0; i--) {
-        const time = nowTs - (i * tfSeconds);
-        const open = currentPrice;
-        const volatility = currentPrice * 0.005;
-        const close = open + (Math.random() - 0.5) * volatility;
-        const high = Math.max(open, close) + Math.random() * volatility;
-        const low = Math.min(open, close) - Math.random() * volatility;
-        const volume = Math.random() * 1000 + 100;
-        
-        syntheticKlines.push({
-          time,
-          open: Math.round(open * 1000000) / 1000000,
-          high: Math.round(high * 1000000) / 1000000,
-          low: Math.round(low * 1000000) / 1000000,
-          close: Math.round(close * 1000000) / 1000000,
-          volume: Math.round(volume * 100) / 100,
-        });
-        currentPrice = close;
-      }
-      
-      const latestClose = syntheticKlines[syntheticKlines.length - 1].close;
-      const firstClose = syntheticKlines[0].close;
-      const change = latestClose - firstClose;
-      const changePct = (change / firstClose) * 100;
-      const syntheticTicker: BinanceTicker = {
-        symbol,
-        price: latestClose,
-        priceChange24h: change,
-        priceChangePercent24h: changePct,
-        volume24h: Math.random() * 50000 + 10000,
-        quoteVolume24h: Math.random() * 50000000 + 10000000,
-        high24h: Math.max(...syntheticKlines.map((k) => k.high)),
-        low24h: Math.min(...syntheticKlines.map((k) => k.low)),
-        updatedAt: Date.now(),
-      };
-
-      const syntheticIndicators = calculateTechnicalIndicators(syntheticKlines);
-      const syntheticRegime = detectMarketRegime(syntheticIndicators, syntheticTicker.price);
-
-      return res.json({
-        status: 'ONLINE',
-        errorMessage: `Mode Démo : API Binance bloquée (${errorMsg}). Données synthétiques utilisées.`,
-        ticker: syntheticTicker,
-        timeframe,
-        klines: syntheticKlines,
-        indicators: syntheticIndicators,
-        orderBook: null,
-        derivatives: null,
-        marketRegime: syntheticRegime,
-        mtfConfluence: null,
-        updatedAt: Date.now(),
-        isDeveloperMode: true,
-      });
-    }
-
-    const ticker = (tickerResult as PromiseFulfilledResult<BinanceTicker>).value;
-    const klines = (klinesResult as PromiseFulfilledResult<KlineCandle[]>).value;
-    const orderBook =
-      orderBookResult.status === 'fulfilled'
-        ? (orderBookResult as PromiseFulfilledResult<OrderBookSummary>).value
-        : null;
-    const derivatives =
-      derivativesResult.status === 'fulfilled'
-        ? (derivativesResult as PromiseFulfilledResult<DerivativesData>).value
-        : null;
-    const { allTimeframes, mtfConfluence } =
-      mtfResult.status === 'fulfilled'
-        ? (mtfResult as PromiseFulfilledResult<any>).value
-        : { allTimeframes: {}, mtfConfluence: null };
-
-    const indicators = calculateTechnicalIndicators(klines);
-    const marketRegime = detectMarketRegime(indicators, ticker.price);
-
-    const response: MarketDataResponse = {
-      status: 'ONLINE',
-      ticker,
-      timeframe,
-      klines,
-      indicators,
-      orderBook,
-      derivatives,
-      marketRegime,
-      mtfConfluence,
-      allTimeframes,
-      updatedAt: Date.now(),
-      isDeveloperMode: isDevMode,
-    };
-
-    res.json(response);
+    const payload = await getMarketDataDirect(symbol, timeframe, marketType, isDevMode);
+    res.json(payload);
   } catch (error: any) {
     console.error('Market data server error:', error);
     res.status(500).json({
@@ -1379,7 +1388,7 @@ app.get('/api/binance/market-data', async (req, res) => {
       indicators: null,
       orderBook: null,
       derivatives: null,
-      marketRegime: 'UNCERTAIN',
+      marketRegime: null,
       mtfConfluence: null,
       updatedAt: Date.now(),
       isDeveloperMode: false,
@@ -1868,58 +1877,94 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     const queryString = `timestamp=${timestamp}&recvWindow=10000`;
     const signature = createBinanceSignature(queryString, apiSecret);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    // Try primary marketType first, then try the other if permission fails
+    const marketTypesToTry: ('FUTURES' | 'SPOT')[] = marketType === 'FUTURES' ? ['FUTURES', 'SPOT'] : ['SPOT', 'FUTURES'];
+    
+    let lastError: any = null;
+    let successfulData: any = null;
+    let actualMarketType: 'FUTURES' | 'SPOT' = marketType;
 
-    let fullUrl = '';
-    if (marketType === 'FUTURES') {
-      const baseUrl = getBinanceFuturesApiBase(useTestnet);
-      fullUrl = `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`;
-    } else {
-      const baseUrl = getBinanceApiBase(useTestnet);
-      fullUrl = `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
+    for (const currentType of marketTypesToTry) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      let fullUrl = '';
+      if (currentType === 'FUTURES') {
+        const baseUrl = getBinanceFuturesApiBase(useTestnet);
+        fullUrl = `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`;
+      } else {
+        const baseUrl = getBinanceApiBase(useTestnet);
+        fullUrl = `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
+      }
+
+      try {
+        const response = await fetch(fullUrl, {
+          method: 'GET',
+          headers: {
+            'X-MBX-APIKEY': apiKey,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        const data = await response.json();
+        if (response.ok) {
+          successfulData = data;
+          actualMarketType = currentType;
+          break;
+        } else {
+          lastError = data;
+        }
+      } catch (err: any) {
+        clearTimeout(timeout);
+        lastError = { msg: err.message };
+      }
     }
 
-    const response = await fetch(fullUrl, {
-      method: 'GET',
-      headers: {
-        'X-MBX-APIKEY': apiKey,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
     const latencyMs = Date.now() - startTime;
-    const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.msg || `Binance API error: ${response.statusText}`,
-        binanceCode: data.code,
+    if (!successfulData) {
+      return res.status(400).json({
+        error: lastError?.msg || 'Binance API connection failed. Please verify API Key, Secret, and IP restrictions.',
+        binanceCode: lastError?.code,
         latencyMs,
       });
     }
 
+    const data = successfulData;
     let nonZeroBalances = [];
     let canTrade = true;
     let canWithdraw = false;
     let canDeposit = true;
-    let accountType = marketType || 'SPOT';
+    let accountType = actualMarketType;
+    let freeUsdt = 0;
+    let totalUsdtEquity = 0;
 
-    if (marketType === 'FUTURES') {
+    if (actualMarketType === 'FUTURES') {
       nonZeroBalances = (data.assets || [])
         .map((b: any) => ({
           asset: b.asset,
           free: parseFloat(b.availableBalance) || 0,
-          locked: (parseFloat(b.walletBalance) || 0) - (parseFloat(b.availableBalance) || 0),
+          locked: Math.max(0, (parseFloat(b.walletBalance) || 0) - (parseFloat(b.availableBalance) || 0)),
           total: parseFloat(b.walletBalance) || 0,
         }))
-        .filter((b: any) => b.total > 0);
+        .filter((b: any) => b.total > 0 || b.free > 0);
       canTrade = data.canTrade ?? true;
       canWithdraw = data.canWithdraw ?? false;
       canDeposit = data.canDeposit ?? true;
+
+      const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
+      const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
+      const totalMargin = parseFloat(data.totalMarginBalance || data.totalWalletBalance || '0') || 0;
+      const availMargin = parseFloat(data.availableBalance || '0') || 0;
+      const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
+      const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
+
+      freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
+      totalUsdtEquity = totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt);
     } else {
+      // SPOT Account
       nonZeroBalances = (data.balances || [])
         .map((b: any) => ({
           asset: b.asset,
@@ -1932,13 +1977,27 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       canWithdraw = data.canWithdraw ?? false;
       canDeposit = data.canDeposit ?? true;
       accountType = data.accountType || 'SPOT';
-    }
 
-    const usdtEntry = nonZeroBalances.find((b: any) => b.asset === 'USDT');
-    const freeUsdt = usdtEntry ? usdtEntry.free : 0;
-    const totalUsdtEquity = marketType === 'FUTURES' && data.totalWalletBalance 
-        ? parseFloat(data.totalWalletBalance) 
-        : (usdtEntry ? usdtEntry.total : 0);
+      const usdtEntry = nonZeroBalances.find((b: any) => b.asset === 'USDT');
+      const usdcEntry = nonZeroBalances.find((b: any) => b.asset === 'USDC');
+      const fdusdEntry = nonZeroBalances.find((b: any) => b.asset === 'FDUSD');
+      
+      const stableFree = (usdtEntry?.free || 0) + (usdcEntry?.free || 0) + (fdusdEntry?.free || 0);
+      const stableTotal = (usdtEntry?.total || 0) + (usdcEntry?.total || 0) + (fdusdEntry?.total || 0);
+
+      freeUsdt = stableFree;
+      totalUsdtEquity = stableTotal;
+
+      // Also sum up major crypto assets if stablecoins are zero or to give accurate total portfolio equity
+      for (const item of nonZeroBalances) {
+        if (!['USDT', 'USDC', 'FDUSD', 'BUSD'].includes(item.asset)) {
+          const approxPrice = getBasePriceForSymbol(`${item.asset}USDT`);
+          if (approxPrice > 0) {
+            totalUsdtEquity += (item.total * approxPrice);
+          }
+        }
+      }
+    }
 
     return res.json({
       success: true,
@@ -1950,11 +2009,11 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       takerCommission: data.takerCommission || 0,
       updateTime: data.updateTime || Date.now(),
       balances: nonZeroBalances,
-      freeUsdt,
-      totalUsdtEquity,
+      freeUsdt: Math.round(freeUsdt * 100) / 100,
+      totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
       useTestnet,
       latencyMs,
-      marketType,
+      marketType: actualMarketType,
     });
   } catch (error: any) {
     console.error('Binance Account Error:', error);
@@ -2424,6 +2483,7 @@ async function initFrontendAndServices() {
   try {
     initDb();
     await strategyManager.init();
+    setMarketDataProvider(getMarketDataDirect);
     startBotEngine();
     startTelegramSync();
     startMarketScanner();

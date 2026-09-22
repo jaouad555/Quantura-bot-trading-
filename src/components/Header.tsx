@@ -740,34 +740,51 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Connection Status Badge */}
           {getConnectionBadge()}
 
-          {/* Paper Wallet Virtual Balance / Total Portfolio Equity */}
+          {/* Paper Wallet / Binance Live Real Equity Balance Button */}
           {onOpenCustomBalanceModal && (
             <button
               type="button"
-              onClick={onOpenCustomBalanceModal}
+              onClick={() => {
+                if (executionMode === 'BINANCE_LIVE' && onOpenBinanceModal) {
+                  onOpenBinanceModal();
+                } else if (onOpenCustomBalanceModal) {
+                  onOpenCustomBalanceModal();
+                }
+              }}
               className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                portfolioMetrics.totalNetPnl > 0
+                executionMode === 'BINANCE_LIVE'
+                  ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+                  : portfolioMetrics.totalNetPnl > 0
                   ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                   : portfolioMetrics.totalNetPnl < 0
                   ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 hover:border-amber-500/60'
                   : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50'
               }`}
               title={
-                isArabic
-                  ? `إجمالي قيمة المحفظة: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
-                  : `Total Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
+                executionMode === 'BINANCE_LIVE'
+                  ? (isArabic
+                      ? `رصيد بايننس الحقيقي (Live): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)})`
+                      : `Binance Live Real Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Margin: $${portfolioMetrics.inTradeMargin.toFixed(2)})`)
+                  : (isArabic
+                      ? `إجمالي قيمة المحفظة التجريبية (Paper): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
+                      : `Total Paper Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`)
               }
             >
-              <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-              <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-              {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
+              <Wallet className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : 'text-emerald-400'}`} strokeWidth={2} />
+              <span className={`text-[8px] font-bold px-1 py-0.2 rounded uppercase ${
+                executionMode === 'BINANCE_LIVE' ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-300'
+              }`}>
+                {executionMode === 'BINANCE_LIVE' ? 'LIVE' : 'PAPER'}
+              </span>
+              <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {executionMode === 'PAPER' && (portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
                 <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
                   portfolioMetrics.totalNetPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
                 }`}>
                   {portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}${portfolioMetrics.totalNetPnl.toFixed(1)}
                 </span>
               )}
-              <span className="text-[9px] text-emerald-400/80 font-normal hidden sm:inline">USDT</span>
+              <span className={`text-[9px] font-normal hidden sm:inline ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400/80' : 'text-emerald-400/80'}`}>USDT</span>
             </button>
           )}
 
@@ -778,12 +795,12 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onOpenBinanceModal}
               className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
                 executionMode === 'BINANCE_LIVE'
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-xs'
                   : binanceConfig?.isConnected
                   ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25'
                   : 'bg-slate-900/80 text-amber-300 border-slate-800 hover:bg-slate-800'
               }`}
-              title={executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}
+              title={executionMode === 'BINANCE_LIVE' ? 'Binance Live (Real Account)' : binanceConfig?.isConnected ? 'Binance API (Connected)' : 'Binance API'}
             >
               <Key className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : binanceConfig?.isConnected ? 'text-cyan-400' : 'text-amber-400'}`} strokeWidth={2} />
               <span className="hidden xs:inline">

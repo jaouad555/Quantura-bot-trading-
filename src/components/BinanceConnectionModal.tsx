@@ -169,20 +169,21 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           apiKey: apiKey.trim(),
           apiSecret: apiSecret.trim(),
           useTestnet,
-          marketType,
+          marketType: data.marketType || marketType,
           isConnected: true,
           lastConnectedAt: Date.now(),
           latencyMs: data.latencyMs,
           accountInfo,
+          isLiveModeEnabled: executionMode === 'BINANCE_LIVE',
         };
 
         setTestResult({
           success: true,
           message: isArabic
-            ? `تم الاتصال بنجاح مع بايننس! الاستجابة: ${data.latencyMs}ms | الرصيد المتاح: $${data.freeUsdt.toFixed(2)} USDT`
+            ? `تم الاتصال بنجاح مع بايننس (${data.marketType || marketType})! الاستجابة: ${data.latencyMs}ms | الرصيد المتاح: $${(data.freeUsdt || 0).toFixed(2)} USDT`
             : isEn
-            ? `Connected successfully to Binance! Latency: ${data.latencyMs}ms | Free Balance: $${data.freeUsdt.toFixed(2)} USDT`
-            : `Connexion réussie à Binance ! Latence : ${data.latencyMs}ms | Solde libre : $${data.freeUsdt.toFixed(2)} USDT`,
+            ? `Connected successfully to Binance (${data.marketType || marketType})! Latency: ${data.latencyMs}ms | Free: $${(data.freeUsdt || 0).toFixed(2)} USDT`
+            : `Connexion réussie à Binance (${data.marketType || marketType}) ! Latence : ${data.latencyMs}ms | Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT`,
           accountInfo,
           latencyMs: data.latencyMs,
         });
@@ -196,11 +197,11 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               apiKey: apiKey.trim(),
               apiSecret: apiSecret.trim(),
               useTestnet,
-              marketType
+              marketType: data.marketType || marketType,
             })
           }).catch(console.error);
           
-          // Only pass safe config back to App.tsx
+          // Pass full updated config with account info back to App
           onSaveConfig({ ...updatedConfig, apiSecret: '' });
         }
       } else {
@@ -252,12 +253,14 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
     } else {
       handleToggleModeFn('PAPER');
       setShowRealMoneyConfirm(false);
+      onSaveConfig({ ...activeBinanceConfig, isLiveModeEnabled: false });
     }
   };
 
   const confirmEnableLiveTrading = () => {
     handleToggleModeFn('BINANCE_LIVE');
     setShowRealMoneyConfirm(false);
+    onSaveConfig({ ...activeBinanceConfig, isLiveModeEnabled: true });
   };
 
   const handleQuickManualOrder = async (side: 'BUY' | 'SELL') => {

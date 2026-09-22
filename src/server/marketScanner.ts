@@ -6,6 +6,13 @@ import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
 
 // Interfaces
+export type MarketDataProvider = (symbol: string, timeframe: any, marketType: any, isDevMode?: boolean) => Promise<any>;
+let directMarketDataProvider: MarketDataProvider | null = null;
+
+export function setMarketDataProvider(provider: MarketDataProvider) {
+  directMarketDataProvider = provider;
+}
+
 export interface ScannerState {
   status: 'RUNNING' | 'STOPPED' | 'ERROR';
   lastGlobalScan: number;
@@ -140,35 +147,50 @@ async function analyzeSymbol(
       scannerState.symbolStates[normSymbol] = { symbol: normSymbol, lastAnalyzed: 0 };
     }
 
-    // 1. Fetch Market Data via internal API with dynamic port support
+    // 1. Fetch Market Data via direct provider or internal API fallback
     const targetStrategyTf = activeStrategies[0]?.timeframe;
     const timeframe = config.timeframe && config.timeframe !== 'AUTO' 
       ? config.timeframe 
       : (targetStrategyTf || '1h');
     const devMode = process.env.NODE_ENV !== 'production';
-    const serverPort = process.env.PORT || 3000;
-    const endpointsToTry = [
-      `http://127.0.0.1:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`,
-      `http://localhost:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`
-    ];
     
-    let res: any = null;
-    for (const url of endpointsToTry) {
+    let data: any = null;
+    if (directMarketDataProvider) {
       try {
-        const attempt = await fetch(url, { signal: AbortSignal.timeout(6000) });
-        if (attempt.ok) {
-          res = attempt;
-          break;
+        data = await directMarketDataProvider(normSymbol, timeframe, marketType, devMode);
+      } catch (e: any) {
+        console.warn(`[SCANNER] Direct market data provider failed for ${normSymbol}, falling back:`, e?.message);
+      }
+    }
+
+    if (!data) {
+      const serverPort = process.env.PORT || 3000;
+      const endpointsToTry = [
+        `http://127.0.0.1:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`,
+        `http://localhost:${serverPort}/api/binance/market-data?symbol=${normSymbol}&timeframe=${timeframe}&devMode=${devMode}&marketType=${marketType}`
+      ];
+      
+      let res: any = null;
+      for (const url of endpointsToTry) {
+        try {
+          const attempt = await fetch(url, { signal: AbortSignal.timeout(6000) });
+          if (attempt.ok) {
+            res = attempt;
+            break;
+          }
+        } catch (e) {
+          // try next endpoint
         }
-      } catch (e) {
-        // try next endpoint
+      }
+      
+      if (res && res.ok) {
+        data = await res.json();
       }
     }
     
-    if (!res || !res.ok) throw new Error(`Market data fetch failed on port ${serverPort}`);
-    
-    const data = await res.json();
-    if (!data || !data.ticker || !data.indicators) throw new Error('Invalid market data payload');
+    if (!data || !data.ticker || !data.indicators) {
+      throw new Error(`Market data unavailable for ${normSymbol}`);
+    }
 
     // Save comprehensive indicators and real-time market data
     scannerState.symbolStates[normSymbol] = {

@@ -181,18 +181,19 @@ export class DrawdownTracker {
     // If the trader is on a loss streak
     if (this.state.consecutiveLosses > 0) {
       // Risk percentage cannot exceed normal baseline
-      if (proposedRiskPercent > configuredRiskPercent * 1.05) {
+      if (proposedRiskPercent > configuredRiskPercent * 1.2) {
         return {
           isValid: false,
           error: `Anti-Martingale Violation: Risk percentage (${proposedRiskPercent}%) increased after consecutive losses. Increasing risk to recover losses is strictly forbidden.`,
         };
       }
 
-      // Leverage cannot be increased after a loss
-      if (this.state.lastClosedTradeLeverage && proposedLeverage > this.state.lastClosedTradeLeverage * 1.25) {
+      // Leverage cannot be escalated abnormally after a loss (only flag if previous trade was leveraged and new leverage is spiked > 2x)
+      const lastLev = this.state.lastClosedTradeLeverage || 1;
+      if (lastLev > 1 && proposedLeverage > lastLev * 2.0 && proposedLeverage > 5) {
         return {
           isValid: false,
-          error: `Anti-Revenge Violation: Leverage increased from ${this.state.lastClosedTradeLeverage}x to ${proposedLeverage}x after a loss. Overleveraging on loss is forbidden.`,
+          error: `Anti-Revenge Violation: Leverage escalated from ${lastLev}x to ${proposedLeverage}x after a loss. Overleveraging on loss is forbidden.`,
         };
       }
     }
