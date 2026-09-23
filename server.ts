@@ -2138,6 +2138,19 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
 /**
  * 1. Test Connection & Fetch Binance Account Balances (GET & POST)
  */
+app.get('/api/server-ip', async (_req, res) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const ipRes = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await ipRes.json();
+    return res.json({ ip: data.ip });
+  } catch (err: any) {
+    return res.json({ error: err.message || 'Unable to fetch public IP' });
+  }
+});
+
 app.get('/api/binance/account', handleBinanceAccountFetch);
 app.post('/api/binance/account', handleBinanceAccountFetch);
 

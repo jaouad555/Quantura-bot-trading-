@@ -809,6 +809,56 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Binance canTrade Status Visual Indicator Badge */}
+          {binanceConfig?.isConnected && (
+            <button
+              id="btn-header-cantrade-status"
+              type="button"
+              onClick={onOpenBinanceModal}
+              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                binanceConfig.accountInfo?.canTrade === true
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                  : binanceConfig.accountInfo?.canTrade === false
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 hover:bg-rose-500/30 animate-pulse shadow-[0_0_12px_rgba(244,63,94,0.25)]'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:bg-slate-800'
+              }`}
+              title={
+                binanceConfig.accountInfo?.canTrade === true
+                  ? (isArabic
+                      ? `صلاحية التداول على بايننس: مفعلة 100% (canTrade: TRUE) - ${binanceConfig.marketType || 'FUTURES'}`
+                      : isFrench
+                      ? `Permission de Trading Binance : ACTIVE (canTrade: TRUE) - ${binanceConfig.marketType || 'FUTURES'}`
+                      : `Binance Trading Permission: ACTIVE & VERIFIED (canTrade: TRUE) - ${binanceConfig.marketType || 'FUTURES'}`)
+                  : binanceConfig.accountInfo?.canTrade === false
+                  ? (isArabic
+                      ? `تنبيه: صلاحية التداول معطلة في المفتاح (canTrade: FALSE)! اضغط لفتح الإعدادات ومعرفة حل قيود IP أو تفعيل Futures.`
+                      : isFrench
+                      ? `Attention : Permission de Trading restreinte (canTrade: FALSE) ! Cliquez pour voir les restrictions d'IP ou activer Futures.`
+                      : `WARNING: Trading permission is RESTRICTED (canTrade: FALSE)! Click to inspect IP restrictions & enable Futures on Binance.`)
+                  : 'Binance Trading Permission: Checking...'
+              }
+            >
+              {binanceConfig.accountInfo?.canTrade === true ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.5} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="tracking-tight">canTrade: <strong className="text-emerald-300">OK</strong></span>
+                </>
+              ) : binanceConfig.accountInfo?.canTrade === false ? (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0 animate-bounce" strokeWidth={2.5} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
+                  <span className="tracking-tight text-rose-200">canTrade: <strong className="text-rose-400 underline">FALSE</strong></span>
+                </>
+              ) : (
+                <>
+                  <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" strokeWidth={2} />
+                  <span className="tracking-tight text-slate-400">canTrade: ...</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Active Trades / Open Positions Shortcut */}
           {onNavigateTab && (
             <button
