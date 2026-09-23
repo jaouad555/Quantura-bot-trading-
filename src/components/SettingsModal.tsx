@@ -2,7 +2,7 @@ import { apiStorage } from "../utils/apiStorage";
 import React, { useState } from 'react';
 import { Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, APP_VERSION_TAG } from '../types';
 import { translations } from '../utils/translations';
-import { X, Globe, Clock, AlertTriangle, Bell, BellOff, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2, BookOpen, HelpCircle } from 'lucide-react';
+import { X, Globe, Clock, AlertTriangle, Bell, BellOff, Volume2, ShieldCheck, Cpu, Key, Flame, Wallet, DollarSign, RotateCcw, Check, Trash2, Send, Download, Upload, User, LogOut, Loader2, BookOpen, HelpCircle, RefreshCw, Activity } from 'lucide-react';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
 
 interface SettingsModalProps {
@@ -22,6 +22,7 @@ interface SettingsModalProps {
   onOpenBinanceModal?: () => void;
   onOpenCustomBalanceModal?: () => void;
   onOpenHelp?: () => void;
+  onRefreshBinancePermissions?: () => Promise<any> | void;
   onLanguageChange: (lang: Language) => void;
   onTimezoneChange: (tz: TimezoneMode) => void;
   onToggleDeveloperMode: (active: boolean) => void;
@@ -50,6 +51,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenBinanceModal,
   onOpenCustomBalanceModal,
   onOpenHelp,
+  onRefreshBinancePermissions,
   onLanguageChange,
   onTimezoneChange,
   onToggleDeveloperMode,
@@ -64,6 +66,80 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isResetting, setIsResetting] = useState(false);
   const [localTgToken, setLocalTgToken] = useState(telegramBotToken);
   const [localTgChatId, setLocalTgChatId] = useState(telegramChatId);
+  const [isTestingBinance, setIsTestingBinance] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    canTrade?: boolean;
+    message: string;
+    details?: string;
+    serverIp?: string;
+    latencyMs?: number;
+  } | null>(null);
+
+  const handleTestBinanceConnection = async () => {
+    setIsTestingBinance(true);
+    setTestResult(null);
+    const t0 = performance.now();
+    try {
+      if (onRefreshBinancePermissions) {
+        await onRefreshBinancePermissions();
+      }
+      const [accRes, ipRes] = await Promise.all([
+        fetch(`/api/binance/account?marketType=${binanceConfig?.marketType || 'FUTURES'}`),
+        fetch('/api/server-ip').catch(() => null),
+      ]);
+      const t1 = performance.now();
+      const latencyMs = Math.round(t1 - t0);
+      const accData = await accRes.json().catch(() => ({}));
+      let serverIp = '';
+      if (ipRes && ipRes.ok) {
+        const ipData = await ipRes.json().catch(() => ({}));
+        serverIp = ipData.ip || '';
+      }
+
+      if (accRes.ok && accData.success) {
+        if (accData.canTrade === true) {
+          setTestResult({
+            success: true,
+            canTrade: true,
+            message: isArabic ? 'الاتصال سليم وأذونات التداول مفعلة 100%' : 'Connection verified & Trading permissions ACTIVE',
+            details: isArabic
+              ? `تم تحديث الحساب بنجاح: canTrade = TRUE | السوق: ${accData.accountType || binanceConfig?.marketType || 'FUTURES'} | الرصيد المتاح: $${Number(accData.freeUsdt || 0).toFixed(2)} USDT`
+              : `Account refreshed: canTrade = TRUE | Market: ${accData.accountType || binanceConfig?.marketType || 'FUTURES'} | Free USDT: $${Number(accData.freeUsdt || 0).toFixed(2)}`,
+            serverIp,
+            latencyMs,
+          });
+        } else {
+          setTestResult({
+            success: true,
+            canTrade: false,
+            message: isArabic ? 'تم الاتصال لكن أذونات التداول مقيدة (canTrade: FALSE)' : 'Connected, but Trading Permission RESTRICTED (canTrade: FALSE)',
+            details: isArabic
+              ? 'يرجى تفعيل "Enable Futures" أو "Enable Spot & Margin" في منصة بايننس، أو إضافة IP السيرفر للقائمة البيضاء.'
+              : 'Enable "Futures" / "Spot & Margin" permissions on Binance or whitelist the server IP.',
+            serverIp,
+            latencyMs,
+          });
+        }
+      } else {
+        setTestResult({
+          success: false,
+          message: isArabic ? 'فشل الاتصال بحساب بينانس' : 'Binance Connection Failed',
+          details: accData.error || accData.hint || (isArabic ? 'تأكد من صحة المفاتيح واتصال الإنترنت.' : 'Check API keys and network.'),
+          serverIp,
+          latencyMs,
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: isArabic ? 'خطأ أثناء فحص الاتصال' : 'Connection Test Error',
+        details: err.message || 'Network error',
+      });
+    } finally {
+      setIsTestingBinance(false);
+    }
+  };
 
 
   if (!isOpen) return null;
@@ -214,11 +290,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClose();
                   onOpenBinanceModal();
                 }}
-                className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition"
+                className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer"
               >
                 <Key className="w-4 h-4" />
                 <span>{isArabic ? 'إدارة مفاتيح API وإعدادات التداول الحقيقي' : 'Gérer les clés API et le Mode Réel'}</span>
               </button>
+
+              {/* Fast Test Connection & Refresh Permissions */}
+              <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleTestBinanceConnection}
+                  disabled={isTestingBinance}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 hover:border-cyan-500/60 font-mono font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                >
+                  {isTestingBinance ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                      <span>{isArabic ? 'جاري فحص الاتصال وتحديث الصلاحيات...' : 'Testing connection & permissions...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{isArabic ? 'فحص الاتصال وتحديث الصلاحيات (Test Connection)' : 'Test Connection & Refresh Permissions'}</span>
+                    </>
+                  )}
+                </button>
+
+                {testResult && (
+                  <div className={`p-3 rounded-xl border text-xs font-mono transition-all animate-in fade-in duration-200 ${
+                    testResult.success && testResult.canTrade
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                      : testResult.success && !testResult.canTrade
+                      ? 'bg-rose-500/15 border-rose-500/50 text-rose-200'
+                      : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                  }`}>
+                    <div className="flex items-start gap-2.5">
+                      {testResult.success && testResult.canTrade ? (
+                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <div className="font-bold flex items-center justify-between">
+                          <span>{testResult.message}</span>
+                          {testResult.latencyMs && <span className="text-[10px] text-slate-400">~{testResult.latencyMs}ms</span>}
+                        </div>
+                        {testResult.details && (
+                          <div className="text-[11px] text-slate-300 opacity-90">{testResult.details}</div>
+                        )}
+                        {testResult.serverIp && (
+                          <div className="text-[10px] text-cyan-400/90 font-mono">Server IP: {testResult.serverIp}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

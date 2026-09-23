@@ -371,6 +371,9 @@ export const App: React.FC = () => {
     } catch {}
   }, []);
 
+  const lastCanTradeDiagnosticRef = useRef<number>(0);
+  const prevCanTradeRef = useRef<boolean | null>(null);
+
   // Fetch live Binance account balances (Futures / Spot) and canTrade permissions
   const fetchLiveBinanceBalance = useCallback(async () => {
     try {
@@ -378,6 +381,7 @@ export const App: React.FC = () => {
       const res = await fetch(`/api/binance/account?marketType=${currentMt}`);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
+        const canTradeStatus = data.canTrade === true;
         setBinanceConfig(prev => ({
           ...prev,
           isConnected: true,
@@ -385,7 +389,7 @@ export const App: React.FC = () => {
           marketType: data.marketType || prev.marketType || currentMt,
           accountInfo: {
             balances: data.balances || [],
-            canTrade: data.canTrade === true,
+            canTrade: canTradeStatus,
             canWithdraw: data.canWithdraw ?? false,
             canDeposit: data.canDeposit ?? true,
             updateTime: data.updateTime || Date.now(),
@@ -396,13 +400,45 @@ export const App: React.FC = () => {
             totalUsdtEquity: Number(data.totalUsdtEquity || data.freeUsdt || 0),
           }
         }));
+
+        // Trigger diagnostic function if canTrade is false while API keys are configured
+        if (!canTradeStatus) {
+          const now = Date.now();
+          // Rate-limit diagnostics to once every 2 minutes or upon status transition
+          if (now - lastCanTradeDiagnosticRef.current > 120000 || prevCanTradeRef.current !== false) {
+            lastCanTradeDiagnosticRef.current = now;
+            const isAr = languageRef.current === 'ar';
+            const diagMsg = isAr
+              ? `[تشخيص أذونات Binance API] تحذير: تم الاتصال بنجاح لكن صلاحية التداول مقيدة (canTrade = false). يرجى التحقق من لوحة تحكم بايننس: 1) تفعيل 'Enable Futures' / 'Enable Spot & Margin'. 2) فحص قيود الـ IP وإضافة عنوان خادم التطبيق.`
+              : `[Binance API Diagnostics] Warning: Account connected but trading permission is RESTRICTED (canTrade = false). In Binance API Management, ensure: 1) 'Enable Futures' / 'Enable Spot & Margin' is checked. 2) Server IP is whitelisted under IP restrictions.`;
+            
+            setBotLogs(prev => [
+              {
+                id: `diag-cantrade-${now}`,
+                timestamp: now,
+                type: 'ERROR' as any,
+                symbol: `BINANCE_${data.marketType || currentMt}`,
+                side: 'BUY',
+                price: tickerRef.current?.price || 0,
+                amountUsdt: 0,
+                reason: diagMsg,
+                mode: 'BINANCE_LIVE',
+              },
+              ...(prev || []).slice(0, 49)
+            ]);
+          }
+        }
+        prevCanTradeRef.current = canTradeStatus;
+        return data;
       } else if (data.code === 'MISSING_CREDENTIALS') {
         setBinanceConfig(prev => ({
           ...prev,
           isConnected: false,
           accountInfo: null,
         }));
+        prevCanTradeRef.current = null;
       }
+      return data;
     } catch (err) {
       console.warn('Error polling Binance live balance:', err);
     }
@@ -3550,6 +3586,7 @@ export const App: React.FC = () => {
             setIsSettingsOpen(false);
             setIsHelpModalOpen(true);
           }}
+          onRefreshBinancePermissions={fetchLiveBinanceBalance}
           onLanguageChange={setLanguage}
           onTimezoneChange={setTimezone}
           onToggleDeveloperMode={setIsDeveloperMode}
