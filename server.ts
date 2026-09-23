@@ -1729,8 +1729,22 @@ function decryptSecret(text) {
   }
 }
 
+function isValidBinanceKey(key: string): boolean {
+  if (!key) return false;
+  const trimmed = key.trim();
+  if (trimmed.includes('...') || trimmed.includes('*') || trimmed.length < 15) return false;
+  return true;
+}
+
+function isValidBinanceSecret(secret: string): boolean {
+  if (!secret) return false;
+  const trimmed = secret.trim();
+  if (trimmed.includes('...') || trimmed.includes('*') || trimmed.length < 15) return false;
+  return true;
+}
+
 function getEnvBinanceCredentials() {
-  const apiKey = (
+  const rawKey = (
     process.env.BINANCE_API_KEY ||
     process.env.BINANCE_KEY ||
     process.env.BINANCE_APIKEY ||
@@ -1742,7 +1756,7 @@ function getEnvBinanceCredentials() {
     ''
   ).trim();
 
-  const apiSecret = (
+  const rawSecret = (
     process.env.BINANCE_SECRET_KEY ||
     process.env.BINANCE_API_SECRET ||
     process.env.BINANCE_SECRET ||
@@ -1755,6 +1769,9 @@ function getEnvBinanceCredentials() {
     process.env.VITE_BINANCE_SECRET ||
     ''
   ).trim();
+
+  const apiKey = isValidBinanceKey(rawKey) ? rawKey : '';
+  const apiSecret = isValidBinanceSecret(rawSecret) ? rawSecret : '';
 
   const useTestnet =
     process.env.BINANCE_USE_TESTNET === 'true' ||
@@ -1777,8 +1794,17 @@ app.get('/api/config/binance', async (req, res) => {
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      const effectiveKey = (parsed.apiKey || envCreds.apiKey || '').trim();
-      const effectiveSecret = (decryptSecret(parsed.apiSecret) || envCreds.apiSecret || '').trim();
+      let effectiveKey = (parsed.apiKey || '').trim();
+      let effectiveSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+
+      // Clean corrupted mask in KV
+      if (!isValidBinanceKey(effectiveKey)) {
+        effectiveKey = envCreds.apiKey;
+      }
+      if (!isValidBinanceSecret(effectiveSecret)) {
+        effectiveSecret = envCreds.apiSecret;
+      }
+
       if (effectiveKey && effectiveSecret) {
         return res.json({
           configured: true,
@@ -1799,40 +1825,46 @@ app.get('/api/config/binance', async (req, res) => {
     });
   }
 
-  return res.json({ configured: false, useTestnet: false, marketType: 'FUTURES' });
+  return res.json({ configured: false, useTestnet: false, marketType: 'SPOT' });
 });
 
 app.post('/api/config/binance', async (req, res) => {
   let { apiKey, apiSecret, useTestnet, marketType } = req.body;
-  if (!apiKey || !apiSecret) {
-    return res.status(400).json({ error: 'API Key and Secret are required' });
-  }
   
-  let finalSecret = String(apiSecret).trim();
-  let finalKey = String(apiKey).trim();
+  let finalKey = (apiKey || '').trim();
+  let finalSecret = (apiSecret || '').trim();
   
+  const envCreds = getEnvBinanceCredentials();
+  
+  // If user provided a mask or empty string, retrieve existing valid key
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      if (finalSecret === '****************' || finalSecret.includes('***')) finalSecret = decryptSecret(parsed.apiSecret);
-      if (finalKey.includes('...')) finalKey = parsed.apiKey;
+      const existingStoredKey = (parsed.apiKey || '').trim();
+      const existingStoredSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+
+      if (!isValidBinanceKey(finalKey)) {
+        finalKey = isValidBinanceKey(existingStoredKey) ? existingStoredKey : envCreds.apiKey;
+      }
+      if (!isValidBinanceSecret(finalSecret)) {
+        finalSecret = isValidBinanceSecret(existingStoredSecret) ? existingStoredSecret : envCreds.apiSecret;
+      }
     } catch(e) {}
+  } else {
+    if (!isValidBinanceKey(finalKey)) finalKey = envCreds.apiKey;
+    if (!isValidBinanceSecret(finalSecret)) finalSecret = envCreds.apiSecret;
   }
-  
-  const envCreds = getEnvBinanceCredentials();
-  if (finalSecret === '****************' || finalSecret.includes('***')) {
-    finalSecret = envCreds.apiSecret || finalSecret;
-  }
-  if (finalKey.includes('...')) {
-    finalKey = envCreds.apiKey || finalKey;
+
+  if (!isValidBinanceKey(finalKey) || !isValidBinanceSecret(finalSecret)) {
+    return res.status(400).json({ error: 'Valid unmasked API Key and Secret are required' });
   }
 
   const secureConfig = {
     apiKey: finalKey,
     apiSecret: encryptSecret(finalSecret),
-    useTestnet,
-    marketType
+    useTestnet: Boolean(useTestnet),
+    marketType: marketType || 'SPOT'
   };
   await kv.set('binance_api_config', JSON.stringify(secureConfig));
   res.json({ success: true, message: 'Binance credentials saved securely in backend.' });
@@ -1876,15 +1908,44 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      dbKey = (parsed.apiKey || '').trim();
-      dbSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+      const parsedKey = (parsed.apiKey || '').trim();
+      const parsedSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+      if (isValidBinanceKey(parsedKey) && isValidBinanceSecret(parsedSecret)) {
+        dbKey = parsedKey;
+        dbSecret = parsedSecret;
+      } else {
+        // If stored config had a masked placeholder or was corrupted, remove it so it falls back cleanly to .env
+        await kv.delete('binance_api_config');
+      }
       dbTestnet = parsed.useTestnet;
       dbMarketType = parsed.marketType;
     } catch(e) {}
   }
 
-  const apiKey = headerKey || (bodyKey && bodyKey.includes('...') ? (dbKey || envCreds.apiKey) : bodyKey) || dbKey || envCreds.apiKey;
-  const apiSecret = headerSecret || (bodySecret && (bodySecret === '****************' || bodySecret.includes('***')) ? (dbSecret || envCreds.apiSecret) : bodySecret) || dbSecret || envCreds.apiSecret;
+  // Resolve API Key: prefer valid explicitly passed key, then stored valid key, then env key
+  let apiKey = '';
+  if (isValidBinanceKey(headerKey)) {
+    apiKey = headerKey;
+  } else if (isValidBinanceKey(bodyKey)) {
+    apiKey = bodyKey;
+  } else if (isValidBinanceKey(dbKey)) {
+    apiKey = dbKey;
+  } else if (isValidBinanceKey(envCreds.apiKey)) {
+    apiKey = envCreds.apiKey;
+  }
+
+  // Resolve API Secret: prefer valid explicitly passed secret, then stored valid secret, then env secret
+  let apiSecret = '';
+  if (isValidBinanceSecret(headerSecret)) {
+    apiSecret = headerSecret;
+  } else if (isValidBinanceSecret(bodySecret)) {
+    apiSecret = bodySecret;
+  } else if (isValidBinanceSecret(dbSecret)) {
+    apiSecret = dbSecret;
+  } else if (isValidBinanceSecret(envCreds.apiSecret)) {
+    apiSecret = envCreds.apiSecret;
+  }
+
   const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : envCreds.useTestnet);
   const marketType = headerMarketType || bodyMarketType || dbMarketType || envCreds.marketType || 'SPOT';
 

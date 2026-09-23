@@ -410,10 +410,10 @@ export const App: React.FC = () => {
         if (data.configured) {
           setBinanceConfig(prev => ({
             ...prev,
-            apiKey: data.apiKeyPrefix,
-            apiSecret: '****************', // Fake mask
-            useTestnet: data.useTestnet,
-            marketType: data.marketType,
+            apiKey: prev.apiKey && !prev.apiKey.includes('...') ? prev.apiKey : '',
+            apiSecret: prev.apiSecret && !prev.apiSecret.includes('...') && prev.apiSecret !== '****************' ? prev.apiSecret : '',
+            useTestnet: data.useTestnet !== undefined ? data.useTestnet : prev.useTestnet,
+            marketType: data.marketType || prev.marketType,
             isConnected: true
           }));
           // Fetch balance immediately upon detecting configured credentials
@@ -3010,6 +3010,7 @@ export const App: React.FC = () => {
             onClose={() => setIsMobileMenuOpen(false)}
             botEnabled={botConfig.enabled}
             executionMode={executionMode}
+            binanceConfig={binanceConfig}
             paperWallet={paperWallet}
             activeBotPositions={activeBotPositions}
             isDesktopOpen={isDesktopSidebarOpen}

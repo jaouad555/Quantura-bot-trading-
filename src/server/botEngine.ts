@@ -344,6 +344,108 @@ const createBinanceSignature = (queryString: string, apiSecret: string) => {
   return crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
 };
 
+export interface RealBinanceAccountInfo {
+  success: boolean;
+  canTrade: boolean;
+  freeUsdt: number;
+  totalUsdtEquity: number;
+  marketType: 'SPOT' | 'FUTURES';
+  error?: string;
+  binanceCode?: number;
+}
+
+/**
+ * Direct real Binance account state query for backend risk validation and execution sizing.
+ */
+export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccountInfo> => {
+  const config = await getBinanceConfig();
+  const effectiveMarketType: 'SPOT' | 'FUTURES' = config.marketType === 'SPOT' ? 'SPOT' : 'FUTURES';
+  if (!config.isConnected || !config.apiKey || !config.apiSecret) {
+    return {
+      success: false,
+      canTrade: false,
+      freeUsdt: 0,
+      totalUsdtEquity: 0,
+      marketType: effectiveMarketType,
+      error: 'Binance credentials not configured or incomplete.',
+    };
+  }
+
+  const timestamp = Date.now();
+  const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+  const signature = createBinanceSignature(queryString, config.apiSecret);
+  const isFutures = effectiveMarketType === 'FUTURES';
+  const baseUrl = isFutures ? getBinanceFuturesApiBase(config.useTestnet) : getBinanceApiBase(config.useTestnet);
+  const url = isFutures
+    ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
+    : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-MBX-APIKEY': config.apiKey,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        canTrade: false,
+        freeUsdt: 0,
+        totalUsdtEquity: 0,
+        marketType: effectiveMarketType,
+        error: data.msg || 'Binance API request rejected',
+        binanceCode: data.code,
+      };
+    }
+
+    let canTrade = data.canTrade ?? true;
+    let freeUsdt = 0;
+    let totalUsdtEquity = 0;
+
+    if (isFutures) {
+      const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
+      const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
+      const totalMargin = parseFloat(data.totalMarginBalance || data.totalWalletBalance || '0') || 0;
+      const availMargin = parseFloat(data.availableBalance || '0') || 0;
+      const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
+      const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
+      freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
+      totalUsdtEquity = totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt);
+    } else {
+      const balances = data.balances || [];
+      const usdt = balances.find((b: any) => b.asset === 'USDT');
+      const usdc = balances.find((b: any) => b.asset === 'USDC');
+      const fdusd = balances.find((b: any) => b.asset === 'FDUSD');
+      freeUsdt = (parseFloat(usdt?.free || '0') || 0) + (parseFloat(usdc?.free || '0') || 0) + (parseFloat(fdusd?.free || '0') || 0);
+      totalUsdtEquity = freeUsdt + (parseFloat(usdt?.locked || '0') || 0) + (parseFloat(usdc?.locked || '0') || 0) + (parseFloat(fdusd?.locked || '0') || 0);
+    }
+
+    return {
+      success: true,
+      canTrade,
+      freeUsdt: Math.round(freeUsdt * 100) / 100,
+      totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
+      marketType: effectiveMarketType,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      canTrade: false,
+      freeUsdt: 0,
+      totalUsdtEquity: 0,
+      marketType: effectiveMarketType,
+      error: err.message || 'Network timeout contacting Binance',
+    };
+  }
+};
+
 // Simulate or real execute order
 export const serverExecuteOrder = async (symbol: string, side: string, quoteOrderQty: number, quantity: number, currentPrice: number) => {
     const config = await getBinanceConfig();
@@ -515,16 +617,20 @@ export const startBotEngine = () => {
           roePercent <= -99.0
         );
 
+        const isPosLive = pos.mode === 'BINANCE_LIVE';
+
         if (isLiquidated) {
           console.warn(`[SERVER ENGINE] 🚨 LIQUIDATION TRIGGERED for ${pos.symbol} at ${currentP} (Entry: ${pos.entryPrice}, Liq: ${pos.liquidationPrice})`);
           const marginLost = pos.remainingAmountUsdt;
           const tranchePnl = -marginLost;
           const totalTradePnl = pos.realizedPnlUsdt + tranchePnl;
 
-          if (isLiveMode && binanceConfig.isConnected) {
-            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP);
+          if (isPosLive) {
+            if (binanceConfig.isConnected) {
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP);
+            }
           } else {
-            // Margin lost entirely; zero returned
+            // Margin lost entirely; zero returned to paper wallet
             walletPnlDelta += tranchePnl;
           }
 
@@ -539,7 +645,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: -100,
             reason: `Liquidation threshold reached (-100% Margin Depleted)`,
-            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
 
           historyToAdd.push({
@@ -559,6 +665,7 @@ export const startBotEngine = () => {
             profitUsdt: totalTradePnl,
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
 
           try {
@@ -624,8 +731,10 @@ export const startBotEngine = () => {
           const tranchePnl = marginClosed * (roePercent / 100);
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
 
-          if (isLiveMode && binanceConfig.isConnected) {
-            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          if (isPosLive) {
+            if (binanceConfig.isConnected) {
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+            }
           } else {
             walletBalanceDelta += cashReturned;
             walletPnlDelta += tranchePnl;
@@ -666,7 +775,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: roePercent,
             reason: `TP1 achieved (50% closed at ${currentP}, SL secured at breakeven)`,
-            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
         }
         
@@ -680,8 +789,10 @@ export const startBotEngine = () => {
           const tranchePnl = marginClosed * (roePercent / 100);
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
 
-          if (isLiveMode && binanceConfig.isConnected) {
-            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+          if (isPosLive) {
+            if (binanceConfig.isConnected) {
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+            }
           } else {
             walletBalanceDelta += cashReturned;
             walletPnlDelta += tranchePnl;
@@ -723,7 +834,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: roePercent,
             reason: `TP2 achieved (50% remaining closed at ${currentP}, SL advanced to TP1)`,
-            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
         }
         
@@ -747,8 +858,10 @@ export const startBotEngine = () => {
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
           const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
-          if (isLiveMode && binanceConfig.isConnected) {
-            await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+          if (isPosLive) {
+            if (binanceConfig.isConnected) {
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+            }
           } else {
             walletBalanceDelta += cashReturned;
             walletPnlDelta += tranchePnl;
@@ -780,7 +893,7 @@ export const startBotEngine = () => {
             pnlUsdt: Math.round(tranchePnl * 100) / 100,
             pnlPercent: Math.round(roePercent * 100) / 100,
             reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
-            mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER'
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER'
           });
 
           const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || pos.remainingAmountUsdt || 10;
@@ -802,6 +915,7 @@ export const startBotEngine = () => {
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
             pnlHistory: pos.pnlHistory,
+            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
 
           try {
@@ -887,10 +1001,12 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
     const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
     const binanceConfig = await getBinanceConfig();
-    const isLiveMode = (await kv.get('app_execution_mode')) === 'BINANCE_LIVE';
+    const isPosLive = pos.mode === 'BINANCE_LIVE';
 
-    if (isLiveMode && binanceConfig.isConnected) {
-      await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+    if (isPosLive) {
+      if (binanceConfig.isConnected) {
+        await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+      }
     } else {
       const currentWalletStr = await kv.get('btc_paper_wallet');
       const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
@@ -925,6 +1041,7 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
       confidence: pos.confidence || 75,
       strategyName: pos.strategyName,
       pnlHistory: pos.pnlHistory,
+      mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
     };
     await kv.set('btc_trade_history', JSON.stringify([historyItem, ...history].slice(0, 500)));
 
@@ -942,7 +1059,7 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
       pnlUsdt: Math.round(tranchePnl * 100) / 100,
       pnlPercent: Math.round(roePercent * 100) / 100,
       reason,
-      mode: isLiveMode ? 'BINANCE_LIVE' : 'PAPER',
+      mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
       marketType: pos.marketType,
       leverage: lev,
     };

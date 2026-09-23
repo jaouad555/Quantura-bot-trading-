@@ -26,7 +26,7 @@ import {
   BookOpen,
   HelpCircle,
 } from 'lucide-react';
-import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG } from '../types';
+import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG, BinanceApiConfig } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { 
@@ -53,6 +53,7 @@ interface SidebarProps {
   onClose?: () => void;
   botEnabled?: boolean;
   executionMode?: 'PAPER' | 'BINANCE_LIVE';
+  binanceConfig?: BinanceApiConfig;
   paperWallet?: PaperWallet;
   activeBotPositions?: ActiveBotPosition[];
   isDesktopOpen?: boolean;
@@ -71,6 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   botEnabled = false,
   executionMode = 'PAPER',
+  binanceConfig,
   paperWallet,
   activeBotPositions,
   isDesktopOpen = true,
@@ -452,6 +454,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Portfolio Balance / Total Equity */}
           {(() => {
+            const isLive = executionMode === 'BINANCE_LIVE';
+            if (isLive && binanceConfig?.accountInfo) {
+              const liveEquity = Number(binanceConfig.accountInfo.totalUsdtEquity || binanceConfig.accountInfo.freeUsdt || 0);
+              const freeCash = Number(binanceConfig.accountInfo.freeUsdt || 0);
+              const livePositions = (activeBotPositions || []).filter(p => p.mode === 'BINANCE_LIVE');
+              const inTradeMargin = livePositions.reduce((acc, p) => acc + (p.remainingAmountUsdt || p.marginUsdt || 0), 0);
+              return (
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
+                      {isArabic ? 'رصيد بينانس الحي' : 'Binance Live Equity'}
+                    </span>
+                    <span className="text-[8px] font-mono font-bold px-1 rounded bg-rose-500/20 text-rose-300">
+                      LIVE
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono font-bold text-emerald-300 truncate">
+                    ${liveEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                  </div>
+                  <div className="text-[8px] text-slate-400 font-mono mt-1 flex items-center justify-between border-t border-slate-900 pt-0.5">
+                    <span>{isArabic ? 'متاح:' : 'Free:'} ${freeCash.toFixed(2)}</span>
+                    <span>{isArabic ? 'في الصفقات:' : 'Trades:'} ${inTradeMargin.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            }
             const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions);
             return (
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">

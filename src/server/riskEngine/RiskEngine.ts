@@ -239,6 +239,9 @@ export class RiskEngine {
     if (!stopLoss || isNaN(stopLoss) || stopLoss <= 0 || !isFinite(stopLoss)) {
       return reject('MISSING_STOP_LOSS', 'Every trade must have a mandatory valid Stop Loss.');
     }
+    if (proposal.isPaper === false && (accountEquity <= 0 || availableBalance <= 0)) {
+      return reject('INSUFFICIENT_EQUITY', 'LIVE Trading rejected: Real Binance account balance/equity is unavailable or zero. Safety protocol engaged.');
+    }
     if (accountEquity <= 0 || isNaN(accountEquity)) {
       return reject('INSUFFICIENT_EQUITY', 'Account equity could not be determined. Fail-safe triggered.');
     }
@@ -534,17 +537,23 @@ export class RiskEngine {
       return proposal.accountEquity;
     }
 
+    // CRITICAL INVARIANT: In LIVE mode (isPaper === false), NEVER use virtual paper wallet or default constants!
+    if (proposal.isPaper === false) {
+      return 0; // Return 0 to trigger structured rejection in evaluateProposal
+    }
+
+    // PAPER mode: read virtual wallet
     try {
       const walletStr = await kv.get('btc_paper_wallet');
       if (walletStr) {
         const wallet = JSON.parse(walletStr);
-        const freeBalance = wallet.balance || 0;
-        const totalInvestedMargin = activePositions.reduce((sum, p) => sum + p.marginUsdt, 0);
-        return freeBalance + totalInvestedMargin;
+        const freeBalance = typeof wallet.balance === 'number' ? wallet.balance : 1000;
+        const totalInvestedMargin = activePositions.reduce((sum, p) => sum + (p.marginUsdt || 0), 0);
+        return Math.max(0, freeBalance + totalInvestedMargin);
       }
     } catch {}
 
-    return 1000; // safe default fallback
+    return 1000; // safe default fallback only for PAPER mode
   }
 
   /**

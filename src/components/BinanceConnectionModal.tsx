@@ -158,14 +158,15 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
   if (!isOpen) return null;
 
   const handleTestAndSave = async (autoSave: boolean = true) => {
-    if (!apiKey.trim() || !apiSecret.trim()) {
+    const hasInputKeys = Boolean(apiKey.trim() && apiSecret.trim());
+    if (!hasInputKeys && !activeBinanceConfig.isConnected) {
       setTestResult({
         success: false,
         message: isArabic
-          ? 'يرجى إدخال كل من API Key و Secret Key'
+          ? 'يرجى إدخال كل من API Key و Secret Key الكاملين'
           : isEn
-          ? 'Please enter both API Key and Secret Key'
-          : 'Veuillez saisir votre API Key et votre Secret Key.',
+          ? 'Please enter both full unmasked API Key and Secret Key'
+          : 'Veuillez saisir votre API Key et votre Secret Key complets.',
       });
       return;
     }
@@ -174,15 +175,20 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
     setTestResult(null);
 
     try {
+      const payload: any = {
+        useTestnet,
+        marketType,
+      };
+
+      if (hasInputKeys) {
+        payload.apiKey = apiKey.trim();
+        payload.apiSecret = apiSecret.trim();
+      }
+
       const response = await fetch('/api/binance/account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: apiKey.trim(),
-          apiSecret: apiSecret.trim(),
-          useTestnet,
-          marketType,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -203,8 +209,8 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
         const updatedConfig: BinanceApiConfig = {
           ...activeBinanceConfig,
-          apiKey: apiKey.trim(),
-          apiSecret: apiSecret.trim(),
+          apiKey: hasInputKeys ? apiKey.trim() : activeBinanceConfig.apiKey,
+          apiSecret: '',
           useTestnet,
           marketType: data.marketType || marketType,
           isConnected: true,
@@ -225,7 +231,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           latencyMs: data.latencyMs,
         });
 
-        if (autoSave) {
+        if (autoSave && hasInputKeys) {
           // Securely save credentials on the backend
           fetch('/api/config/binance', {
             method: 'POST',
@@ -237,10 +243,10 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               marketType: data.marketType || marketType,
             })
           }).catch(console.error);
-          
-          // Pass full updated config with account info back to App
-          onSaveConfig({ ...updatedConfig, apiSecret: '' });
         }
+        
+        // Pass full updated config with account info back to App
+        onSaveConfig(updatedConfig);
       } else {
         setTestResult({
           success: false,
@@ -250,7 +256,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
     } catch (err: any) {
       setTestResult({
         success: false,
-        message: err.message || (isArabic ? 'حدث خطأ أثناء فحص الاتصال' : 'Erreur lors du test de connexion.'),
+        message: err.message || (isArabic ? 'حدث خطأ أثناء الاتصال' : 'Erreur de connexion réseau'),
       });
     } finally {
       setIsTesting(false);
@@ -683,7 +689,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
                 onClick={() => handleTestAndSave(true)}
-                disabled={isTesting || !apiKey.trim() || !apiSecret.trim()}
+                disabled={isTesting || (!activeBinanceConfig.isConnected && (!apiKey.trim() || !apiSecret.trim()))}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20 transition font-sans text-xs"
               >
                 {isTesting ? (

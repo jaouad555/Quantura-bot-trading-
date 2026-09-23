@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { kv } from './db.js';
-import { serverExecuteOrder, sendServerTelegramNotification } from './botEngine.js';
+import { serverExecuteOrder, sendServerTelegramNotification, fetchRealBinanceAccountDirect } from './botEngine.js';
 import { RiskEngine } from './riskEngine/RiskEngine.js';
 import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
@@ -351,11 +351,32 @@ async function processTradingSignal(
       }
     }
 
-    // Allocate Wallet
-    const walletStr = await kv.get('btc_paper_wallet');
-    let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
-    wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
-    wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
+    // -----------------------------------------------------------------
+    // SIZING & BALANCE RESOLUTION (Strict PAPER vs LIVE isolation)
+    // -----------------------------------------------------------------
+    let totalEquity = 0;
+    let availableBalance = 0;
+
+    if (isLive) {
+      const realAcc = await fetchRealBinanceAccountDirect();
+      if (!realAcc.success || !realAcc.canTrade || realAcc.freeUsdt <= 0 || realAcc.totalUsdtEquity <= 0) {
+        console.log(`[TRADE BLOCKED] ${symbol} LIVE Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
+        return;
+      }
+      totalEquity = realAcc.totalUsdtEquity;
+      availableBalance = realAcc.freeUsdt;
+    } else {
+      const walletStr = await kv.get('btc_paper_wallet');
+      let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+      wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
+      wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
+
+      totalEquity = wallet.balance;
+      currentModePositions.forEach((p: any) => {
+        totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
+      });
+      availableBalance = wallet.balance;
+    }
     
     const isLong = signal.decision === 'LONG';
     let safeSl = signal.stopLoss;
@@ -381,12 +402,6 @@ async function processTradingSignal(
     const isFutures = (config.marketType || 'FUTURES') === 'FUTURES';
     const lev = isFutures ? (config.leverage || auth.strategy?.defaultLeverage || 3) : 1;
 
-    // Calculate total equity including active positions for risk-based sizing
-    let totalEquity = wallet.balance;
-    currentModePositions.forEach((p: any) => {
-        totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
-    });
-
     let margin = 0;
     if (config.sizingMode === 'RISK_BASED') {
         const targetRiskUsdt = totalEquity * ((config.riskPerTradePercent || 2.0) / 100);
@@ -399,10 +414,10 @@ async function processTradingSignal(
     }
 
     margin = Math.round(margin * 100) / 100;
-    if (margin > wallet.balance) margin = wallet.balance;
+    if (margin > availableBalance) margin = availableBalance;
 
     if (margin < 10) {
-      console.log(`[TRADE BLOCKED] Insufficient free margin: $${wallet.balance.toFixed(2)} available, min required: $10.00`);
+      console.log(`[TRADE BLOCKED] Insufficient free margin: $${availableBalance.toFixed(2)} available, min required: $10.00`);
       return;
     }
 
@@ -432,10 +447,11 @@ async function processTradingSignal(
       marketType: (config.marketType || 'FUTURES') as 'SPOT' | 'FUTURES',
       leverage: lev,
       accountEquity: totalEquity,
-      availableBalance: wallet.balance,
+      availableBalance: availableBalance,
       quantity: (margin * lev) / currentPrice,
       orderType: 'MARKET' as const,
       timestamp: Date.now(),
+      isPaper: !isLive,
       marketData: {
         currentPrice: currentPrice,
         bidPrice: bestBid,
@@ -456,7 +472,7 @@ async function processTradingSignal(
     if (config.sizingMode === 'RISK_BASED' && riskEvaluation.approvedQuantity > 0 && riskEvaluation.approvedQuantity * currentPrice < margin * lev) {
       margin = Math.max(10, Math.round((riskEvaluation.approvedQuantity * currentPrice / lev) * 100) / 100);
     }
-    if (margin > wallet.balance) margin = wallet.balance;
+    if (margin > availableBalance) margin = availableBalance;
 
     // We can proceed to execute
     console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. Margin: $${margin} (${config.tradeAllocationPercent || 25}%), Lev: ${lev}x, Notional: $${(margin * lev).toFixed(2)}`);
