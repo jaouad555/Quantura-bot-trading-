@@ -371,30 +371,36 @@ export const App: React.FC = () => {
     } catch {}
   }, []);
 
-  // Fetch live Binance account balances (Futures / Spot)
+  // Fetch live Binance account balances (Futures / Spot) and canTrade permissions
   const fetchLiveBinanceBalance = useCallback(async () => {
     try {
-      const res = await fetch('/api/binance/account');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success) {
+      const currentMt = botConfigRef.current?.marketType || 'FUTURES';
+      const res = await fetch(`/api/binance/account?marketType=${currentMt}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setBinanceConfig(prev => ({
           ...prev,
           isConnected: true,
           useTestnet: data.useTestnet !== undefined ? data.useTestnet : prev.useTestnet,
-          marketType: data.marketType || prev.marketType,
+          marketType: data.marketType || prev.marketType || currentMt,
           accountInfo: {
             balances: data.balances || [],
-            canTrade: data.canTrade ?? true,
+            canTrade: data.canTrade === true,
             canWithdraw: data.canWithdraw ?? false,
             canDeposit: data.canDeposit ?? true,
             updateTime: data.updateTime || Date.now(),
-            accountType: data.accountType || 'FUTURES',
+            accountType: data.accountType || currentMt,
             makerCommission: data.makerCommission || 0,
             takerCommission: data.takerCommission || 0,
             freeUsdt: Number(data.freeUsdt || 0),
             totalUsdtEquity: Number(data.totalUsdtEquity || data.freeUsdt || 0),
           }
+        }));
+      } else if (data.code === 'MISSING_CREDENTIALS') {
+        setBinanceConfig(prev => ({
+          ...prev,
+          isConnected: false,
+          accountInfo: null,
         }));
       }
     } catch (err) {
@@ -416,28 +422,22 @@ export const App: React.FC = () => {
             marketType: data.marketType || prev.marketType,
             isConnected: true
           }));
-          // Fetch balance immediately upon detecting configured credentials
           fetchLiveBinanceBalance();
         } else {
-           setBinanceConfig(prev => ({ ...prev, isConnected: false, apiKey: '', apiSecret: '' }));
+          setBinanceConfig(prev => ({ ...prev, isConnected: false, apiKey: '', apiSecret: '' }));
         }
       })
       .catch(console.error);
   }, [fetchLiveBinanceBalance]);
 
-  // Periodic live account balance polling when connected or in live mode
+  // Periodic live account & permissions polling every 5s
   useEffect(() => {
-    if (!binanceConfig.isConnected && executionMode !== 'BINANCE_LIVE') return;
-    
-    // Initial fetch
     fetchLiveBinanceBalance();
-    
     const interval = setInterval(() => {
       fetchLiveBinanceBalance();
-    }, 10000);
-    
+    }, 5000);
     return () => clearInterval(interval);
-  }, [binanceConfig.isConnected, executionMode, fetchLiveBinanceBalance]);
+  }, [fetchLiveBinanceBalance]);
 
 
   const [isBinanceModalOpen, setIsBinanceModalOpen] = useState(false);
