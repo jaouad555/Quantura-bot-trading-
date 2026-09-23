@@ -2102,9 +2102,17 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       }
     }
 
+    let tradePermissionWarning = null;
+    if (!canTrade) {
+      tradePermissionWarning = actualMarketType === 'FUTURES'
+        ? 'Futures trading permission is disabled on this API Key. Please edit your API Key on Binance and check "Enable Futures" (تفعيل العقود الآجلة).'
+        : 'Spot trading permission is disabled on this API Key. Please edit your API Key on Binance and check "Enable Spot & Margin Trading".';
+    }
+
     return res.json({
       success: true,
       canTrade,
+      tradePermissionWarning,
       canWithdraw,
       canDeposit,
       accountType,
@@ -2498,6 +2506,144 @@ app.post('/api/binance/cancel-order', async (req, res) => {
     }
 
     return res.json({ success: true, canceled: data });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 5. Futures Position Risk & Live Positions on Binance
+ */
+app.get('/api/binance/futures/positions', async (req, res) => {
+  try {
+    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Binance API Credentials' });
+    }
+
+    const symbol = (req.query.symbol as string)?.toUpperCase();
+    const timestamp = Date.now();
+    let query = `timestamp=${timestamp}&recvWindow=10000`;
+    if (symbol) query = `symbol=${symbol}&${query}`;
+
+    const signature = createBinanceSignature(query, apiSecret);
+    const baseUrl = getBinanceFuturesApiBase(useTestnet);
+
+    const response = await fetch(`${baseUrl}/fapi/v2/positionRisk?${query}&signature=${signature}`, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.msg || 'Failed to fetch futures positions', data });
+    }
+
+    const activePositions = Array.isArray(data) 
+      ? data.filter((p: any) => parseFloat(p.positionAmt || '0') !== 0)
+      : [];
+
+    return res.json({
+      success: true,
+      activePositionsCount: activePositions.length,
+      positions: activePositions,
+      allPositions: data,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 6. Futures Test Order (Dry-Run: tests API key, HMAC signature, Futures permissions & lot size without risking funds)
+ */
+app.post('/api/binance/futures/test-order', async (req, res) => {
+  try {
+    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Binance API Credentials', code: 'MISSING_CREDENTIALS' });
+    }
+
+    const { symbol = 'BTCUSDT', side = 'BUY', quantity = '0.002', type = 'MARKET' } = req.body;
+    const timestamp = Date.now();
+    const params: Record<string, string> = {
+      symbol: symbol.toUpperCase(),
+      side: side.toUpperCase(),
+      type: type.toUpperCase(),
+      quantity: String(quantity),
+      timestamp: timestamp.toString(),
+      recvWindow: '10000',
+    };
+
+    const queryString = new URLSearchParams(params).toString();
+    const signature = createBinanceSignature(queryString, apiSecret);
+    const baseUrl = getBinanceFuturesApiBase(useTestnet);
+
+    // Binance Futures order test endpoint validates syntax and permissions without creating order
+    const response = await fetch(`${baseUrl}/fapi/v1/order/test?${queryString}&signature=${signature}`, {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: (data as any).msg || 'Binance Futures test order failed',
+        binanceCode: (data as any).code,
+        testedParams: params,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: '✅ Binance Futures API Credentials & Order Signature Verified Successfully! (Test Dry-Run passed)',
+      testedParams: params,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 7. Futures Set Leverage
+ */
+app.post('/api/binance/futures/leverage', async (req, res) => {
+  try {
+    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Binance API Credentials' });
+    }
+
+    const { symbol = 'BTCUSDT', leverage = 5 } = req.body;
+    const timestamp = Date.now();
+    const params: Record<string, string> = {
+      symbol: symbol.toUpperCase(),
+      leverage: String(leverage),
+      timestamp: timestamp.toString(),
+      recvWindow: '10000',
+    };
+
+    const queryString = new URLSearchParams(params).toString();
+    const signature = createBinanceSignature(queryString, apiSecret);
+    const baseUrl = getBinanceFuturesApiBase(useTestnet);
+
+    const response = await fetch(`${baseUrl}/fapi/v1/leverage?${queryString}&signature=${signature}`, {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.msg || 'Failed to adjust leverage', data });
+    }
+
+    return res.json({ success: true, symbol, leverage: data.leverage, maxNotionalValue: data.maxNotionalValue });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
