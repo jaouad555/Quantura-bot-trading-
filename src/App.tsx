@@ -92,10 +92,12 @@ const normalizeSymbol = (sym?: string): string => (sym || '').toLowerCase().repl
 
 export type DisplayMode = 'auto' | 'standard' | 'compact' | 'fullscreen';
 export const App: React.FC = () => {
-  // Navigation & UI States
+  // Navigation & UI States - strictly local to this device/browser
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      return apiStorage.getItem('app_is_authenticated') === 'true' || sessionStorage.getItem('app_is_authenticated') === 'true';
+      const isAuth = localStorage.getItem('app_is_authenticated') === 'true' || sessionStorage.getItem('app_is_authenticated') === 'true';
+      const is2fa = localStorage.getItem('app_2fa_verified') === 'true' || sessionStorage.getItem('app_2fa_verified') === 'true';
+      return isAuth && is2fa;
     } catch {
       return false;
     }
@@ -106,26 +108,9 @@ export const App: React.FC = () => {
     isAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsAuthenticated(true);
-        const name = user.email ? user.email.split('@')[0] : 'user';
-        setUsername(name);
-        try {
-          apiStorage.setItem('app_is_authenticated', 'true');
-          apiStorage.setItem('app_username', name);
-          sessionStorage.setItem('app_is_authenticated', 'true');
-          sessionStorage.setItem('app_username', name);
-        } catch {}
-      }
-      setAuthChecking(false);
-    });
-    return () => unsubscribe();
-  }, []);
   const [username, setUsername] = useState<string>(() => {
     try {
-      return apiStorage.getItem('app_username') || sessionStorage.getItem('app_username') || '';
+      return localStorage.getItem('app_username') || sessionStorage.getItem('app_username') || '';
     } catch {
       return '';
     }
@@ -136,20 +121,30 @@ export const App: React.FC = () => {
     setIsAuthenticated(true);
     setUsername(finalUser);
     try {
-      apiStorage.setItem('app_is_authenticated', 'true');
-      apiStorage.setItem('app_username', finalUser);
+      localStorage.setItem('app_is_authenticated', 'true');
+      localStorage.setItem('app_username', finalUser);
+      localStorage.setItem('app_2fa_verified', 'true');
       sessionStorage.setItem('app_is_authenticated', 'true');
       sessionStorage.setItem('app_username', finalUser);
+      sessionStorage.setItem('app_2fa_verified', 'true');
     } catch {}
   };
 
   const handleLogout = useCallback(() => {
     try {
       signOut(auth).catch(() => {});
-      apiStorage.removeItem('app_is_authenticated');
-      apiStorage.removeItem('app_username');
+      localStorage.removeItem('app_is_authenticated');
+      localStorage.removeItem('app_email');
+      localStorage.removeItem('app_username');
+      localStorage.removeItem('app_2fa_verified');
       sessionStorage.removeItem('app_is_authenticated');
+      sessionStorage.removeItem('app_email');
       sessionStorage.removeItem('app_username');
+      sessionStorage.removeItem('app_2fa_verified');
+      apiStorage.removeItem('app_is_authenticated');
+      apiStorage.removeItem('app_email');
+      apiStorage.removeItem('app_username');
+      apiStorage.removeItem('app_2fa_verified');
     } catch (err) {}
     
     // Set states to force immediate re-render to AuthScreen

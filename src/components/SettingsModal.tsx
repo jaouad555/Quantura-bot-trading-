@@ -552,6 +552,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Two-Factor Authentication (2FA) & Security */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>{isArabic ? 'المصادقة الثنائية (2FA)' : 'Two-Factor Authentication (2FA)'}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono font-bold">
+                      {isArabic ? 'مفعلة' : 'ACTIVE'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {isArabic ? 'تأمين تسجيل الدخول برمز PIN مكون من 6 أرقام عند فتح البوت من أي جهاز' : 'Secured login with 6-digit PIN code across devices'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 font-medium">
+                  {isArabic ? 'رمز التحقق الثنائي (2FA Master PIN):' : 'Current 2FA Master PIN:'}
+                </span>
+                <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  {apiStorage.getItem('app_2fa_master_pin') || '272270'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                {isArabic 
+                  ? '🔒 عند الخروج والدخول من متصفح آخر، سيطلب منك النظام إدخال هذا الرمز لضمان عدم دخول أي شخص غير مصرح له.'
+                  : '🔒 Upon logout or entering from another browser, this 6-digit PIN is strictly required.'}
+              </p>
+            </div>
+          </div>
+
           {/* Account & Session (Déconnexion) */}
           <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">

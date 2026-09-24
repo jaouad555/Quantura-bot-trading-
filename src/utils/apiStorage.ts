@@ -30,7 +30,21 @@ class ApiStorage {
       if (res.ok) {
         const serverData = await res.json();
         if (serverData && typeof serverData === 'object') {
-          this.mem = { ...this.mem, ...serverData };
+          // Never import device-specific or auth session keys from server
+          const AUTH_SESSION_KEYS = new Set([
+            'app_is_authenticated',
+            'app_email',
+            'app_username',
+            'app_2fa_verified',
+            'session_token',
+          ]);
+          const filtered: Record<string, string> = {};
+          for (const [k, v] of Object.entries(serverData)) {
+            if (!AUTH_SESSION_KEYS.has(k) && typeof v === 'string') {
+              filtered[k] = v;
+            }
+          }
+          this.mem = { ...this.mem, ...filtered };
         }
       }
     } catch {
@@ -70,11 +84,14 @@ class ApiStorage {
         window.dispatchEvent(new CustomEvent('apiStorage_updated', { detail: { key, value } }));
     }
 
-    fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, value }),
-    }).catch(() => {});
+    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
+    if (!AUTH_SESSION_KEYS.includes(key)) {
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value }),
+      }).catch(() => {});
+    }
   }
 
 
@@ -85,11 +102,14 @@ class ApiStorage {
         window.localStorage.removeItem(key);
       } catch (e) {}
     }
-    fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, value: null }),
-    }).catch(() => {});
+    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
+    if (!AUTH_SESSION_KEYS.includes(key)) {
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: null }),
+      }).catch(() => {});
+    }
   }
 
   async resetTradingData() {
