@@ -475,7 +475,13 @@ async function processTradingSignal(
     if (margin > availableBalance) margin = availableBalance;
 
     // We can proceed to execute
-    console.log(`[EXECUTION] ${symbol} [${signal.strategyName}] -> APPROVED. Margin: $${margin} (${config.tradeAllocationPercent || 25}%), Lev: ${lev}x, Notional: $${(margin * lev).toFixed(2)}`);
+    console.log(`\n[ENTRY ENGINE] -----------------------------------------`);
+    console.log(`SYMBOL: ${symbol} | TIMEFRAME: ${signal.timeframe || '15m'} | PRICE: $${currentPrice}`);
+    console.log(`SIGNAL: ${signal.decision} | SCORE: ${signal.confidence} | STRATEGY: ${signal.strategyName}`);
+    console.log(`SL: $${safeSl} | TP1: $${safeTp1} | TP2: $${safeTp2} | TP3: $${safeTp3} | RR: 1:${((Math.abs(safeTp1 - currentPrice) / Math.max(0.01, Math.abs(currentPrice - safeSl)))).toFixed(2)}`);
+    console.log(`ENTRY QUALITY: VALID | DECISION: ${signal.decision}`);
+    console.log(`MARGIN: $${margin} | LEVERAGE: ${lev}x | NOTIONAL: $${(margin * lev).toFixed(2)} | MODE: ${isLive ? 'BINANCE_LIVE' : 'PAPER'}`);
+    console.log(`---------------------------------------------------------\n`);
 
     const notional = margin * lev;
     const quantity = notional / currentPrice;

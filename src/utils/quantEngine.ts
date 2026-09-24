@@ -15,6 +15,7 @@ import {
   KlineCandle,
 } from '../types';
 import { formatCoinPrice } from './tradingPairs';
+import { EntryQualityEngine, roundPrice } from './entryQualityEngine';
 
 /**
  * Detect Market Regime deterministically based on indicators and volatility
@@ -366,31 +367,29 @@ export function generateQuantitativePlan(
     swingLow: currentPrice,
   };
 
-  let decision: DecisionType = 'WAIT';
-  let bias: BiasType = 'NEUTRAL';
+  // Execute Complete Multi-Gate Entry Validation via EntryQualityEngine
+  const validation = EntryQualityEngine.evaluate({
+    symbol: normSymbol,
+    timeframe,
+    currentPrice,
+    indicators,
+    quantScore,
+    marketRegime,
+    orderBook,
+    derivatives,
+    mtfConfluence,
+  });
 
-  // Rule: Clear statistical threshold without fake certainty
-  if (bullishScore >= 65 && bullishScore > bearishScore + 18) {
-    decision = 'LONG';
-    bias = 'BULLISH';
-  } else if (bearishScore >= 65 && bearishScore > bullishScore + 18) {
-    decision = 'SHORT';
-    bias = 'BEARISH';
-  } else if (bullishScore >= 55) {
-    bias = 'BULLISH';
-    decision = 'WAIT';
-  } else if (bearishScore >= 55) {
-    bias = 'BEARISH';
-    decision = 'WAIT';
-  } else {
-    bias = 'NEUTRAL';
-    decision = 'NO_TRADE';
-  }
-
-  // Filter against adverse market regimes
-  if (marketRegime === 'HIGH_VOLATILITY' && signalStrength < 78) {
-    decision = 'WAIT';
-  }
+  const decision: DecisionType = validation.decision;
+  const bias: BiasType = validation.bias;
+  const entryQuality: EntryQuality = validation.entryQuality;
+  const entryType = validation.entryType;
+  const entryZone = validation.entryZone;
+  const targets = validation.targets;
+  const stopLoss = validation.stopLoss;
+  const riskRewardRatio = validation.riskRewardRatio;
+  const waitReason = validation.waitReason;
+  const rejectionReason = validation.rejectionReason;
 
   let tradeType: TradeType = 'SHORT_TRADE';
   let expectedDuration = '2h - 8h';
@@ -429,135 +428,35 @@ export function generateQuantitativePlan(
     optimalExitTime = 'Objectif macro swing ou divergence baissière journalière';
   }
 
-  // Dynamic price rounding helper according to price magnitude
-  const roundPrice = (val: number): number => {
-    if (val >= 1000) return Math.round(val * 100) / 100;
-    if (val >= 50) return Math.round(val * 100) / 100;
-    if (val >= 1) return Math.round(val * 1000) / 1000;
-    if (val >= 0.01) return Math.round(val * 10000) / 10000;
-    if (val >= 0.0001) return Math.round(val * 1000000) / 1000000;
-    return Math.round(val * 100000000) / 100000000;
-  };
-
-  // Calculate Entry, Stop Loss & Targets
-  let entryZone = null;
-  let targets = null;
-  let stopLoss = null;
-  let riskRewardRatio = null;
   let invalidationReason = '';
   let longInvalidBelow: number | undefined;
   let shortInvalidAbove: number | undefined;
 
   if (decision === 'LONG') {
-    const ideal = roundPrice(currentPrice);
-    const minEntry = roundPrice(ideal - 0.4 * atr);
-    const maxEntry = roundPrice(ideal + 0.25 * atr);
-    entryZone = { min: minEntry, max: maxEntry, ideal };
-
-    // SL: Under recent swing low or 1.8 * ATR
-    const slDist = Math.max(1.8 * atr, ideal * 0.005);
-    let rawSL = ideal - slDist;
-    if (ms.swingLow && ms.swingLow < ideal && (ideal - ms.swingLow) <= 3.5 * atr) {
-      rawSL = Math.min(rawSL, ms.swingLow - 0.2 * atr);
-    }
-    let calculatedSL = roundPrice(rawSL);
-    // Strict invariant: LONG SL must be strictly lower than ideal
-    if (calculatedSL >= ideal) {
-      calculatedSL = roundPrice(ideal * 0.985);
-    }
-    stopLoss = calculatedSL;
     longInvalidBelow = stopLoss;
     invalidationReason = `Scénario LONG invalidé en cas de clôture ${timeframe} sous $${formatCoinPrice(stopLoss, symbol)} ou cassure du support structurel.`;
-
-    const risk = Math.max(ideal * 0.005, ideal - stopLoss);
-    let tp1 = roundPrice(ideal + risk * 1.5);
-    let tp2 = roundPrice(ideal + risk * 2.5);
-    let tp3 = roundPrice(ideal + risk * 4.0);
-
-    if (tp1 <= ideal) tp1 = roundPrice(ideal * 1.015);
-    if (tp2 <= tp1) tp2 = roundPrice(tp1 * 1.015);
-    if (tp3 <= tp2) tp3 = roundPrice(tp2 * 1.015);
-
-    targets = { tp1, tp2, tp3 };
-    riskRewardRatio = Math.round(((tp1 - ideal) / risk) * 100) / 100;
   } else if (decision === 'SHORT') {
-    const ideal = roundPrice(currentPrice);
-    const minEntry = roundPrice(ideal - 0.25 * atr);
-    const maxEntry = roundPrice(ideal + 0.4 * atr);
-    entryZone = { min: minEntry, max: maxEntry, ideal };
-
-    const slDist = Math.max(1.8 * atr, ideal * 0.005);
-    let rawSL = ideal + slDist;
-    if (ms.swingHigh && ms.swingHigh > ideal && (ms.swingHigh - ideal) <= 3.5 * atr) {
-      rawSL = Math.max(rawSL, ms.swingHigh + 0.2 * atr);
-    }
-    let calculatedSL = roundPrice(rawSL);
-    // Strict invariant: SHORT SL must be strictly higher than ideal
-    if (calculatedSL <= ideal) {
-      calculatedSL = roundPrice(ideal * 1.015);
-    }
-    stopLoss = calculatedSL;
     shortInvalidAbove = stopLoss;
     invalidationReason = `Scénario SHORT invalidé en cas de clôture ${timeframe} au-dessus de $${formatCoinPrice(stopLoss, symbol)} ou rejet des vendeurs.`;
-
-    const risk = Math.max(ideal * 0.005, stopLoss - ideal);
-    let tp1 = roundPrice(ideal - risk * 1.5);
-    let tp2 = roundPrice(ideal - risk * 2.5);
-    let tp3 = roundPrice(ideal - risk * 4.0);
-
-    if (tp1 >= ideal) tp1 = roundPrice(ideal * 0.985);
-    if (tp2 >= tp1) tp2 = roundPrice(tp1 * 0.985);
-    if (tp3 >= tp2) tp3 = roundPrice(tp2 * 0.985);
-
-    targets = { tp1, tp2, tp3 };
-    riskRewardRatio = Math.round(((ideal - tp1) / risk) * 100) / 100;
   } else {
-    // WAIT or NO_TRADE
     longInvalidBelow = roundPrice((indicators.supportLevels && indicators.supportLevels[0]) || currentPrice * 0.98);
     shortInvalidAbove = roundPrice((indicators.resistanceLevels && indicators.resistanceLevels[0]) || currentPrice * 1.02);
-    invalidationReason = `Marché en phase de consolidation / incertitude. Attendre une confirmation au-dessus de $${formatCoinPrice(shortInvalidAbove, symbol)} ou sous $${formatCoinPrice(longInvalidBelow, symbol)}.`;
+    invalidationReason = waitReason || `Marché en phase de consolidation / incertitude. Attendre une confirmation au-dessus de $${formatCoinPrice(shortInvalidAbove, symbol)} ou sous $${formatCoinPrice(longInvalidBelow, symbol)}.`;
   }
-
-  // Calculate Entry Quality
-  let grade: 'A' | 'B' | 'C' | 'D' = 'C';
-  let qualityScore = quantScore.signalStrength;
-  let qualityReason = '';
-
-  if (decision === 'LONG' || decision === 'SHORT') {
-    if (signalStrength >= 80 && (riskRewardRatio || 0) >= 1.8) {
-      grade = 'A';
-      qualityReason = 'Configuration haute probabilité avec forte confluence technique et ratio R:R supérieur à 1:1.8.';
-    } else if (signalStrength >= 68 && (riskRewardRatio || 0) >= 1.5) {
-      grade = 'B';
-      qualityReason = 'Configuration solide avec bon ratio R:R, valider le volume lors de la prise de position.';
-    } else {
-      grade = 'C';
-      qualityReason = 'Configuration modérée, risque accru de volatilité. Réduire la taille de position.';
-    }
-  } else {
-    grade = 'D';
-    qualityReason = 'Signal insuffisant ou marché en compression. Préserver son capital et patienter.';
-  }
-
-  const entryQuality: EntryQuality = {
-    grade,
-    score: qualityScore,
-    reason: qualityReason,
-  };
 
   // Primary & Alternative Scenarios
   let primaryScenario = '';
   let alternativeScenario = '';
 
   if (decision === 'LONG') {
-    primaryScenario = `Rebond technique depuis la zone $${formatCoinPrice(entryZone?.min, symbol)}-$${formatCoinPrice(entryZone?.max, symbol)} avec accélération haussière vers TP1 ($${formatCoinPrice(targets?.tp1, symbol)}) puis TP2 ($${formatCoinPrice(targets?.tp2, symbol)}).`;
+    primaryScenario = `Rebond technique (${entryType}) depuis la zone $${formatCoinPrice(entryZone?.min, symbol)}-$${formatCoinPrice(entryZone?.max, symbol)} vers TP1 ($${formatCoinPrice(targets?.tp1, symbol)}) puis TP2 ($${formatCoinPrice(targets?.tp2, symbol)}).`;
     alternativeScenario = `Cassure sous le Stop Loss ($${formatCoinPrice(stopLoss, symbol)}) entraînant un retest du support majeur $${formatCoinPrice(indicators.supportLevels?.[1], symbol) || 'inférieur'}.`;
   } else if (decision === 'SHORT') {
-    primaryScenario = `Rejet sous la résistance avec pression vendeuse vers TP1 ($${formatCoinPrice(targets?.tp1, symbol)}) puis TP2 ($${formatCoinPrice(targets?.tp2, symbol)}).`;
+    primaryScenario = `Rejet vendeur (${entryType}) sous la résistance avec accélération vers TP1 ($${formatCoinPrice(targets?.tp1, symbol)}) puis TP2 ($${formatCoinPrice(targets?.tp2, symbol)}).`;
     alternativeScenario = `Reprise acheteuse au-dessus de $${formatCoinPrice(stopLoss, symbol)} déclenchant une liquidation des shorts vers $${formatCoinPrice(indicators.resistanceLevels?.[1], symbol) || 'supérieur'}.`;
   } else {
-    primaryScenario = `Consolidation latérale entre le support $${formatCoinPrice(longInvalidBelow, symbol)} et la résistance $${formatCoinPrice(shortInvalidAbove, symbol)}.`;
-    alternativeScenario = `Sortie violente de range nécessitant une réévaluation immédiate du flux d'ordres.`;
+    primaryScenario = waitReason || `Consolidation latérale entre le support $${formatCoinPrice(longInvalidBelow, symbol)} et la résistance $${formatCoinPrice(shortInvalidAbove, symbol)}.`;
+    alternativeScenario = `Sortie de range avec confirmation de volume requise avant tout engagement.`;
   }
 
   const msTrend = ms.trend || 'NEUTRAL';
@@ -569,52 +468,58 @@ export function generateQuantitativePlan(
   keyFactors.push(`Régime de Marché : ${marketRegime.replace('_', ' ')}`);
   keyFactors.push(`Structure : ${msTrend} (${msStructure})`);
   keyFactors.push(`RSI(14) : ${indicators?.rsi14 || 50} | MACD Hist : ${indicators?.macd?.histogram || 0}`);
-  keyFactors.push(`EMA 20/50/200 : ${currentPrice > (indicators?.ema200 || currentPrice) ? 'Au-dessus de EMA200 (Macro Bull)' : 'Sous EMA200 (Macro Bear)'}`);
+  keyFactors.push(`Qualité d'Entrée : ${entryQuality.status || 'WAIT'} (Grade ${entryQuality.grade}) - ${entryType}`);
+  if (rejectionReason) {
+    keyFactors.push(`Filtre de Sécurité : ${rejectionReason}`);
+  }
   if (orderBook) {
     keyFactors.push(`Carnet d'ordres : ${orderBook.bias === 'BUYERS_STRONG' ? 'Pression acheteuse (+)' : orderBook.bias === 'SELLERS_STRONG' ? 'Pression vendeuse (-)' : 'Équilibré'}`);
   }
 
   const riskLevel: RiskLevel =
-    marketRegime === 'HIGH_VOLATILITY' || grade === 'C' ? 'HIGH' : grade === 'A' ? 'LOW' : 'MEDIUM';
+    marketRegime === 'HIGH_VOLATILITY' || entryQuality.grade === 'C' ? 'HIGH' : entryQuality.grade === 'A' ? 'LOW' : 'MEDIUM';
 
-  const technicalReason = `${decision} ${pairLabel} (${timeframe}) basé sur Score Quantitatif ${quantScore.signalStrength}/100. Structure: ${msTrend}, Régime: ${marketRegime}.`;
+  const technicalReason = `${decision} ${pairLabel} (${timeframe}) basé sur Score Quantitatif ${quantScore.signalStrength}/100 [Qualité: ${entryQuality.status} ${entryQuality.grade}]. Structure: ${msTrend}, Régime: ${marketRegime}.${waitReason ? ` Note: ${waitReason}` : ''}`;
   const riskWarning = 'Le trading de cryptomonnaies comporte un risque élevé. Respectez un risque maximal de 1% à 2% par trade.';
 
   const detailedAnalysis = {
     fr: `📊 **RAPPORT QUANTITATIF ${pairLabel} (${timeframe.toUpperCase()})**
-• **Décision** : ${decision} (Force du Signal : ${quantScore.signalStrength}%)
+• **Décision** : ${decision} (Force du Signal : ${quantScore.signalStrength}% | Qualité : ${entryQuality.status || 'WAIT'} Grade ${entryQuality.grade})
+• **Type d'Entrée** : ${entryType}
 • **Régime de Marché** : ${marketRegime}
 • **Structure de Marché** : ${msTrend} - ${msBos}
 • **Moyennes Mobiles** : EMA20 ($${formatCoinPrice(indicators?.ema20 || currentPrice, symbol)}), EMA50 ($${formatCoinPrice(indicators?.ema50 || currentPrice, symbol)}), EMA200 ($${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
 • **Momentum** : RSI14 à ${indicators?.rsi14 || 50}, MACD Histogram à ${indicators?.macd?.histogram || 0}
 • **Carnet & Flux** : ${orderBook ? `Ratio Bids/Asks : ${orderBook.bidAskRatio} (${orderBook.bias})` : 'Données spot Binance'}
 • **Plan de Trade** :
-  - Entrée Idéale : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'N/A'}
+  - Entrée Idéale : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)} [Zone: $${formatCoinPrice(entryZone.min, symbol)} - $${formatCoinPrice(entryZone.max, symbol)}]` : 'N/A'}
   - Stop Loss : ${stopLoss ? `$${formatCoinPrice(stopLoss, symbol)}` : 'N/A'}
   - Objectifs : ${targets ? `TP1 $${formatCoinPrice(targets.tp1, symbol)} | TP2 $${formatCoinPrice(targets.tp2, symbol)} | TP3 $${formatCoinPrice(targets.tp3, symbol)}` : 'N/A'}
-  - Ratio Risque/Rendement : ${riskRewardRatio ? `1:${riskRewardRatio}` : 'N/A'}`,
+  - Ratio Risque/Rendement : ${riskRewardRatio ? `1:${riskRewardRatio}` : 'N/A'}${waitReason ? `\n• **Statut d'Attente** : ${waitReason}` : ''}`,
 
-    ar: `📊 **تقرير التحليل الكمي والفني لزوج ${pairLabel} (${timeframe.toUpperCase()})**
-• **القرار** : ${decision === 'LONG' ? 'شراء (LONG)' : decision === 'SHORT' ? 'بيع (SHORT)' : 'انتظار (WAIT)'} (قوة الإشارة: ${quantScore.signalStrength}%)
-• **حالة السوق** : ${marketRegime}
+    ar: `📊 **تقرير التحليل الكمي المتقدم لزوج ${pairLabel} (${timeframe.toUpperCase()})**
+• **القرار** : ${decision === 'LONG' ? 'شراء (LONG)' : decision === 'SHORT' ? 'بيع (SHORT)' : 'انتظار (WAIT)'} (قوة الإشارة: ${quantScore.signalStrength}% | جودة الدخول: ${entryQuality.status || 'WAIT'} فئة ${entryQuality.grade})
+• **نوع الدخول** : ${entryType}
+• **حالة وسياق السوق** : ${marketRegime}
 • **هيكل السوق** : ${msTrend} (${msStructure})
-• **المؤشرات الفنية** : RSI14 (${indicators?.rsi14 || 50}) | Stochastic (${indicators?.stoch?.k || 50}) | MACD (${indicators?.macd?.histogram || 0}) | EMA200 (${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
-• **خطة التداول** :
-  - سعر الدخول المثالي : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'غير متاح'}
+• **المؤشرات الفنية** : RSI14 (${indicators?.rsi14 || 50}) | MACD (${indicators?.macd?.histogram || 0}) | EMA200 (${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
+• **خطة الدخول وإدارة المخاطر** :
+  - منطقة الدخول المثالية : ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)} (النطاق: $${formatCoinPrice(entryZone.min, symbol)} - $${formatCoinPrice(entryZone.max, symbol)})` : 'غير متاح'}
   - وقف الخسارة (SL) : ${stopLoss ? `$${formatCoinPrice(stopLoss, symbol)}` : 'غير متاح'}
   - الأهداف الربحية : ${targets ? `TP1: $${formatCoinPrice(targets.tp1, symbol)} | TP2: $${formatCoinPrice(targets.tp2, symbol)}` : 'غير متاح'}
-  - نسبة المخاطرة/المكسب : ${riskRewardRatio ? `1:${riskRewardRatio}` : 'غير متاح'}`,
+  - نسبة العائد إلى المخاطرة : ${riskRewardRatio ? `1:${riskRewardRatio}` : 'غير متاح'}${waitReason ? `\n• **سبب الانتظار** : ${waitReason}` : ''}`,
 
     en: `📊 **QUANTITATIVE ${pairLabel} REPORT (${timeframe.toUpperCase()})**
-• **Decision**: ${decision} (Signal Strength: ${quantScore.signalStrength}%)
+• **Decision**: ${decision} (Signal Strength: ${quantScore.signalStrength}% | Entry Quality: ${entryQuality.status || 'WAIT'} Grade ${entryQuality.grade})
+• **Entry Type**: ${entryType}
 • **Market Regime**: ${marketRegime}
 • **Market Structure**: ${msTrend} (${msStructure})
 • **Indicators**: RSI14 (${indicators?.rsi14 || 50}), MACD Hist (${indicators?.macd?.histogram || 0}), EMA200 ($${formatCoinPrice(indicators?.ema200 || currentPrice, symbol)})
 • **Trade Execution Plan**:
-  - Ideal Entry: ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)}` : 'N/A'}
+  - Ideal Entry: ${entryZone ? `$${formatCoinPrice(entryZone.ideal, symbol)} [Zone: $${formatCoinPrice(entryZone.min, symbol)} - $${formatCoinPrice(entryZone.max, symbol)}]` : 'N/A'}
   - Stop Loss: ${stopLoss ? `$${formatCoinPrice(stopLoss, symbol)}` : 'N/A'}
   - Targets: ${targets ? `TP1 $${formatCoinPrice(targets.tp1, symbol)}, TP2 $${formatCoinPrice(targets.tp2, symbol)}` : 'N/A'}
-  - Risk/Reward: ${riskRewardRatio ? `1:${riskRewardRatio}` : 'N/A'}`,
+  - Risk/Reward: ${riskRewardRatio ? `1:${riskRewardRatio}` : 'N/A'}${waitReason ? `\n• **Wait Condition**: ${waitReason}` : ''}`,
   };
 
   return {
@@ -632,6 +537,9 @@ export function generateQuantitativePlan(
     targets,
     stopLoss,
     riskRewardRatio,
+    entryType,
+    waitReason,
+    rejectionReason,
     invalidation: {
       longInvalidBelow,
       shortInvalidAbove,

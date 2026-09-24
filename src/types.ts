@@ -161,10 +161,18 @@ export interface QuantitativeScore {
   };
 }
 
+export type EntryQualityStatus = 'VALID' | 'WAIT' | 'INVALID';
+export type EntryTypeCategory = 'MARKET_ENTRY' | 'PULLBACK_ENTRY' | 'RETEST_ENTRY' | 'BREAKOUT_ENTRY';
+
 export interface EntryQuality {
+  status?: EntryQualityStatus;
   grade: 'A' | 'B' | 'C' | 'D';
-  score: number; // 0-100
+  score: number; // 0-100 (Signal Strength)
+  entryType?: EntryTypeCategory;
+  rejectionReason?: string;
   reason: string;
+  antiChasePassed?: boolean;
+  distanceFromIdealPct?: number;
 }
 
 export interface TimeframeAnalysis {
@@ -238,6 +246,9 @@ export interface AIAnalysisResult {
   keyFactors: string[];
   technicalReason: string;
   riskWarning: string;
+  entryType?: EntryTypeCategory;
+  waitReason?: string;
+  rejectionReason?: string;
 
   detailedAnalysis: {
     fr: string;
