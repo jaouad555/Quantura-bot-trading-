@@ -1,5 +1,6 @@
 import { kv } from './db';
 import { RiskEngine } from './riskEngine/RiskEngine';
+import { RoeEngine, DEFAULT_ROE_CONFIG } from './roeEngine';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -566,6 +567,7 @@ export const startBotEngine = () => {
 
       const binanceConfig = await getBinanceConfig();
       const isLiveMode = await kv.get('app_execution_mode') === 'BINANCE_LIVE';
+      const roeEngineInstance = RoeEngine.getInstance(botConfig.roeEngine);
 
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
@@ -576,22 +578,54 @@ export const startBotEngine = () => {
 
         const isLong = pos.decision === 'LONG';
         const lev = Math.max(1, pos.leverage || 1);
-        
-        // Exact ROE% and Price Difference Math
-        // LONG: (current - entry) / entry * 100
-        // SHORT: (entry - current) / entry * 100
-        const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-        const roePercent = priceDiffPct * lev;
-        const unrealizedPnlUsdt = pos.remainingAmountUsdt * (roePercent / 100);
+        const activeMargin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt > 0
+          ? pos.remainingAmountUsdt
+          : (pos.marginUsdt || pos.initialAmountUsdt || 10);
+
+        // Advanced Server-Authoritative ROE Engine Calculation (Separating Gross, Net, Fees, Funding, Slippage)
+        const roeMetrics = roeEngineInstance.evaluatePosition({
+          symbol: pos.symbol,
+          decision: pos.decision,
+          entryPrice: pos.entryPrice,
+          currentPrice: currentP,
+          leverage: lev,
+          marginUsdt: activeMargin,
+          initialMarginUsdt: pos.initialAmountUsdt,
+          realizedPnlUsdt: pos.realizedPnlUsdt,
+          currentStopLoss: pos.stopLoss,
+          initialStopLoss: pos.initialStopLoss,
+          peakROE: pos.peakROE,
+          peakPrice: pos.peakPrice,
+          previousState: pos.roeState,
+          tp1Hit: pos.tp1Hit,
+          tp2Hit: pos.tp2Hit,
+          tp3Hit: pos.tp3Hit,
+          openedAt: pos.openedAt,
+        });
+
+        // Audit Logging for state transitions and SL updates
+        roeEngineInstance.logEvaluation(pos.symbol, pos.decision, roeMetrics, pos.entryPrice, currentP, lev);
 
         // Update live position state on every tick
         pos.currentPrice = currentP;
-        pos.unrealizedPnlUsdt = Math.round(unrealizedPnlUsdt * 100) / 100;
-        pos.roePercent = Math.round(roePercent * 100) / 100;
-        if (!pos.marginUsdt) pos.marginUsdt = pos.remainingAmountUsdt;
-        if (!pos.positionSizeUsdt) pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
+        pos.grossROE = roeMetrics.grossROE;
+        pos.netROE = roeMetrics.netROE;
+        pos.roePercent = roeMetrics.netROE; // Backward-compatible alias
+        pos.unrealizedPnlUsdt = roeMetrics.netPnL;
+        pos.peakROE = roeMetrics.peakROE;
+        pos.roeDrawdown = roeMetrics.roeDrawdown;
+        pos.roeState = roeMetrics.state;
+        pos.estimatedFeesUsdt = roeMetrics.estimatedFees;
+        pos.fundingCostUsdt = roeMetrics.fundingCost;
+        pos.estimatedSlippageUsdt = roeMetrics.estimatedSlippage;
+        pos.breakevenPrice = roeMetrics.breakevenPrice;
+        pos.protectedProfitUsdt = roeMetrics.protectedProfitUsdt;
+        pos.trailingStatus = roeMetrics.trailingStatus;
+
+        if (!pos.marginUsdt) pos.marginUsdt = activeMargin;
+        if (!pos.positionSizeUsdt) pos.positionSizeUsdt = activeMargin * lev;
         if (!pos.pnlHistory) pos.pnlHistory = [];
-        pos.pnlHistory = [...pos.pnlHistory, Math.round(roePercent * 10) / 10].slice(-50);
+        pos.pnlHistory = [...pos.pnlHistory, Math.round(roeMetrics.netROE * 10) / 10].slice(-50);
 
         // In SPOT mode (or 1x leverage), there is NO liquidation mechanism whatsoever
         const isPosFutures = pos.marketType === 'FUTURES' && (pos.leverage || 1) > 1;
@@ -610,11 +644,11 @@ export const startBotEngine = () => {
           pos.leverage = 1;
         }
 
-        // 1. LIQUIDATION GUARD CHECK (FUTURES ONLY)
+        // 1. LIQUIDATION GUARD CHECK (FUTURES ONLY - HIGHEST RISK HIERARCHY)
         const isLiquidated = isPosFutures && (
           (isLong && currentP <= (pos.liquidationPrice || 0)) ||
           (!isLong && currentP >= (pos.liquidationPrice || Infinity)) ||
-          roePercent <= -99.0
+          roeMetrics.netROE <= -99.0
         );
 
         const isPosLive = pos.mode === 'BINANCE_LIVE';
@@ -623,7 +657,7 @@ export const startBotEngine = () => {
           console.warn(`[SERVER ENGINE] 🚨 LIQUIDATION TRIGGERED for ${pos.symbol} at ${currentP} (Entry: ${pos.entryPrice}, Liq: ${pos.liquidationPrice})`);
           const marginLost = pos.remainingAmountUsdt;
           const tranchePnl = -marginLost;
-          const totalTradePnl = pos.realizedPnlUsdt + tranchePnl;
+          const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
@@ -682,53 +716,40 @@ export const startBotEngine = () => {
           continue;
         }
 
-        // 2. TRAILING STOP LOSS (Server-Side)
-        if (botConfig.trailingStopEnabled) {
-          const trailGapPercent = (botConfig.trailingStopPercent || 1.2) / 100;
-          const activationProfit = botConfig.trailingActivationProfitPercent || 1.5;
-          
-          let currentPeak = pos.peakPrice || pos.entryPrice;
-          if ((isLong && currentP > currentPeak) || (!isLong && currentP < currentPeak)) {
-            currentPeak = currentP;
-            pos.peakPrice = currentPeak;
-            stateChanged = true;
-          }
+        // 2. ADVANCED ROE ENGINE STOP LOSS RATCHETING & TRAILING (Server-Side)
+        // Strict Monotonicity: Long SL only moves UP, Short SL only moves DOWN, never loosens!
+        let currentPeak = pos.peakPrice || pos.entryPrice;
+        if ((isLong && currentP > currentPeak) || (!isLong && currentP < currentPeak)) {
+          currentPeak = currentP;
+          pos.peakPrice = currentPeak;
+          stateChanged = true;
+        }
 
-          if (roePercent >= activationProfit || pos.tp1Hit) {
-            let calculatedTrailingSl = isLong 
-              ? currentPeak * (1 - trailGapPercent) 
-              : currentPeak * (1 + trailGapPercent);
+        if (botConfig.trailingStopEnabled !== false && botConfig.roeEngine?.enabled !== false) {
+          if (roeMetrics.shouldUpdateStopLoss && roeMetrics.candidateStopLoss) {
+            const candidateSL = roeMetrics.candidateStopLoss;
+            const isTighter = isLong
+              ? (!pos.stopLoss || candidateSL > pos.stopLoss)
+              : (!pos.stopLoss || candidateSL < pos.stopLoss);
 
-            // Once activated or TP1 hit, guarantee SL is at least Breakeven + fee buffer (+0.05%)
-            const breakevenFloor = isLong ? pos.entryPrice * 1.0005 : pos.entryPrice * 0.9995;
-            if (isLong) {
-              calculatedTrailingSl = Math.max(calculatedTrailingSl, breakevenFloor);
-            } else {
-              calculatedTrailingSl = Math.min(calculatedTrailingSl, breakevenFloor);
-            }
-
-            const isTslTighter = isLong
-              ? (!pos.stopLoss || calculatedTrailingSl > pos.stopLoss)
-              : (!pos.stopLoss || calculatedTrailingSl < pos.stopLoss);
-
-            if (isTslTighter) {
-              pos.stopLoss = calculatedTrailingSl;
-              pos.trailingStopPrice = calculatedTrailingSl;
+            if (isTighter) {
+              pos.stopLoss = candidateSL;
+              pos.trailingStopPrice = candidateSL;
               pos.isTrailingActive = true;
-              pos.lastAction = `Trailing SL: $${calculatedTrailingSl.toFixed(2)} ⚡ (Locked Profit)`;
+              pos.lastAction = `${roeMetrics.state} | SL: $${candidateSL.toFixed(2)} ⚡ (${roeMetrics.stopLossUpdateReason || 'Locked Profit'})`;
               stateChanged = true;
             }
           }
         }
 
-        // 3. TP1 HIT (Take 50% profit, move SL to breakeven + fee buffer without degrading existing Trailing SL)
+        // 3. TP1 HIT (Take 50% profit, move SL to Fee-Aware Breakeven without degrading existing Trailing SL)
         const isTp1Valid = isLong ? pos.tp1 > pos.entryPrice : pos.tp1 < pos.entryPrice;
         const isTp1Triggered = isTp1Valid && !pos.tp1Hit && (isLong ? currentP >= pos.tp1 : currentP <= pos.tp1);
 
         if (isTp1Triggered) {
           console.log(`[SERVER ENGINE] TP1 Hit for ${pos.symbol} at ${currentP}`);
           const marginClosed = pos.remainingAmountUsdt * 0.5;
-          const tranchePnl = marginClosed * (roePercent / 100);
+          const tranchePnl = marginClosed * (roeMetrics.netROE / 100);
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
 
           if (isPosLive) {
@@ -747,21 +768,21 @@ export const startBotEngine = () => {
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
 
-          // Protect capital: move stop loss to breakeven + 0.05% fee buffer, NEVER lowering an already higher trailing SL
-          const breakevenFeeAdjusted = isLong ? pos.entryPrice * 1.0005 : pos.entryPrice * 0.9995;
+          // Protect capital: move stop loss to fee-aware breakeven, NEVER lowering an already higher trailing SL
+          const breakevenFloor = roeMetrics.breakevenPrice || (isLong ? pos.entryPrice * 1.001 : pos.entryPrice * 0.999);
           pos.stopLoss = isLong
-            ? Math.max(pos.stopLoss || 0, breakevenFeeAdjusted)
-            : Math.min(pos.stopLoss || breakevenFeeAdjusted, breakevenFeeAdjusted);
+            ? Math.max(pos.stopLoss || 0, breakevenFloor)
+            : Math.min(pos.stopLoss || breakevenFloor, breakevenFloor);
 
-          pos.lastAction = 'TP1 hit: 50% closed, SL locked at breakeven+ ✓ (Server)';
+          pos.lastAction = 'TP1 hit: 50% closed, SL locked at fee-aware breakeven+ ✓ (Server)';
           stateChanged = true;
 
           sendServerTelegramNotification(
             `🎯 <b>TP1 Target Achieved!</b>\n\n` +
             `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
             `💰 Closed: 50% at $${currentP.toLocaleString()}\n` +
-            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roePercent.toFixed(1)}%)\n` +
-            `🛡️ Stop Loss moved to Break-Even (${pos.entryPrice.toLocaleString()})`
+            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}% Net ROE)\n` +
+            `🛡️ Stop Loss secured at Fee-Aware Breakeven ($${pos.stopLoss?.toLocaleString()})`
           );
 
           logsToAdd.push({
@@ -773,8 +794,8 @@ export const startBotEngine = () => {
             price: currentP,
             amountUsdt: marginClosed * lev,
             pnlUsdt: tranchePnl,
-            pnlPercent: roePercent,
-            reason: `TP1 achieved (50% closed at ${currentP}, SL secured at breakeven)`,
+            pnlPercent: roeMetrics.netROE,
+            reason: `TP1 achieved (50% closed at ${currentP}, SL secured at fee-aware breakeven)`,
             mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
         }
@@ -786,7 +807,7 @@ export const startBotEngine = () => {
         if (isTp2Triggered) {
           console.log(`[SERVER ENGINE] TP2 Hit for ${pos.symbol} at ${currentP}`);
           const marginClosed = pos.remainingAmountUsdt * 0.5;
-          const tranchePnl = marginClosed * (roePercent / 100);
+          const tranchePnl = marginClosed * (roeMetrics.netROE / 100);
           const cashReturned = Math.max(0, marginClosed + tranchePnl);
 
           if (isPosLive) {
@@ -805,7 +826,7 @@ export const startBotEngine = () => {
           pos.remainingAmountBtc *= 0.5;
           pos.realizedPnlUsdt += tranchePnl;
 
-          // Lock SL at TP1 price to guarantee massive gain on the remaining 25% runner!
+          // Lock SL at TP1 price to guarantee massive gain on the remaining runner
           if (pos.tp1 && pos.tp1 > 0) {
             pos.stopLoss = isLong
               ? Math.max(pos.stopLoss || 0, pos.tp1)
@@ -819,7 +840,7 @@ export const startBotEngine = () => {
             `🎯 <b>TP2 Target Hit! (Runner Secured)</b>\n\n` +
             `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
             `💰 Closed: 50% remaining at $${currentP.toLocaleString()}\n` +
-            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roePercent.toFixed(1)}%)\n` +
+            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}%)\n` +
             `🛡️ Stop Loss advanced to TP1 (${(pos.tp1 || 0).toLocaleString()})`
           );
 
@@ -832,7 +853,7 @@ export const startBotEngine = () => {
             price: currentP,
             amountUsdt: marginClosed * lev,
             pnlUsdt: tranchePnl,
-            pnlPercent: roePercent,
+            pnlPercent: roeMetrics.netROE,
             reason: `TP2 achieved (50% remaining closed at ${currentP}, SL advanced to TP1)`,
             mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
@@ -848,7 +869,7 @@ export const startBotEngine = () => {
           console.log(`[SERVER ENGINE] ${isTp3 ? 'TP3' : 'SL'} Hit for ${pos.symbol} at ${currentP}`);
           
           const marginClosed = pos.remainingAmountUsdt;
-          let tranchePnl = marginClosed * (roePercent / 100);
+          let tranchePnl = marginClosed * (roeMetrics.netROE / 100);
           
           // Liquidation clamp
           if (tranchePnl < -marginClosed) {
@@ -891,7 +912,7 @@ export const startBotEngine = () => {
             price: currentP,
             amountUsdt: marginClosed * lev,
             pnlUsdt: Math.round(tranchePnl * 100) / 100,
-            pnlPercent: Math.round(roePercent * 100) / 100,
+            pnlPercent: Math.round(roeMetrics.netROE * 100) / 100,
             reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
             mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER'
           });
@@ -992,10 +1013,25 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
     const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
     const isLong = pos.decision === 'LONG';
     const lev = Math.max(1, pos.leverage || 1);
-    const priceDiffPct = ((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-    const roePercent = priceDiffPct * lev;
     const marginClosed = pos.remainingAmountUsdt || 0;
-    let tranchePnl = marginClosed * (roePercent / 100);
+
+    const roeMetrics = RoeEngine.getInstance().evaluatePosition({
+      symbol: pos.symbol,
+      decision: pos.decision,
+      entryPrice: pos.entryPrice,
+      currentPrice: currentP,
+      leverage: lev,
+      marginUsdt: marginClosed,
+      initialMarginUsdt: pos.initialAmountUsdt,
+      realizedPnlUsdt: pos.realizedPnlUsdt,
+      tp1Hit: pos.tp1Hit,
+      tp2Hit: pos.tp2Hit,
+      tp3Hit: pos.tp3Hit,
+      openedAt: pos.openedAt,
+    });
+
+    const roePercent = roeMetrics.netROE;
+    let tranchePnl = roeMetrics.netPnL;
     if (tranchePnl < -marginClosed) tranchePnl = -marginClosed;
     const cashReturned = Math.max(0, marginClosed + tranchePnl);
     const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;

@@ -794,11 +794,16 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     const isLong = pos.decision === 'LONG';
     const lev = Math.max(1, pos.leverage || 1);
     const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-    const roePercent = priceDiffPct * lev;
+    const grossROE = pos.grossROE !== undefined ? pos.grossROE : (priceDiffPct * lev);
+    const netROE = pos.netROE !== undefined ? pos.netROE : (pos.roePercent !== undefined ? pos.roePercent : grossROE);
+    const roePercent = netROE;
     const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
       ? pos.remainingAmountUsdt
       : (pos.marginUsdt || pos.initialAmountUsdt || 0);
     const usdt = calculatePositionUnrealizedPnl(pos, p);
+    const peakROE = pos.peakROE !== undefined ? pos.peakROE : Math.max(0, netROE);
+    const roeDrawdown = pos.roeDrawdown !== undefined ? pos.roeDrawdown : Math.max(0, peakROE - netROE);
+    const roeState = pos.roeState || (netROE < 0 ? 'LOSS' : netROE < 1.5 ? 'RECOVERY' : netROE < 3.0 ? 'PROFIT' : netROE < 5.0 ? 'PROTECTED' : 'LOCK_PROFIT');
 
     // Distance to liquidation %
     let distanceToLiqPct: number | null = null;
@@ -808,12 +813,20 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
     return { 
       roePercent, 
+      grossROE,
+      netROE,
+      peakROE,
+      roeDrawdown,
+      roeState,
       priceDiffPct, 
       usdt, 
       currentP: p,
       margin,
       positionSizeUsdt: margin * lev,
-      distanceToLiqPct
+      distanceToLiqPct,
+      estimatedFees: pos.estimatedFeesUsdt || 0,
+      breakevenPrice: pos.breakevenPrice || pos.entryPrice,
+      protectedProfitUsdt: pos.protectedProfitUsdt || 0
     };
   };
 
@@ -984,6 +997,24 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     {activePosition.strategyName}
                   </span>
                 )}
+
+                {/* ROE Engine State Machine Badge */}
+                {metrics.roeState && (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border flex items-center gap-1 ${
+                    metrics.roeState === 'LOCK_PROFIT'
+                      ? 'bg-purple-950/80 text-purple-300 border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)] animate-pulse'
+                      : metrics.roeState === 'PROTECTED'
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                      : metrics.roeState === 'PROFIT'
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40'
+                      : metrics.roeState === 'RECOVERY'
+                      ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                      : 'bg-rose-950/80 text-rose-300 border-rose-500/40'
+                  }`}>
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>{metrics.roeState}</span>
+                  </span>
+                )}
                 
                 <span className="text-[10px] font-mono text-slate-500">
                   #{index + 1}
@@ -1002,6 +1033,15 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       {isArabic ? 'حجم العقد الإجمالي:' : 'Notional Size:'}{' '}
                       <strong className="text-cyan-300 font-bold">${metrics.positionSizeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </span>
+                    <span className="text-slate-700">•</span>
+                    <span title={isArabic ? 'القمة المحققة للـ ROE' : 'Peak Net ROE'}>
+                      Peak: <strong className="text-emerald-300">+{metrics.peakROE.toFixed(2)}%</strong>
+                    </span>
+                    {metrics.roeDrawdown > 0 && (
+                      <span className="text-amber-400 text-[11px]" title={isArabic ? 'التراجع من القمة' : 'ROE Drawdown'}>
+                        (DD: -{metrics.roeDrawdown.toFixed(2)}%)
+                      </span>
+                    )}
                   </>
                 )}
               </div>
@@ -1010,13 +1050,18 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
           {/* Right: Live ROE Counter & Net PnL Hero Pill */}
           <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-            <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end justify-center min-w-[150px] ${emotionConfig.roeBg}`}>
-              <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-slate-400 block">
-                {isFutures ? (isArabic ? 'العائد على الهامش (ROE)' : 'Live Return (ROE)') : (isArabic ? 'ربح / خسارة الصفقة' : 'Spot Return')}
-              </span>
+            <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end justify-center min-w-[160px] ${emotionConfig.roeBg}`}>
+              <div className="flex items-center justify-between w-full text-[10px] uppercase font-mono tracking-wider font-semibold text-slate-400">
+                <span>{isFutures ? (isArabic ? 'صافي ROE' : 'Net ROE') : (isArabic ? 'عائد السبوت' : 'Spot Return')}</span>
+                {isFutures && (
+                  <span className="text-[9px] text-slate-500" title="Gross ROE before fees/funding">
+                    Gross: {metrics.grossROE >= 0 ? '+' : ''}{metrics.grossROE.toFixed(1)}%
+                  </span>
+                )}
+              </div>
               <div className={`text-lg sm:text-xl font-mono font-black flex items-center gap-1.5 ${emotionConfig.roeColor}`}>
                 <span>{liveRoePercent >= 0 ? '+' : ''}{liveRoePercent.toFixed(2)}%</span>
-                {isFutures && <span className="text-xs font-bold opacity-80">ROE</span>}
+                {isFutures && <span className="text-xs font-bold opacity-80">NET</span>}
               </div>
               <span className="text-xs font-mono font-bold text-slate-300">
                 {livePnlUsdt >= 0 ? '+' : ''}${livePnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT

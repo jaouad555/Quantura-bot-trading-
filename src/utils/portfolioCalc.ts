@@ -17,16 +17,26 @@ export function calculatePositionUnrealizedPnl(
     : (pos.marginUsdt || pos.initialAmountUsdt || 0);
     
   if (margin <= 0) return 0;
+
+  // If using authoritative currentPrice and pos.unrealizedPnlUsdt is present, use server value
+  if ((!livePrice || livePrice === pos.currentPrice) && typeof pos.unrealizedPnlUsdt === 'number' && !isNaN(pos.unrealizedPnlUsdt)) {
+    return pos.unrealizedPnlUsdt;
+  }
   
   const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1);
-  const pnl = margin * priceDiffPct * lev;
+  const grossPnl = margin * priceDiffPct * lev;
+
+  // Conservative fee deduction (0.05% entry + 0.05% exit on notional)
+  const positionNotional = margin * lev;
+  const estimatedFees = positionNotional * 0.001;
+  const netPnl = grossPnl - estimatedFees;
   
   // Guard against loss exceeding 100% of isolated margin
-  if (pnl < -margin) {
+  if (netPnl < -margin) {
     return -margin;
   }
   
-  return pnl;
+  return netPnl;
 }
 
 /**

@@ -503,7 +503,24 @@ export interface AutoBotConfig {
   multiPairScanning?: boolean; // Autonomous scanning across top watchlist symbols
   autoAdaptiveStrategy?: boolean; // AI reads market regime in real-time and auto-matches optimal strategy
   activePresets?: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[]; // Currently selected presets in UI
+  // Advanced ROE Engine Configuration
+  roeEngine?: {
+    enabled?: boolean;
+    trailingActivationROE?: number; // e.g. 1.5% Net ROE to arm trailing stop
+    profitProtectionROE?: number; // e.g. 3.0% Net ROE to guarantee profit floor
+    aggressiveProtectionROE?: number; // e.g. 5.0% Net ROE to tighten trailing
+    minimumProfitROE?: number; // e.g. 0.5% Net ROE guaranteed floor once protected
+    trailingMode?: 'FIXED' | 'ATR_DYNAMIC';
+    trailingStopPercent?: number; // e.g. 1.2%
+    atrTrailingMultiplier?: number; // e.g. 1.5x ATR
+    minimumTrailingPercent?: number; // e.g. 0.8%
+    maximumTrailingPercent?: number; // e.g. 2.5%
+    feeAwareBreakeven?: boolean;
+    fundingAwareROE?: boolean;
+  };
 }
+
+export type RoeStateType = 'LOSS' | 'RECOVERY' | 'PROFIT' | 'PROTECTED' | 'LOCK_PROFIT';
 
 export interface ActiveBotPosition {
   id: string;
@@ -539,6 +556,20 @@ export interface ActiveBotPosition {
   marginUsdt?: number; // Initial/Current active margin
   positionSizeUsdt?: number; // Total leveraged notional value (Margin * Leverage)
   liquidationPrice?: number; // Bankruptcy / Liquidation price
+  // Advanced ROE Engine Metrics & State
+  grossROE?: number; // Directional price delta * leverage
+  netROE?: number; // Net ROE % factoring fees, slippage, and funding
+  roePercent?: number; // Backward-compatible alias for netROE
+  unrealizedPnlUsdt?: number;
+  peakROE?: number; // Highest Net ROE achieved during trade lifetime (non-decreasing)
+  roeDrawdown?: number; // Drawdown from peak ROE (peakROE - netROE)
+  roeState?: RoeStateType;
+  estimatedFeesUsdt?: number;
+  fundingCostUsdt?: number;
+  estimatedSlippageUsdt?: number;
+  breakevenPrice?: number;
+  protectedProfitUsdt?: number;
+  trailingStatus?: 'INACTIVE' | 'ACTIVE' | 'LOCKED_PROFIT' | 'AGGRESSIVE';
   // Trailing stop tracking
   peakPrice?: number;
   isTrailingActive?: boolean;

@@ -22,5 +22,6 @@
   "app_email": "jawman27227@gmail.com",
   "app_username": "jawman27227",
   "quantura_backtest_settings": "{\"viewMode\":\"SINGLE_COIN\",\"activeSingleSymbol\":\"BTCUSDT\",\"selectedStrategyId\":\"SWING\",\"timeframe\":\"4h\",\"months\":6,\"initialBalance\":1000,\"leverage\":1,\"marketType\":\"SPOT\",\"tradeAllocationPercent\":20,\"riskRewardTarget\":2.5,\"minSignalStrength\":65,\"slAtrMultiplier\":2,\"trailingStopEnabled\":true,\"trailingStopPercent\":1.2,\"trailingActivationProfitPercent\":1.5,\"feeRatePercent\":0.05,\"slippagePercent\":0.02,\"activeSymbolsForBacktest\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\",\"BNBUSDT\",\"XRPUSDT\",\"DOGEUSDT\",\"ADAUSDT\",\"AVAXUSDT\"]}",
-  "selected_trading_pair": "BTCUSDT"
+  "selected_trading_pair": "BTCUSDT",
+  "binance_api_config": "{\"apiKey\":\"\",\"apiSecret\":\"\",\"useTestnet\":false,\"isLiveModeEnabled\":false,\"isConnected\":false,\"accountInfo\":null,\"autoTradingEnabled\":false}"
 }

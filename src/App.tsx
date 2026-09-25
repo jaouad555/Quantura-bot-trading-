@@ -162,6 +162,8 @@ export const App: React.FC = () => {
     } catch {}
     return 'fr';
   });
+  const languageRef = useRef<Language>(language);
+  useEffect(() => { languageRef.current = language; }, [language]);
   const [timezone, setTimezone] = useState<TimezoneMode>(() => {
     try {
       const saved = apiStorage.getItem('app_timezone');
@@ -598,6 +600,8 @@ export const App: React.FC = () => {
     return '1h';
   });
   const [ticker, setTicker] = useState<BinanceTicker | null>(null);
+  const tickerRef = useRef<BinanceTicker | null>(null);
+  useEffect(() => { tickerRef.current = ticker; }, [ticker]);
   const [klines, setKlines] = useState<KlineCandle[]>([]);
   const [marketData, setMarketData] = useState<MarketDataResponse | null>(null);
   const marketDataRef = useRef<MarketDataResponse | null>(null);
