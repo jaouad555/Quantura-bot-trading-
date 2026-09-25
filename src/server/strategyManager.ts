@@ -489,28 +489,34 @@ class StrategyManager {
       }
 
       case 'BREAKOUT': {
-        // Volatility expansion breaking out of squeeze with ADX confirmation
+        // Volatility expansion breaking out of squeeze with ADX & Volume confirmation
         const isBandwidthExpanding = bb.bandwidthPercent > 3.2 && adx >= 24;
-        if (isBandwidthExpanding && currentPrice >= bb.upper && rsi >= 56 && rsi <= 76) {
+        const vol = indicators?.volume || 0;
+        const volAvg = indicators?.volumeAvg20 || 0;
+        const hasVolSurge = volAvg > 0 ? vol >= volAvg * 1.15 : true;
+        const isNotOverExtendedLong = rsi <= 68 && Math.abs(currentPrice - ema20) <= 1.5 * atr;
+        const isNotOverExtendedShort = rsi >= 32 && Math.abs(currentPrice - ema20) <= 1.5 * atr;
+
+        if (isBandwidthExpanding && currentPrice >= bb.upper && rsi >= 54 && isNotOverExtendedLong && hasVolSurge) {
           decision = 'LONG';
-          confidence = Math.min(94, Math.round(72 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice > ema200 ? 5 : 0)));
-          reason = `Volatility Breakout: Confirmed Bollinger expansion (${bb.bandwidthPercent.toFixed(1)}%) with ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
+          confidence = Math.min(94, Math.round(74 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice > ema200 ? 5 : 0)));
+          reason = `Volatility Breakout: Confirmed Bollinger expansion (${bb.bandwidthPercent.toFixed(1)}%) with Volume surge, ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
           const rawSl = Math.min(bb.middle, currentPrice - atr * 1.2);
           stopLoss = rawSl < currentPrice ? rawSl : currentPrice - Math.max(atr * 1.2, currentPrice * 0.008);
           const risk = currentPrice - stopLoss;
-          tp1 = currentPrice + risk * 1.5;
-          tp2 = currentPrice + risk * 2.8;
-          tp3 = currentPrice + risk * 4.5;
-        } else if (isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 44 && rsi >= 24) {
+          tp1 = currentPrice + risk * 1.8;
+          tp2 = currentPrice + risk * 3.0;
+          tp3 = currentPrice + risk * 4.8;
+        } else if (isBandwidthExpanding && currentPrice <= bb.lower && rsi <= 46 && isNotOverExtendedShort && hasVolSurge) {
           decision = 'SHORT';
-          confidence = Math.min(94, Math.round(72 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice < ema200 ? 5 : 0)));
-          reason = `Volatility Breakout: Downward expansion (${bb.bandwidthPercent.toFixed(1)}%) with ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
+          confidence = Math.min(94, Math.round(74 + Math.min(10, bb.bandwidthPercent * 1.5) + (currentPrice < ema200 ? 5 : 0)));
+          reason = `Volatility Breakout: Downward expansion (${bb.bandwidthPercent.toFixed(1)}%) with Volume surge, ADX (${adx.toFixed(1)}) and RSI ${rsi.toFixed(1)}.`;
           const rawSl = Math.max(bb.middle, currentPrice + atr * 1.2);
           stopLoss = rawSl > currentPrice ? rawSl : currentPrice + Math.max(atr * 1.2, currentPrice * 0.008);
           const risk = stopLoss - currentPrice;
-          tp1 = currentPrice - risk * 1.5;
-          tp2 = currentPrice - risk * 2.8;
-          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 4.5);
+          tp1 = currentPrice - risk * 1.8;
+          tp2 = currentPrice - risk * 3.0;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 4.8);
         }
         break;
       }

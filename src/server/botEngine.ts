@@ -525,8 +525,71 @@ export const serverExecuteOrder = async (symbol: string, side: string, quoteOrde
 }
 
 
+export const permanentlyClosedPositionIds = new Set<string>();
+
+/**
+ * Reconciles the paper wallet to exact mathematical truth:
+ * Free Balance = Base Deposit (1000) + Total Realized PnL - Total Active In-Trade Margins
+ * This prevents any possibility of wallet balances multiplying or drifting when trades are lost!
+ */
+export const reconcilePaperWalletDirect = async () => {
+  try {
+    const histStr = await kv.get('btc_trade_history');
+    const history = histStr ? JSON.parse(histStr) : [];
+    
+    // Deduplicate history by trade id or key to ensure PnL is counted strictly once
+    const seenHistoryIds = new Set<string>();
+    const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER');
+    const uniquePaperTrades = paperTrades.filter((h: any) => {
+      const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
+      if (seenHistoryIds.has(id)) return false;
+      seenHistoryIds.add(id);
+      if (h.posId) permanentlyClosedPositionIds.add(h.posId);
+      if (h.id) permanentlyClosedPositionIds.add(h.id);
+      return true;
+    });
+
+    const totalRealizedPnl = uniquePaperTrades.reduce((acc: number, h: any) => acc + (Number(h.profitUsdt) || 0), 0);
+    
+    // Get active open positions
+    const posStr = await kv.get('btc_active_bot_positions');
+    const positions = posStr ? JSON.parse(posStr) : [];
+    const activePaperPositions = positions.filter((p: any) => !permanentlyClosedPositionIds.has(p.id) && (!p.mode || p.mode === 'PAPER'));
+    
+    const inTradeMargin = activePaperPositions.reduce((acc: number, p: any) => {
+      const m = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
+        ? p.remainingAmountUsdt
+        : (p.marginUsdt || p.initialAmountUsdt || 0);
+      return acc + Math.max(0, m);
+    }, 0);
+
+    const baseCapitalStr = await kv.get('paper_wallet_initial_deposit');
+    const baseCapital = baseCapitalStr ? (Number(baseCapitalStr) || 1000) : 1000;
+
+    const reconciledFreeCash = Math.max(0, Math.round((baseCapital + totalRealizedPnl - inTradeMargin) * 100) / 100);
+    const reconciledRealizedPnl = Math.round(totalRealizedPnl * 100) / 100;
+
+    const reconciledWallet = {
+      balance: reconciledFreeCash,
+      realizedPnl: reconciledRealizedPnl,
+      openPosition: null,
+      history: [],
+    };
+
+    await kv.set('btc_paper_wallet', JSON.stringify(reconciledWallet));
+    console.log(`[ACCOUNTING RECONCILE] Paper Wallet Restored to Truth: Free Balance: $${reconciledFreeCash}, Realized PnL: $${reconciledRealizedPnl}, In-Trade Margin: $${inTradeMargin}`);
+    return reconciledWallet;
+  } catch (err) {
+    console.error('[ACCOUNTING RECONCILE] Error reconciling paper wallet:', err);
+    return null;
+  }
+};
+
 export const startBotEngine = () => {
   console.log("🤖 Initializing Server-Side Bot Execution Engine...");
+
+  // Run initial sanity reconciliation on startup
+  reconcilePaperWalletDirect().catch(() => {});
 
   if (engineInterval) clearInterval(engineInterval);
 
@@ -541,21 +604,24 @@ export const startBotEngine = () => {
       let positions = JSON.parse(positionsStr);
       if (!Array.isArray(positions) || positions.length === 0) return;
 
+      // Filter out any positions that were already permanently closed to prevent duplicate triggers
+      positions = positions.filter((p: any) => p && p.id && !permanentlyClosedPositionIds.has(p.id));
+      if (positions.length === 0) return;
+
       let stateChanged = false;
-      let walletBalanceDelta = 0;
       let walletPnlDelta = 0;
+      let walletBalanceDelta = 0;
       const logsToAdd: any[] = [];
       const historyToAdd: any[] = [];
 
-
       // Group by symbol and marketType to fetch prices efficiently
-      const uniqueKeys = Array.from(new Set(positions.map((p: any) => `${(p.marketType || 'FUTURES')}_${String(p.symbol || 'BTCUSDT')}`)));
+      const uniqueKeys: string[] = Array.from(new Set(positions.map((p: any) => `${(p.marketType || 'FUTURES')}_${String(p.symbol || 'BTCUSDT')}`)));
       const priceResults = await Promise.allSettled(uniqueKeys.map(k => {
         const [mt, sym] = k.split('_');
         return fetchSymbolPrice(sym, mt as 'SPOT' | 'FUTURES');
       }));
       const prices: Record<string, number> = {};
-      uniqueKeys.forEach((k, idx) => {
+      uniqueKeys.forEach((k: string, idx: number) => {
         const res = priceResults[idx];
         const [_, sym] = k.split('_');
         if (res.status === 'fulfilled' && (res.value as number) > 0) {
@@ -950,6 +1016,7 @@ export const startBotEngine = () => {
             console.error('[SERVER ENGINE] Risk Engine record error:', err);
           }
 
+          permanentlyClosedPositionIds.add(pos.id);
           pos._delete = true;
           stateChanged = true;
         }
@@ -961,6 +1028,7 @@ export const startBotEngine = () => {
       const freshPositions = freshPositionsStr ? JSON.parse(freshPositionsStr) : [];
       
       const updatedPositions = freshPositions.map((freshPos: any) => {
+         if (permanentlyClosedPositionIds.has(freshPos.id)) return null;
          const loopPos = positions.find((p: any) => p.id === freshPos.id);
          if (loopPos) {
              if (loopPos._delete) return null;
@@ -972,14 +1040,6 @@ export const startBotEngine = () => {
       
       await kv.set('btc_active_bot_positions', JSON.stringify(updatedPositions));
 
-      if (walletBalanceDelta !== 0 || walletPnlDelta !== 0) {
-        const currentWalletStr = await kv.get('btc_paper_wallet');
-        const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
-        currentWallet.balance = Math.max(0, Math.round(((Number(currentWallet.balance) || 1000) + walletBalanceDelta) * 100) / 100);
-        currentWallet.realizedPnl = Math.round(((Number(currentWallet.realizedPnl) || 0) + walletPnlDelta) * 100) / 100;
-        await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
-      }
-
       if (logsToAdd.length > 0) {
         const logsStr = await kv.get('btc_bot_logs');
         const logs = logsStr ? JSON.parse(logsStr) : [];
@@ -989,7 +1049,20 @@ export const startBotEngine = () => {
       if (historyToAdd.length > 0) {
         const histStr = await kv.get('btc_trade_history');
         const history = histStr ? JSON.parse(histStr) : [];
-        await kv.set('btc_trade_history', JSON.stringify([...historyToAdd, ...history].slice(0, 500)));
+        const seenHistIds = new Set<string>();
+        const deduplicatedHist = [...historyToAdd, ...history].filter((h: any) => {
+          const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
+          if (seenHistIds.has(id)) return false;
+          seenHistIds.add(id);
+          return true;
+        });
+        await kv.set('btc_trade_history', JSON.stringify(deduplicatedHist.slice(0, 500)));
+      }
+
+      // 7. ATOMIC RECONCILIATION: Free Balance = Base Deposit (1000) + Realized PnL - In-Trade Margin
+      // Eliminates balance multiplication and drift forever!
+      if (walletBalanceDelta !== 0 || walletPnlDelta !== 0 || historyToAdd.length > 0 || stateChanged) {
+        await reconcilePaperWalletDirect();
       }
 
     } catch (err) {
@@ -1043,13 +1116,9 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
       if (binanceConfig.isConnected) {
         await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
       }
-    } else {
-      const currentWalletStr = await kv.get('btc_paper_wallet');
-      const currentWallet = currentWalletStr ? JSON.parse(currentWalletStr) : { balance: 1000, realizedPnl: 0 };
-      currentWallet.balance = Math.max(0, Math.round(((Number(currentWallet.balance) || 1000) + cashReturned) * 100) / 100);
-      currentWallet.realizedPnl = Math.round(((Number(currentWallet.realizedPnl) || 0) + tranchePnl) * 100) / 100;
-      await kv.set('btc_paper_wallet', JSON.stringify(currentWallet));
     }
+
+    permanentlyClosedPositionIds.add(posId);
 
     // Immediately remove from active positions
     const remainingPositions = positions.filter((p: any) => p.id !== posId);
@@ -1061,6 +1130,7 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
     const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || marginClosed || 10;
     const historyItem = {
       id: `history-manual-${Date.now()}`,
+      posId: posId,
       timestamp: Date.now(),
       symbol: pos.symbol,
       decision: pos.decision,
@@ -1079,7 +1149,18 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
       pnlHistory: pos.pnlHistory,
       mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
     };
-    await kv.set('btc_trade_history', JSON.stringify([historyItem, ...history].slice(0, 500)));
+    const seenHistIds = new Set<string>();
+    const deduplicatedHist = [historyItem, ...history].filter((h: any) => {
+      const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
+      if (seenHistIds.has(id)) return false;
+      seenHistIds.add(id);
+      return true;
+    });
+    await kv.set('btc_trade_history', JSON.stringify(deduplicatedHist.slice(0, 500)));
+
+    if (!isPosLive) {
+      await reconcilePaperWalletDirect();
+    }
 
     // Add to logs
     const logsStr = await kv.get('btc_bot_logs');

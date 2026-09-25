@@ -1,9 +1,11 @@
 import WebSocket from 'ws';
 import { kv } from './db.js';
-import { serverExecuteOrder, sendServerTelegramNotification, fetchRealBinanceAccountDirect } from './botEngine.js';
+import { serverExecuteOrder, sendServerTelegramNotification, fetchRealBinanceAccountDirect, reconcilePaperWalletDirect } from './botEngine.js';
 import { RiskEngine } from './riskEngine/RiskEngine.js';
 import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
+import { EntryQualityEngine } from '../utils/entryQualityEngine.js';
+import { calculateQuantitativeScore, detectMarketRegime } from '../utils/quantEngine.js';
 
 // Interfaces
 export type MarketDataProvider = (symbol: string, timeframe: any, marketType: any, isDevMode?: boolean) => Promise<any>;
@@ -233,6 +235,72 @@ async function analyzeSymbol(
         if (!stratSignal || stratSignal.decision === 'WAIT') {
           continue;
         }
+
+        // =========================================================================
+        // ZERO-BYPASS ENTRY CONFIRMATION ENGINE (Mandatory Multi-Gate Filter)
+        // =========================================================================
+        const signalTf = (stratSignal.timeframe || timeframe) as any;
+        const quantScore = calculateQuantitativeScore(
+          signalTf,
+          data.ticker.price,
+          data.indicators,
+          data.orderBook,
+          data.derivatives,
+          data.mtfConfluence
+        );
+
+        const marketRegime = data.marketRegime || detectMarketRegime(data.indicators, data.ticker.price);
+
+        const entryValidation = EntryQualityEngine.evaluate({
+          symbol: normSymbol,
+          timeframe: signalTf,
+          currentPrice: data.ticker.price,
+          indicators: data.indicators,
+          quantScore,
+          marketRegime,
+          orderBook: data.orderBook,
+          derivatives: data.derivatives,
+          mtfConfluence: data.mtfConfluence,
+        });
+
+        // 1. Directional alignment: EntryQualityEngine must agree with strategy direction
+        if (entryValidation.decision !== stratSignal.decision) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} Strategy ${stratSignal.strategyName} proposed ${stratSignal.decision}, but Entry Confirmation Engine issued ${entryValidation.decision} (${entryValidation.waitReason || entryValidation.rejectionReason})`);
+          continue;
+        }
+
+        // 2. Status gate: Must not be INVALID or WAIT
+        if (entryValidation.entryQuality.status === 'INVALID' || entryValidation.entryQuality.status === 'WAIT') {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} [${stratSignal.strategyName}] Quality Rejected: ${entryValidation.rejectionReason} - ${entryValidation.waitReason}`);
+          continue;
+        }
+
+        // 3. Anti-Chase gate: Must not buy tops or short bottoms on overextended candles
+        if (!entryValidation.antiChasePassed) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Anti-Chase Violation: ${entryValidation.waitReason}`);
+          continue;
+        }
+
+        // 4. Entry Zone Gate: Price must be within the defined entry zone
+        if (entryValidation.rejectionReason === 'PRICE_FAR_FROM_ENTRY_ZONE') {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Price outside entry zone: ${entryValidation.waitReason}`);
+          continue;
+        }
+
+        // 5. Risk-to-Reward Ratio: Minimum 1:1.30, ensuring TP1 is realistic and SL is protected
+        if (entryValidation.riskRewardRatio < 1.30) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Insufficient R:R (${entryValidation.riskRewardRatio.toFixed(2)})`);
+          continue;
+        }
+
+        // Upgrade strategy signal with structurally validated entry zone, Stop Loss and TP targets
+        stratSignal.stopLoss = entryValidation.stopLoss;
+        stratSignal.tp1 = entryValidation.targets.tp1;
+        stratSignal.tp2 = entryValidation.targets.tp2;
+        stratSignal.tp3 = entryValidation.targets.tp3;
+        stratSignal.riskRewardRatio = entryValidation.riskRewardRatio;
+        stratSignal.confidence = Math.max(stratSignal.confidence, entryValidation.entryQuality.score);
+        stratSignal.reason = `${stratSignal.reason} | Confirmed: Grade ${entryValidation.entryQuality.grade} (${entryValidation.entryType}) R:R 1:${entryValidation.riskRewardRatio.toFixed(2)}`;
 
         foundActiveSignal = true;
         scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
@@ -567,6 +635,10 @@ async function processTradingSignal(
     const freshPositions = freshPosStr ? JSON.parse(freshPosStr) : [];
     freshPositions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
+    
+    if (!isLive) {
+      await reconcilePaperWalletDirect();
+    }
     
     // Dispatch instant Telegram Notification
     const sideEmoji = signal.decision === 'LONG' ? '🟢' : '🔴';

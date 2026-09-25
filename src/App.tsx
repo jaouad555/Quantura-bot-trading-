@@ -1708,19 +1708,13 @@ export const App: React.FC = () => {
               setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: actualP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
-        } else {
-          updatePaperWalletSync((prev) => ({
-            ...prev,
-            balance: prev.balance + cashReturned,
-            realizedPnl: prev.realizedPnl + finalPnlUsdt,
-          }));
         }
 
         lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
         recentlyClosedPositionIdsRef.current.add(pos.id);
         updateBotPositionsSync((prev) => prev.filter(p => p.id !== pos.id));
 
-        // Call server-side authoritative close endpoint to update backend KV immediately
+        // Call server-side authoritative close endpoint to update backend KV and reconcile paper wallet
         fetch('/api/bot/close-position', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1731,6 +1725,21 @@ export const App: React.FC = () => {
             realizedPnlUsdt: finalPnlUsdt,
             profitPercent: roePercent,
           }),
+        }).then(async (res) => {
+          if (res.ok) {
+            // Immediate sync of authoritative server wallet state
+            try {
+              const confRes = await fetch('/api/config/all');
+              if (confRes.ok) {
+                const confData = await confRes.json();
+                if (confData.btc_paper_wallet) {
+                  const sWallet = JSON.parse(confData.btc_paper_wallet);
+                  setPaperWallet(sWallet);
+                  paperWalletRef.current = sWallet;
+                }
+              }
+            } catch (e) {}
+          }
         }).catch(() => {});
 
         const closedHistoryItem: TradeHistoryItem = {

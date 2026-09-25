@@ -184,10 +184,12 @@ export function calculateQuantitativeScore(
   else if (rsi14 < 25) rsiBull = 55; // Extreme oversold
 
   let macdBull = 50;
-  if (macd.macdLine > macd.signalLine && macd.histogram > 0) macdBull = 85;
-  else if (macd.macdLine > macd.signalLine && macd.histogram <= 0) macdBull = 60;
-  else if (macd.macdLine < macd.signalLine && macd.histogram < 0) macdBull = 15;
-  else macdBull = 40;
+  if (macd && typeof macd.macdLine === 'number' && typeof macd.signalLine === 'number') {
+    if (macd.macdLine > macd.signalLine && (macd.histogram || 0) > 0) macdBull = 85;
+    else if (macd.macdLine > macd.signalLine && (macd.histogram || 0) <= 0) macdBull = 60;
+    else if (macd.macdLine < macd.signalLine && (macd.histogram || 0) < 0) macdBull = 15;
+    else macdBull = 40;
+  }
 
   let stochBull = 50;
   if (stoch) {

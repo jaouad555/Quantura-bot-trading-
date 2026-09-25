@@ -204,8 +204,9 @@ export class RoeEngine {
         ? currentPeakPrice * (1 - trailingDistancePercent / 100)
         : currentPeakPrice * (1 + trailingDistancePercent / 100);
 
-      // Rule: Once in PROFIT or TP1 is hit, SL must never be worse than Breakeven+
-      if (input.tp1Hit || netROE >= this.config.trailingActivationROE) {
+      // Rule: Breakeven+ protection is enforced once TP1 is secured, or once deep in PROTECTED/LOCK_PROFIT territory (>= 3.0% Net ROE).
+      // In the early PROFIT phase (1.5% - 3.0%), trailing stop tracks favorable movement without choking the position prematurely before TP1.
+      if (input.tp1Hit || state === 'PROTECTED' || state === 'LOCK_PROFIT') {
         trailSL = isLong
           ? Math.max(trailSL, breakevenPrice)
           : Math.min(trailSL, breakevenPrice);
