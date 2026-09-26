@@ -3589,6 +3589,9 @@ export const App: React.FC = () => {
           onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
           onOpenRiskModal={() => setIsRiskModalOpen(true)}
           onOpenSettingsModal={() => setIsSettingsOpen(true)}
+          onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+          onOpenHelpModal={() => setIsHelpModalOpen(true)}
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
         />
             </div>
           </div>

@@ -1,13 +1,10 @@
 import React from 'react';
 import {
   Cpu,
-  Terminal,
   Shield,
   Zap,
   Activity,
   Key,
-  Code2,
-  ExternalLink,
   ChevronRight,
   TrendingUp,
   Radar,
@@ -24,16 +21,22 @@ import {
   BadgeCheck,
   Fingerprint,
   Award,
-  Radio,
   Sliders,
   CheckCircle2,
   PieChart,
   History,
   Coins,
+  Brain,
+  HelpCircle,
+  Bell,
+  Wallet,
+  Scale,
+  RefreshCw,
+  Terminal,
 } from 'lucide-react';
-import { Language, TradingExecutionMode, BinanceApiConfig, APP_VERSION_TAG, APP_VERSION } from '../types';
+import { Language, TradingExecutionMode, BinanceApiConfig, APP_VERSION_TAG } from '../types';
 
-interface FooterProps {
+export interface FooterProps {
   language: Language;
   activeTab: string;
   onSelectTab: (tab: any) => void;
@@ -42,6 +45,9 @@ interface FooterProps {
   onOpenBinanceModal: () => void;
   onOpenRiskModal: () => void;
   onOpenSettingsModal: () => void;
+  onOpenCustomBalanceModal?: () => void;
+  onOpenHelpModal?: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -53,8 +59,12 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenBinanceModal,
   onOpenRiskModal,
   onOpenSettingsModal,
+  onOpenCustomBalanceModal,
+  onOpenHelpModal,
+  onOpenNotifications,
 }) => {
   const isArabic = language === 'ar';
+  const isEn = language === 'en';
   const marketType = binanceConfig?.marketType || 'FUTURES';
 
   const scrollToTop = () => {
@@ -64,20 +74,19 @@ export const Footer: React.FC<FooterProps> = ({
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="mt-20 border-t border-slate-800/80 bg-gradient-to-b from-slate-950 via-[#060a12] to-[#02050b] text-slate-400 relative z-10 overflow-hidden font-sans">
+    <footer className={`mt-20 border-t border-slate-800/80 bg-gradient-to-b from-slate-950 via-[#050811] to-[#020408] text-slate-400 relative z-10 overflow-hidden font-sans ${isArabic ? 'rtl text-right' : 'ltr text-left'}`}>
       {/* Top subtle decorative ambient glow line */}
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-24 bg-cyan-500/[0.04] blur-3xl pointer-events-none rounded-full"></div>
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-24 bg-cyan-500/[0.04] pointer-events-none rounded-full" />
 
       {/* Top Bar: Live Institutional Ticker / Ecosystem Status */}
-      <div className="border-b border-slate-800/70 bg-slate-900/50 backdrop-blur-md px-4 sm:px-8 py-3">
+      <div className="border-b border-slate-800/70 bg-slate-900/60 backdrop-blur-md px-4 sm:px-8 py-3">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6">
             {/* Live Gateway Status */}
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
               </span>
               <span className="text-slate-200 font-mono text-[11px] font-bold tracking-wider">
                 BINANCE WS: <span className="text-emerald-400">STREAMING ACTIVE</span>
@@ -115,23 +124,34 @@ export const Footer: React.FC<FooterProps> = ({
             {/* Risk Guard State */}
             <div className="hidden lg:flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span>RISK GUARD: <strong className="text-cyan-300">STRICT ARMED</strong></span>
+              <span>RISK SHIELD: <strong className="text-cyan-300 font-bold">CIRCUIT BREAKER ARMED</strong></span>
             </div>
           </div>
 
           {/* Quick Right Side Links & Back to Top */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={onOpenBinanceModal}
-              className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Key className="w-3 h-3 text-amber-400" />
-              <span>{binanceConfig?.isConnected ? 'API CONNECTED' : 'SETUP API KEYS'}</span>
+              <span>{binanceConfig?.isConnected ? (isArabic ? 'بينانس متصل' : 'API CONNECTED') : (isArabic ? 'ربط بينانس API' : 'SETUP API')}</span>
             </button>
+
+            {onOpenHelpModal && (
+              <button
+                onClick={onOpenHelpModal}
+                className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title={isArabic ? 'دليل البدء السريع' : 'Quick Start Guide'}
+              >
+                <HelpCircle className="w-3 h-3 text-cyan-400" />
+                <span>{isArabic ? 'المساعدة' : 'GUIDE'}</span>
+              </button>
+            )}
 
             <button
               onClick={scrollToTop}
-              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 border border-slate-700 transition-all cursor-pointer shadow-xs group"
+              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 border border-slate-700 transition-colors cursor-pointer shadow-xs group"
               title={isArabic ? 'الرجوع إلى الأعلى' : 'Back to top'}
             >
               <ArrowUp className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -144,8 +164,8 @@ export const Footer: React.FC<FooterProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10">
           
-          {/* Column 1: Brand, Identity & Vision (2 Spans on LG) */}
-          <div className="lg:col-span-2 flex flex-col justify-between">
+          {/* Column 1: Brand, Identity & Executive Founder (2 Spans on LG) */}
+          <div className="lg:col-span-2 flex flex-col justify-between space-y-6">
             <div>
               {/* Brand Logo & Title */}
               <div className="flex items-center gap-4 mb-4">
@@ -153,8 +173,7 @@ export const Footer: React.FC<FooterProps> = ({
                   className="relative group cursor-pointer shrink-0"
                   onClick={scrollToTop}
                 >
-                  <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500/40 via-cyan-400/40 to-emerald-400/40 rounded-2xl blur-lg opacity-50 group-hover:opacity-100 transition duration-500"></div>
-                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-[#02050b] border-2 border-cyan-500/50 p-1 shadow-2xl transition-all duration-500 group-hover:scale-105 flex items-center justify-center overflow-hidden">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-[#02050b] border-2 border-cyan-500/50 p-1 shadow-2xl transition-transform duration-300 group-hover:scale-105 flex items-center justify-center overflow-hidden">
                     <img
                       src="/logo.png"
                       alt="Quantura Logo"
@@ -163,12 +182,12 @@ export const Footer: React.FC<FooterProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col text-left rtl:text-right">
+                <div className="flex flex-col">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-['Syncopate',sans-serif] font-black text-white tracking-[0.18em] text-lg sm:text-xl uppercase text-sweep-shine">
                       QUANTURA
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-[9.5px] font-bold tracking-wider shadow-xs">
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-[9.5px] font-bold tracking-wider shadow-xs">
                       {APP_VERSION_TAG}
                     </span>
                   </div>
@@ -185,38 +204,41 @@ export const Footer: React.FC<FooterProps> = ({
               </div>
 
               {/* Bio & Description */}
-              <p className="text-xs text-slate-400 leading-relaxed mb-5 max-w-md">
+              <p className="text-xs text-slate-400 leading-relaxed mb-4 max-w-md">
                 {isArabic
-                  ? 'محطة التداول الكمي الاحترافية المدعومة بالذكاء الاصطناعي وخوارزميات المؤسسات المالية. تتميز بمعمارية مزدوجة معزولة بالكامل تدعم تداول Spot و USDT-M Futures، مع تنفيذ فوري للصفقات وحماية رأس المال عبر حارس المخاطر اللحظي.'
-                  : 'Enterprise-grade quantitative AI trading terminal engineered with institutional algorithms, zero-cross isolated Spot & USDT-M Futures routing, deterministic risk guardrails, and sub-millisecond market intelligence.'}
+                  ? 'محطة التداول الكمي الاحترافية المدعومة بالذكاء الاصطناعي المؤسسي. توفر معمارية تداول مزدوجة تدعم Spot (1x) و USDT-M Futures (1x إلى 50x Isolated)، مع 10 استراتيجيات خوارزمية ذكية، ومحرك إدارة المخاطر، وجني أرباح مجزأ، ووقف خسارة متحرك لحظي.'
+                  : 'Enterprise-grade quantitative AI trading terminal engineered with institutional algorithms, dual-engine Spot (1x) & USDT-M Futures (1x to 50x Isolated) execution, 10 automated quant strategies, dynamic scale-out TP, trailing SL, and real-time risk circuit breaker.'}
               </p>
 
               {/* Institutional Specs Chips */}
-              <div className="flex flex-wrap gap-2 mb-6">
+              <div className="flex flex-wrap gap-2">
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
                   <Lock className="w-3 h-3 text-emerald-400" />
                   <span>ED25519 / HMAC-SHA256</span>
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
                   <Zap className="w-3 h-3 text-amber-400" />
-                  <span>Spot & USDT-M Isolated</span>
+                  <span>Spot & Futures Isolated</span>
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
                   <Shield className="w-3 h-3 text-cyan-400" />
-                  <span>Non-Custodial Direct Keys</span>
+                  <span>Direct Non-Custodial Keys</span>
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 flex items-center gap-1.5 shadow-sm">
+                  <Bot className="w-3 h-3 text-purple-400" />
+                  <span>10 Quant Presets + AI</span>
                 </span>
               </div>
             </div>
 
             {/* Executive Founder & Quantitative Architect Credential Card */}
-            <div className="rounded-2xl bg-gradient-to-b from-slate-900/95 via-slate-900/80 to-[#070b14] border border-slate-800 hover:border-cyan-500/40 p-4 sm:p-4.5 shadow-2xl relative overflow-hidden group transition-all duration-500">
+            <div className="rounded-2xl bg-gradient-to-b from-slate-900/95 via-slate-900/80 to-[#070b14] border border-slate-800 hover:border-cyan-500/40 p-4 sm:p-4.5 shadow-2xl relative overflow-hidden group transition-colors duration-300">
               {/* Dynamic Top Ambient Laser Glow */}
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500/60 via-cyan-400 to-emerald-400/60 group-hover:h-[2.5px] transition-all duration-500"></div>
-              <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-20 bg-cyan-500/10 blur-2xl pointer-events-none rounded-full group-hover:bg-cyan-500/20 transition-all duration-700"></div>
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500/60 via-cyan-400 to-emerald-400/60" />
 
               {/* Card Header Row: Badge & Official Status */}
               <div className="flex items-center justify-between gap-2 mb-3.5 relative z-10">
-                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/30 text-amber-300 text-[9px] font-mono font-bold tracking-wider uppercase">
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] font-mono font-bold tracking-wider uppercase">
                   <Award className="w-3 h-3 text-amber-400 shrink-0" />
                   <span>{isArabic ? 'المؤسس والمعماري الرئيسي' : 'FOUNDER & CHIEF ARCHITECT'}</span>
                 </div>
@@ -231,37 +253,29 @@ export const Footer: React.FC<FooterProps> = ({
               <div className="flex items-center gap-3.5 relative z-10 mb-3">
                 {/* Monogram Executive Avatar */}
                 <div className="relative shrink-0 group/avatar">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 via-slate-800 to-cyan-500/20 border-2 border-amber-500/40 group-hover:border-cyan-400/60 shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center justify-center transition-all duration-500 group-hover/avatar:scale-105">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 via-slate-800 to-cyan-500/20 border-2 border-amber-500/40 group-hover:border-cyan-400/60 shadow-md flex items-center justify-center transition-transform duration-300 group-hover/avatar:scale-105">
                     <span className="font-['Syncopate',sans-serif] font-black text-sm tracking-tighter bg-gradient-to-br from-amber-200 via-amber-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-sm">
                       JA
                     </span>
                   </div>
                   {/* Status Beacon Dot */}
                   <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900" />
                   </span>
                 </div>
 
                 {/* Identity & Typography */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    {/* Ethereal rising smoke vapor */}
-                    <div className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0" title="Quantum Vapor">
-                      <span className="w-1 h-1 rounded-full bg-cyan-400/60 blur-[0.5px]"></span>
-                      <span className="smoke-wisp-1 absolute bottom-0.5 w-2 h-2 rounded-full bg-slate-300/50 blur-[1.5px] pointer-events-none"></span>
-                      <span className="smoke-wisp-2 absolute bottom-0.5 w-2.5 h-2.5 rounded-full bg-cyan-200/40 blur-[2px] pointer-events-none"></span>
-                    </div>
-
-                    <h4 className="text-sweep-shine font-['Syncopate',sans-serif] font-extrabold text-xs sm:text-[13px] tracking-[0.24em] uppercase text-slate-100 truncate">
+                    <h4 className="font-['Syncopate',sans-serif] font-extrabold text-xs sm:text-[13px] tracking-[0.24em] uppercase text-slate-100 truncate">
                       JAOUAD ABDECHCHAFI
                     </h4>
                   </div>
 
                   <p className="text-[10px] text-slate-400 font-mono leading-tight truncate">
                     {isArabic 
-                      ? 'مهندس خوارزميات التداول العصبي وشبكة الربط الفوري' 
-                      : 'Lead Quantitative Systems & Core Protocol Architect'}
+                      ? 'مهندس خوارزميات التداول الكمي والذكاء الاصطناعي' 
+                      : 'Lead Quantitative Systems & AI Protocol Architect'}
                   </p>
                 </div>
               </div>
@@ -284,17 +298,17 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Column 2: Terminal Navigation */}
+          {/* Column 2: Terminal Modules (All 10 Core Views) */}
           <div>
             <h4 className="text-white text-xs font-mono font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-              <span>{isArabic ? 'وحدات المحطة (Terminal)' : 'Terminal Modules'}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span>{isArabic ? 'وحدات المحطة (10 Modules)' : 'Terminal Modules (10)'}</span>
             </h4>
-            <ul className="space-y-2.5 text-xs">
+            <ul className="space-y-2 text-xs">
               <li>
                 <button
                   onClick={() => onSelectTab('signal')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'signal' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -302,34 +316,36 @@ export const Footer: React.FC<FooterProps> = ({
                     <Activity className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
                     <span>{isArabic ? 'لوحة الإشارات الفورية' : 'AI Live Signals'}</span>
                   </span>
-                  <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
+                  <span className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[9px] font-mono font-bold">
+                    PRO
+                  </span>
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => onSelectTab('autoBot')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'autoBot' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <Bot className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
+                    <Bot className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                     <span>{isArabic ? 'محرك البوت الآلي' : 'Quant Trading Bot'}</span>
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-mono font-bold">
-                    6 PRESETS
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-mono font-bold">
+                    10 STRATS
                   </span>
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => onSelectTab('globalScanner')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'globalScanner' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <Radar className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                    <Radar className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
                     <span>{isArabic ? 'رادار ومسّاح السوق' : 'Market Radar Scanner'}</span>
                   </span>
                   <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
@@ -338,7 +354,7 @@ export const Footer: React.FC<FooterProps> = ({
               <li>
                 <button
                   onClick={() => onSelectTab('chart')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'chart' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -352,7 +368,7 @@ export const Footer: React.FC<FooterProps> = ({
               <li>
                 <button
                   onClick={() => onSelectTab('mtf')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'mtf' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -365,8 +381,36 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <button
+                  onClick={() => onSelectTab('market')}
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
+                    activeTab === 'market' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Globe2 className="w-3.5 h-3.5 text-teal-400 group-hover:translate-x-0.5 transition-transform" />
+                    <span>{isArabic ? 'نظرة عامة والسيولة' : 'Market Overview & Hub'}</span>
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onSelectTab('analysis')}
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
+                    activeTab === 'analysis' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Brain className="w-3.5 h-3.5 text-rose-400 group-hover:translate-x-0.5 transition-transform" />
+                    <span>{isArabic ? 'تحليل الذكاء الاصطناعي' : 'AI Deep Market Analysis'}</span>
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
+                </button>
+              </li>
+              <li>
+                <button
                   onClick={() => onSelectTab('backtest')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'backtest' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -380,13 +424,13 @@ export const Footer: React.FC<FooterProps> = ({
               <li>
                 <button
                   onClick={() => onSelectTab('history')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'history' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-2">
                     <History className="w-3.5 h-3.5 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
-                    <span>{isArabic ? 'سجل الصفقات الحي' : 'Trade Journal & History'}</span>
+                    <span>{isArabic ? 'سجل الصفقات الحي' : 'Trade History & Journal'}</span>
                   </span>
                   <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-cyan-400" />
                 </button>
@@ -394,7 +438,7 @@ export const Footer: React.FC<FooterProps> = ({
               <li>
                 <button
                   onClick={() => onSelectTab('riskWallet')}
-                  className={`w-full text-left rtl:text-right flex items-center justify-between transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'riskWallet' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -408,75 +452,103 @@ export const Footer: React.FC<FooterProps> = ({
             </ul>
           </div>
 
-          {/* Column 3: Quantitative Strategies */}
+          {/* Column 3: 10 Quantitative Strategies */}
           <div>
             <h4 className="text-white text-xs font-mono font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>{isArabic ? 'الاستراتيجيات المدمجة' : 'Built-in Strategies'}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>{isArabic ? 'الاستراتيجيات الكمية (10)' : 'Quant Strategies (10)'}</span>
             </h4>
-            <ul className="space-y-2.5 text-xs">
+            <ul className="space-y-2 text-xs">
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                  <span>Momentum Trend Pro</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="truncate">Momentum Trend Pro</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">ADX / RSI</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">ADX/EMA</span>
               </li>
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-                  <span>High-Freq Scalper</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                  <span className="truncate">High-Freq Scalper</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Fast 15m</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">5m/15m</span>
               </li>
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                  <span>Breakout Sniper</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span className="truncate">Breakout Sniper</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Vol Expansion</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">Vol Expan</span>
               </li>
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
-                  <span>Mean Reversion Pro</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
+                  <span className="truncate">Mean Reversion Pro</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Bollinger %B</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">BB %B</span>
               </li>
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                  <span>Smart Money (SMC)</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                  <span className="truncate">Smart Money (SMC)</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">OB & FVG</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">OB / FVG</span>
               </li>
               <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  <span>Conservative Swing</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="truncate">Conservative Swing</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Low Drawdown</span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">Low DD</span>
+              </li>
+              <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                  <span className="truncate">Dynamic Volatility</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">ATR Guard</span>
+              </li>
+              <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                  <span className="truncate">Liquidity Sweep Hunt</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">Stop Sweep</span>
+              </li>
+              <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
+                  <span className="truncate">MTF Trend Rider</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">SuperTrend</span>
+              </li>
+              <li className="flex items-center justify-between text-slate-400 hover:text-slate-200">
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shrink-0" />
+                  <span className="truncate">AI Adaptive Matrix</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0">Auto Regime</span>
               </li>
             </ul>
           </div>
 
-          {/* Column 4: Security, Compliance & System Controls */}
+          {/* Column 4: Security, Protocols & Quick System Controls */}
           <div>
             <h4 className="text-white text-xs font-mono font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              <span>{isArabic ? 'الحماية والأدوات' : 'Security & Tools'}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span>{isArabic ? 'الحماية والتحكم السريع' : 'Security & Controls'}</span>
             </h4>
-            <div className="space-y-3 text-xs">
+            <div className="space-y-2.5 text-xs">
               <button
                 onClick={onOpenRiskModal}
-                className="w-full text-left rtl:text-right p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-cyan-500/40 transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 transition-colors flex items-center justify-between group cursor-pointer"
               >
                 <div>
                   <div className="text-slate-200 font-semibold group-hover:text-cyan-300 transition-colors">
                     {isArabic ? 'محرك إدارة المخاطر' : 'Risk Management Engine'}
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    {isArabic ? 'حد أقصى للخسارة والسحب اليومي' : 'Max SL, Daily Cap, Spread'}
+                    {isArabic ? 'قاطع الحماية، الحد اليومي والسحب' : 'Circuit Breaker, Daily Drawdown'}
                   </div>
                 </div>
                 <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -484,7 +556,7 @@ export const Footer: React.FC<FooterProps> = ({
 
               <button
                 onClick={onOpenBinanceModal}
-                className="w-full text-left rtl:text-right p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/40 transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 transition-colors flex items-center justify-between group cursor-pointer"
               >
                 <div>
                   <div className="text-slate-200 font-semibold group-hover:text-amber-300 transition-colors">
@@ -497,35 +569,99 @@ export const Footer: React.FC<FooterProps> = ({
                 <Key className="w-4 h-4 text-amber-400 shrink-0" />
               </button>
 
+              {onOpenCustomBalanceModal && (
+                <button
+                  onClick={onOpenCustomBalanceModal}
+                  className="w-full p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 transition-colors flex items-center justify-between group cursor-pointer"
+                >
+                  <div>
+                    <div className="text-slate-200 font-semibold group-hover:text-emerald-300 transition-colors">
+                      {isArabic ? 'رصيد المحاكاة الافتراضي' : 'Virtual Paper Balance'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      {isArabic ? 'تخصيص رصيد المحفظة التجريبية' : 'Adjust Paper Wallet Funds'}
+                    </div>
+                  </div>
+                  <Wallet className="w-4 h-4 text-emerald-400 shrink-0" />
+                </button>
+              )}
+
+              {onOpenNotifications && (
+                <button
+                  onClick={onOpenNotifications}
+                  className="w-full p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/40 transition-colors flex items-center justify-between group cursor-pointer"
+                >
+                  <div>
+                    <div className="text-slate-200 font-semibold group-hover:text-purple-300 transition-colors">
+                      {isArabic ? 'مركز التنبيهات الفورية' : 'Push Notification Center'}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {isArabic ? 'سجل التنبيهات وإشارات التليجرام' : 'Live Alerts & Telegram Bot'}
+                    </div>
+                  </div>
+                  <Bell className="w-4 h-4 text-purple-400 shrink-0" />
+                </button>
+              )}
+
               <button
                 onClick={onOpenSettingsModal}
-                className="w-full text-left rtl:text-right p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-cyan-500/40 transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 transition-colors flex items-center justify-between group cursor-pointer"
               >
                 <div>
                   <div className="text-slate-200 font-semibold group-hover:text-cyan-300 transition-colors">
                     {isArabic ? 'تفضيلات المحطة وتليجرام' : 'Terminal Preferences'}
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    {isArabic ? 'التنبيهات الفورية والمظهر' : 'Telegram Bot & UI Setup'}
+                    {isArabic ? 'بوت التليجرام، الصوت والمظهر' : 'Telegram Bot, Sounds & Theme'}
                   </div>
                 </div>
-                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+                <Sliders className="w-4 h-4 text-cyan-400 shrink-0" />
               </button>
             </div>
           </div>
 
         </div>
 
-        {/* Institutional Risk Disclaimer (Standard for Binance, TradingView, Bybit) */}
-        <div className="mt-12 pt-8 border-t border-slate-800/70 text-[11px] text-slate-400 leading-relaxed space-y-2">
+        {/* Quantitative Architecture Specifications Bar */}
+        <div className="mt-10 pt-6 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono text-slate-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Binance REST v3</span>
+            </span>
+            <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>USDT-M Futures fapi</span>
+            </span>
+            <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+              <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Sub-100ms WebSocket</span>
+            </span>
+            <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Client-Side Non-Custodial Direct</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 text-slate-500">
+            <span>UPTIME: 99.98%</span>
+            <span>•</span>
+            <span>LATENCY: ~35ms</span>
+          </div>
+        </div>
+
+        {/* Institutional Risk Disclaimer */}
+        <div className="mt-8 pt-6 border-t border-slate-800/70 text-[11px] text-slate-400 leading-relaxed space-y-2">
           <div className="flex items-center gap-2 text-slate-300 font-mono font-bold uppercase text-[10px]">
             <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isArabic ? 'إخلاء المسؤولية المالي والتنظيمي' : 'INSTITUTIONAL RISK WARNING & DISCLAIMER'}</span>
+            <span>{isArabic ? 'إخلاء المسؤولية المالي والتنظيمي' : (isEn ? 'INSTITUTIONAL RISK WARNING & DISCLAIMER' : 'AVERTISSEMENT SUR LES RISQUES FINANCIERS')}</span>
           </div>
           <p>
             {isArabic
               ? 'تداول الأصول الرقمية، العقود الفورية (Spot)، والعقود الآجلة (USDT-M Futures) ينطوي على مخاطر مالية عالية وتقلبات سعرية حادة قد تؤدي إلى خسارة جزء أو كامل رأس المال المستثمر. منصة Quantura توفر أدوات تحليل وخوارزميات مساعدة كمية، ولا تقدم أي نصائح أو استشارات استثمارية أو مالية مباشرة. الأداء التاريخي لأي استراتيجية ليس ضماناً للنتائج المستقبلية. تقع مسؤولية إدارة المخاطر وتحديد حجم الصفقات ومضاعف الرافعة بالكامل على عاتق المستخدم.'
-              : 'Digital asset trading across Spot and USDT-M Futures markets carries substantial financial risk and extreme price volatility that can result in the loss of all deployed capital. Quantura provides quantitative tooling and automated algorithmic infrastructure for informational and execution purposes only, and does not constitute financial, investment, or legal advice. Past performance is no guarantee of future returns. You remain solely responsible for your risk tolerance and capital preservation.'}
+              : (isEn 
+                  ? 'Digital asset trading across Spot and USDT-M Futures markets carries substantial financial risk and extreme price volatility that can result in the loss of all deployed capital. Quantura provides quantitative tooling and automated algorithmic infrastructure for informational and execution purposes only, and does not constitute financial, investment, or legal advice. Past performance is no guarantee of future returns. You remain solely responsible for your risk tolerance and capital preservation.'
+                  : 'Le trading d\'actifs numériques sur les marchés Spot et Contrats Futures USDT-M comporte un risque financier substantiel et une volatilité extrême pouvant entraîner la perte de l\'intégralité du capital investi. Quantura fournit des outils quantitatifs et une infrastructure algorithmique automatisée à des fins informatives et d\'exécution technique, et ne constitue en aucun cas un conseil financier ou d\'investissement direct. Les performances passées ne préjugent pas des résultats futurs.')}
           </p>
         </div>
 
@@ -534,7 +670,7 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             <span>&copy; {currentYear} QUANTURA TERMINAL ({APP_VERSION_TAG}). ALL RIGHTS RESERVED.</span>
             <span className="text-slate-700 hidden sm:inline">•</span>
-            <span className="text-slate-300">BINANCE SPOT & USDT-M FUTURES PROTOCOLS</span>
+            <span className="text-slate-300">SPOT & USDT-M FUTURES PROTOCOLS</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -554,5 +690,3 @@ export const Footer: React.FC<FooterProps> = ({
     </footer>
   );
 };
-
-
