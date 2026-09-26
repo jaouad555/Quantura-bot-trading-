@@ -940,49 +940,35 @@ export const Header: React.FC<HeaderProps> = ({
             id="btn-header-ai-status-indicator"
             type="button"
             onClick={() => setIsAiStatusModalOpen(true)}
-            className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-              aiStatus.geminiConfigured && aiStatus.qwenConfigured
-                ? 'bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 text-purple-200 border-purple-500/40 hover:border-purple-400/60 shadow-[0_0_12px_rgba(168,85,247,0.18)]'
-                : aiStatus.geminiConfigured
-                ? 'bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25 shadow-[0_0_10px_rgba(168,85,247,0.12)]'
-                : aiStatus.qwenConfigured
-                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25 shadow-[0_0_10px_rgba(99,102,241,0.12)]'
-                : 'bg-slate-900/90 text-amber-300 border-amber-500/30 hover:bg-slate-800'
-            }`}
-            title={
-              isArabic
-                ? `مزود الذكاء الاصطناعي: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (متصل)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (متصل)' : ''} (اضغط للتفاصيل وفحص الاتصال)`
-                : `Active AI Provider: ${aiStatus.geminiConfigured ? 'Gemini 2.5 (Online)' : ''} ${aiStatus.qwenConfigured ? 'Qwen 2.5 (Online)' : ''} (Click to inspect & ping)`
-            }
+            className="h-8 flex items-center gap-1.5 px-2.5 rounded-xl border bg-slate-900/90 text-slate-200 border-slate-700 hover:border-purple-500/50 transition shadow-xs shrink-0 cursor-pointer active:scale-95"
+            title={isArabic ? 'حالة نماذج الذكاء الاصطناعي (Gemini + Qwen + DeepSeek + Quant)' : 'AI Models Status (Gemini + Qwen + DeepSeek + Quant)'}
           >
-            <Cpu className={`w-3.5 h-3.5 shrink-0 ${aiStatus.geminiConfigured ? 'text-purple-400 animate-pulse' : aiStatus.qwenConfigured ? 'text-indigo-400 animate-pulse' : 'text-amber-400'}`} strokeWidth={2} />
-            <div className="flex items-center gap-1">
-              {aiStatus.geminiConfigured && aiStatus.qwenConfigured ? (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-bold text-white">Gemini</span>
-                  <span className="text-slate-500">+</span>
-                  <span className="text-cyan-300 font-bold">Qwen</span>
-                </div>
-              ) : aiStatus.geminiConfigured ? (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-bold text-purple-200">Gemini</span>
-                </div>
-              ) : aiStatus.qwenConfigured ? (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="font-bold text-cyan-200">Qwen</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <span className="font-bold text-amber-200">Quant</span>
-                </div>
-              )}
-              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-slate-400 font-mono hidden 2xl:inline">
-                {aiStatus.latencyMs}ms
-              </span>
+            <div className="flex items-center gap-1.5 font-mono text-[10px]">
+              {/* Gemini Logo */}
+              <div className={`flex items-center transition ${aiStatus.geminiConfigured ? 'text-purple-400 font-bold drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="Google Gemini">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z" />
+                </svg>
+              </div>
+              <span className="text-slate-600 font-bold">+</span>
+              {/* Qwen Logo */}
+              <div className={`flex items-center transition ${aiStatus.qwenConfigured ? 'text-indigo-400 font-bold drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="Qwen 2.5">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L15 8L21 9L16.5 13.5L18 20L12 16.5L6 20L7.5 13.5L3 9L9 8L12 2Z" />
+                </svg>
+              </div>
+              <span className="text-slate-600 font-bold">+</span>
+              {/* DeepSeek Logo */}
+              <div className={`flex items-center transition ${aiStatus.deepseekConfigured ? 'text-purple-300 font-bold drop-shadow-[0_0_8px_rgba(216,180,254,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="DeepSeek V3 / R1">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21.5 11.5C21.5 11.5 18.5 7 12 7C5.5 7 3 10 3 13.5C3 17 6 18.5 9 18.5C12 18.5 13.5 17 15.5 17C17.5 17 19 19 21 18C23 17 21.5 11.5 21.5 11.5ZM13.5 14C12.67 14 12 13.33 12 12.5C12 11.67 12.67 11 13.5 11C14.33 11 15 11.67 15 12.5C15 13.33 14.33 14 13.5 14Z" />
+                </svg>
+              </div>
+              <span className="text-slate-600 font-bold">+</span>
+              {/* Quant Core Logo (Processor / CPU icon) */}
+              <div className="flex items-center text-cyan-400 font-bold drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" title="Quant Math Core">
+                <Cpu className="w-4 h-4" />
+              </div>
             </div>
           </button>
 
