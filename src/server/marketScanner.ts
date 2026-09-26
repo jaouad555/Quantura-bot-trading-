@@ -589,9 +589,11 @@ async function processTradingSignal(
     const newPos = {
       id: `bot-pos-${Date.now()}`,
       symbol: symbol,
+      side: signal.decision as 'LONG' | 'SHORT',
       decision: signal.decision,
       entryPrice: currentPrice,
       currentPrice: currentPrice,
+      quantity: quantity,
       initialAmountUsdt: margin,
       remainingAmountUsdt: margin,
       remainingAmountBtc: quantity,

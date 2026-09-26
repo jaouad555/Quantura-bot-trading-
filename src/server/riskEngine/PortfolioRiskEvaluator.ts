@@ -31,13 +31,56 @@ export class PortfolioRiskEvaluator {
     const candidateSide = candidateProposal.side;
     const strategy = candidateProposal.strategyName || 'Custom';
 
+    // 0. Defensive Sanitization: Filter out malformed positions and normalize numeric fields
+    const validPositions: ActivePositionSnapshot[] = [];
+    for (const rawPos of (existingPositions || [])) {
+      if (!rawPos || typeof rawPos !== 'object') continue;
+      const posSymbol = (rawPos.symbol || '').toUpperCase();
+      const posSide = (rawPos.side || (rawPos as any).decision);
+      const quantity = Number(rawPos.quantity || (rawPos as any).remainingAmountBtc || 0);
+      const currentPrice = Number(rawPos.currentPrice || rawPos.entryPrice || 0);
+      const stopLoss = Number(rawPos.stopLoss || 0);
+      const entryPrice = Number(rawPos.entryPrice || currentPrice || 0);
+      const leverage = Number(rawPos.leverage || 1);
+      const positionSizeUsdt = Number(rawPos.positionSizeUsdt || (rawPos.marginUsdt ? rawPos.marginUsdt * leverage : 0));
+
+      if (
+        !posSymbol ||
+        (posSide !== 'LONG' && posSide !== 'SHORT') ||
+        !Number.isFinite(quantity) || quantity <= 0 ||
+        !Number.isFinite(currentPrice) || currentPrice <= 0 ||
+        !Number.isFinite(stopLoss) || stopLoss <= 0 ||
+        !Number.isFinite(positionSizeUsdt) || positionSizeUsdt <= 0
+      ) {
+        console.warn(`[PORTFOLIO EVALUATOR WARN] Skipping malformed position in risk calculation:`, rawPos);
+        continue;
+      }
+
+      validPositions.push({
+        ...rawPos,
+        symbol: posSymbol,
+        side: posSide,
+        quantity,
+        currentPrice,
+        stopLoss,
+        entryPrice,
+        leverage,
+        positionSizeUsdt,
+        marginUsdt: Number(rawPos.marginUsdt || (positionSizeUsdt / leverage)),
+        unrealizedPnlUsdt: Number(rawPos.unrealizedPnlUsdt || 0),
+        unrealizedRoePercent: Number(rawPos.unrealizedRoePercent || 0),
+        marketType: rawPos.marketType || 'FUTURES',
+        openedAt: Number(rawPos.openedAt || Date.now()),
+      });
+    }
+
     // 1. Max Open Positions Check
-    if (existingPositions.length >= config.maxOpenPositions) {
+    if (validPositions.length >= config.maxOpenPositions) {
       return {
         isApproved: false,
         reasonCode: 'MAX_OPEN_POSITIONS',
-        message: `Maximum open positions limit reached (${existingPositions.length}/${config.maxOpenPositions}). Cannot open new position.`,
-        totalOpenPositions: existingPositions.length,
+        message: `Maximum open positions limit reached (${validPositions.length}/${config.maxOpenPositions}). Cannot open new position.`,
+        totalOpenPositions: validPositions.length,
         portfolioRiskBeforePercent: 0,
         portfolioRiskAfterPercent: 0,
         totalExposureBeforePercent: 0,
@@ -48,13 +91,13 @@ export class PortfolioRiskEvaluator {
     }
 
     // 2. Max Positions per Symbol Check (Strict Anti-Pyramiding / Single Position per Symbol)
-    const existingSameSymbol = existingPositions.find(p => p.symbol.toUpperCase() === symbol);
+    const existingSameSymbol = validPositions.find(p => p.symbol.toUpperCase() === symbol);
     if (existingSameSymbol) {
       return {
         isApproved: false,
         reasonCode: 'MAX_POSITIONS_PER_SYMBOL',
         message: `Position for ${symbol} is already active (${existingSameSymbol.side} ${existingSameSymbol.leverage}x). Multiple positions per symbol are forbidden.`,
-        totalOpenPositions: existingPositions.length,
+        totalOpenPositions: validPositions.length,
         portfolioRiskBeforePercent: 0,
         portfolioRiskAfterPercent: 0,
         totalExposureBeforePercent: 0,
@@ -70,15 +113,16 @@ export class PortfolioRiskEvaluator {
     let existingSymbolExposureUsdt = 0;
     let strategyRiskUsdt = 0;
 
-    for (const pos of existingPositions) {
+    for (const pos of validPositions) {
       const distanceToSl = Math.abs(pos.currentPrice - pos.stopLoss);
-      const posRisk = pos.quantity * distanceToSl;
+      const posRisk = Number.isFinite(pos.quantity * distanceToSl) ? pos.quantity * distanceToSl : 0;
       existingRiskUsdt += posRisk;
 
-      existingExposureUsdt += pos.positionSizeUsdt;
+      const posExp = Number.isFinite(pos.positionSizeUsdt) ? pos.positionSizeUsdt : 0;
+      existingExposureUsdt += posExp;
 
       if (pos.symbol.toUpperCase() === symbol) {
-        existingSymbolExposureUsdt += pos.positionSizeUsdt;
+        existingSymbolExposureUsdt += posExp;
       }
 
       if (pos.strategyName === strategy) {
@@ -86,18 +130,22 @@ export class PortfolioRiskEvaluator {
       }
     }
 
-    const portfolioRiskBeforePercent = accountEquity > 0 ? (existingRiskUsdt / accountEquity) * 100 : 0;
-    const totalExposureBeforePercent = accountEquity > 0 ? (existingExposureUsdt / accountEquity) * 100 : 0;
+    const safeEquity = Number.isFinite(accountEquity) && accountEquity > 0 ? accountEquity : 1000;
+    const portfolioRiskBeforePercent = (existingRiskUsdt / safeEquity) * 100;
+    const totalExposureBeforePercent = (existingExposureUsdt / safeEquity) * 100;
 
     // Projected state after trade
-    const totalRiskAfterUsdt = existingRiskUsdt + candidateRiskAmountUsdt;
-    const portfolioRiskAfterPercent = accountEquity > 0 ? (totalRiskAfterUsdt / accountEquity) * 100 : 0;
+    const safeCandidateRisk = Number.isFinite(candidateRiskAmountUsdt) ? candidateRiskAmountUsdt : 0;
+    const safeCandidateNotional = Number.isFinite(candidateNotionalUsdt) ? candidateNotionalUsdt : 0;
 
-    const totalExposureAfterUsdt = existingExposureUsdt + candidateNotionalUsdt;
-    const totalExposureAfterPercent = accountEquity > 0 ? (totalExposureAfterUsdt / accountEquity) * 100 : 0;
+    const totalRiskAfterUsdt = existingRiskUsdt + safeCandidateRisk;
+    const portfolioRiskAfterPercent = (totalRiskAfterUsdt / safeEquity) * 100;
 
-    const symbolExposureAfterUsdt = existingSymbolExposureUsdt + candidateNotionalUsdt;
-    const symbolExposureAfterPercent = accountEquity > 0 ? (symbolExposureAfterUsdt / accountEquity) * 100 : 0;
+    const totalExposureAfterUsdt = existingExposureUsdt + safeCandidateNotional;
+    const totalExposureAfterPercent = (totalExposureAfterUsdt / safeEquity) * 100;
+
+    const symbolExposureAfterUsdt = existingSymbolExposureUsdt + safeCandidateNotional;
+    const symbolExposureAfterPercent = (symbolExposureAfterUsdt / safeEquity) * 100;
 
     // 4. Maximum Portfolio Risk Cap Check
     if (portfolioRiskAfterPercent > config.maxPortfolioRiskPercent) {
@@ -153,7 +201,7 @@ export class PortfolioRiskEvaluator {
     let maxCorrelation = 0;
     let mostCorrelatedSymbol = '';
 
-    for (const pos of existingPositions) {
+    for (const pos of validPositions) {
       const corr = getCorrelation(symbol, pos.symbol);
       if (corr > maxCorrelation) {
         maxCorrelation = corr;
@@ -166,14 +214,14 @@ export class PortfolioRiskEvaluator {
       }
     }
 
-    const correlationExposurePercent = accountEquity > 0 ? (correlatedExposureUsdt / accountEquity) * 100 : 0;
+    const correlationExposurePercent = safeEquity > 0 ? (correlatedExposureUsdt / safeEquity) * 100 : 0;
 
-    if (correlationExposurePercent > config.maxCorrelationExposurePercent && existingPositions.length > 0) {
+    if (correlationExposurePercent > config.maxCorrelationExposurePercent && validPositions.length > 0) {
       return {
         isApproved: false,
         reasonCode: 'HIGH_CORRELATION',
         message: `High Correlation Risk: Directional exposure across correlated pairs (${symbol} & ${mostCorrelatedSymbol}, r=${maxCorrelation.toFixed(2)}) equals ${correlationExposurePercent.toFixed(1)}%, exceeding safe cluster limit of ${config.maxCorrelationExposurePercent}%.`,
-        totalOpenPositions: existingPositions.length,
+        totalOpenPositions: validPositions.length,
         portfolioRiskBeforePercent,
         portfolioRiskAfterPercent,
         totalExposureBeforePercent,
@@ -186,14 +234,14 @@ export class PortfolioRiskEvaluator {
 
     // 8. Strategy Risk Budget Check
     const strategyBudget = config.strategyRiskBudgets[strategy] || 1.5;
-    const strategyRiskAfterPercent = accountEquity > 0 ? ((strategyRiskUsdt + candidateRiskAmountUsdt) / accountEquity) * 100 : 0;
+    const strategyRiskAfterPercent = safeEquity > 0 ? ((strategyRiskUsdt + safeCandidateRisk) / safeEquity) * 100 : 0;
 
     if (strategyRiskAfterPercent > strategyBudget) {
       return {
         isApproved: false,
         reasonCode: 'STRATEGY_BUDGET_EXCEEDED',
         message: `Strategy '${strategy}' risk budget exceeded (${strategyRiskAfterPercent.toFixed(2)}% > ${strategyBudget}%).`,
-        totalOpenPositions: existingPositions.length,
+        totalOpenPositions: validPositions.length,
         portfolioRiskBeforePercent,
         portfolioRiskAfterPercent,
         totalExposureBeforePercent,
@@ -205,7 +253,7 @@ export class PortfolioRiskEvaluator {
 
     return {
       isApproved: true,
-      totalOpenPositions: existingPositions.length,
+      totalOpenPositions: validPositions.length,
       portfolioRiskBeforePercent,
       portfolioRiskAfterPercent,
       totalExposureBeforePercent,

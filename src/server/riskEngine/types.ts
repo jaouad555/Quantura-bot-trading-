@@ -269,3 +269,64 @@ export interface RiskAuditEntry {
   volatilityRegime: VolatilityRegime;
   clientOrderId?: string;
 }
+
+export interface PersistedPosition {
+  id: string;
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  decision: 'LONG' | 'SHORT';
+  entryPrice: number;
+  currentPrice: number;
+  stopLoss: number;
+  quantity: number;
+  remainingAmountBtc?: number;
+  initialAmountUsdt: number;
+  remainingAmountUsdt: number;
+  marginUsdt: number;
+  positionSizeUsdt: number;
+  leverage: number;
+  marketType: 'SPOT' | 'FUTURES';
+  marginMode?: 'ISOLATED' | 'CROSS';
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  tp1Hit?: boolean;
+  tp2Hit?: boolean;
+  tp3Hit?: boolean;
+  realizedPnlUsdt?: number;
+  unrealizedPnlUsdt?: number;
+  roePercent?: number;
+  strategyId?: string;
+  strategyName: string;
+  strategyStatus?: string;
+  confidence?: number;
+  mode?: 'BINANCE_LIVE' | 'PAPER';
+  openedAt: number;
+  lastAction?: string;
+  isTrailingActive?: boolean;
+  peakPrice?: number;
+}
+
+export function isValidPersistedPosition(pos: any): pos is PersistedPosition {
+  if (!pos || typeof pos !== 'object') return false;
+  if (!pos.symbol || typeof pos.symbol !== 'string') return false;
+
+  const side = pos.side || pos.decision;
+  if (side !== 'LONG' && side !== 'SHORT') return false;
+
+  const entryPrice = Number(pos.entryPrice);
+  const currentPrice = Number(pos.currentPrice || pos.entryPrice);
+  const stopLoss = Number(pos.stopLoss);
+  const quantity = Number(pos.quantity || pos.remainingAmountBtc);
+  const leverage = Number(pos.leverage || 1);
+  const positionSizeUsdt = Number(pos.positionSizeUsdt || (pos.marginUsdt ? pos.marginUsdt * leverage : 0));
+
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0) return false;
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return false;
+  if (!Number.isFinite(stopLoss) || stopLoss <= 0) return false;
+  if (!Number.isFinite(quantity) || quantity <= 0) return false;
+  if (!Number.isFinite(leverage) || leverage <= 0) return false;
+  if (!Number.isFinite(positionSizeUsdt) || positionSizeUsdt <= 0) return false;
+
+  return true;
+}

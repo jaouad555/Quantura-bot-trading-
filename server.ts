@@ -46,6 +46,7 @@ import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider }
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
+import { isValidPersistedPosition } from './src/server/riskEngine/types';
 import {
   AIAnalysisResult,
   BinanceTicker,
@@ -149,7 +150,29 @@ app.post('/api/config', async (req, res) => {
     if (value === null || value === undefined) {
       await kv.delete(key);
     } else {
-      await kv.set(key, String(value));
+      let finalValue = String(value);
+
+      // Schema validation & sanitization for active bot positions to prevent NaN propagation
+      if (key === 'btc_active_bot_positions') {
+        try {
+          const parsed = JSON.parse(String(value));
+          if (Array.isArray(parsed)) {
+            const valid = parsed.filter((p: any) => {
+              const ok = isValidPersistedPosition(p);
+              if (!ok) {
+                console.warn(`[CONFIG API WARN] Rejected malformed position payload for ${p?.symbol || 'UNKNOWN'}:`, p);
+              }
+              return ok;
+            });
+            finalValue = JSON.stringify(valid);
+          }
+        } catch (e) {
+          console.warn('[CONFIG API WARN] Failed to parse btc_active_bot_positions JSON, ignoring write:', e);
+          return res.status(400).json({ error: 'Invalid JSON for positions' });
+        }
+      }
+
+      await kv.set(key, finalValue);
 
       // Auto-synchronize strategyManager if botConfig or active_strategies changed
       if (key === 'btc_bot_config') {
