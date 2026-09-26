@@ -160,9 +160,10 @@ export const Header: React.FC<HeaderProps> = ({
   // AI Provider & Connectivity Status State
   const [aiStatus, setAiStatus] = useState<{
     status: string;
-    provider: 'gemini' | 'qwen' | 'deterministic';
+    provider: 'gemini' | 'qwen' | 'deepseek' | 'deterministic';
     geminiConfigured: boolean;
     qwenConfigured: boolean;
+    deepseekConfigured: boolean;
     activeModel: string;
     lastChecked: number;
     latencyMs: number;
@@ -172,6 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
     provider: 'gemini',
     geminiConfigured: false,
     qwenConfigured: false,
+    deepseekConfigured: false,
     activeModel: 'gemini-2.5-flash',
     lastChecked: Date.now(),
     latencyMs: 24,
@@ -193,6 +195,7 @@ export const Header: React.FC<HeaderProps> = ({
           provider: data.provider || 'deterministic',
           geminiConfigured: !!data.geminiConfigured,
           qwenConfigured: !!data.qwenConfigured,
+          deepseekConfigured: !!data.deepseekConfigured,
           activeModel: data.activeModel || 'gemini-2.5-flash',
           lastChecked: Date.now(),
           latencyMs: Math.max(8, Math.round(t1 - t0)),
@@ -222,6 +225,7 @@ export const Header: React.FC<HeaderProps> = ({
         provider: data.provider || 'deterministic',
         geminiConfigured: !!data.geminiConfigured,
         qwenConfigured: !!data.qwenConfigured,
+        deepseekConfigured: !!data.deepseekConfigured,
         activeModel: data.activeModel || 'gemini-2.5-flash',
         lastChecked: Date.now(),
         latencyMs: Math.max(12, Math.round(t1 - t0)),
@@ -1503,6 +1507,42 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
                   <span>Model: <strong className="text-indigo-300">Qwen/Qwen2.5-32B-Instruct</strong></span>
                   <span>Status: <strong className={aiStatus.qwenConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.qwenConfigured ? 'Ready' : 'Optional'}</strong></span>
+                </div>
+              </div>
+
+              {/* 3. DeepSeek V3 / R1 Card */}
+              <div className={`p-3.5 rounded-xl border transition ${
+                aiStatus.deepseekConfigured
+                  ? 'bg-purple-950/20 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
+                  : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs font-mono">
+                      DS
+                    </div>
+                    <span className="font-bold text-white text-sm font-mono">DeepSeek V3 / R1</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-mono font-medium">
+                      Advanced
+                    </span>
+                  </div>
+                  <span className={`flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                    aiStatus.deepseekConfigured
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${aiStatus.deepseekConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                    {aiStatus.deepseekConfigured ? (isArabic ? 'متصل ونشط' : 'ONLINE') : (isArabic ? 'وضع الاستعداد' : 'STANDBY')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mb-1">
+                  {isArabic
+                    ? 'نموذج التفكير العميق والتحليل المؤسسي (deepseek-chat / deepseek-reasoner).'
+                    : 'Advanced reasoning and institutional trade analysis via DeepSeek API.'}
+                </p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Model: <strong className="text-purple-300">deepseek-chat / reasoner</strong></span>
+                  <span>Status: <strong className={aiStatus.deepseekConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.deepseekConfigured ? 'Configured' : 'Optional'}</strong></span>
                 </div>
               </div>
 

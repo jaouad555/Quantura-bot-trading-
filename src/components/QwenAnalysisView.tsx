@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AIAnalysisResult, MarketDataResponse, Language } from '../types';
 import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
+import { callDeepSeekAPI } from '../utils/deepseek';
+import { apiStorage } from '../utils/apiStorage';
 import {
   Sparkles,
   Activity,
@@ -28,6 +30,7 @@ import {
   Eye,
   RefreshCw,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 
 interface QwenAnalysisViewProps {
@@ -54,6 +57,40 @@ export const QwenAnalysisView: React.FC<QwenAnalysisViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [selectedLangTab, setSelectedLangTab] = useState<Language>(language);
   const [activeSubSection, setActiveSubSection] = useState<'SUMMARY' | 'INDICATORS' | 'PLAYBOOK'>('SUMMARY');
+  const [selectedAiModel, setSelectedAiModel] = useState<'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner'>('qwen');
+  const [aiResponseText, setAiResponseText] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleModelChange = async (model: 'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner') => {
+    setSelectedAiModel(model);
+    if (model === 'deepseek-chat' || model === 'deepseek-reasoner') {
+      const apiKey = apiStorage.getItem('DEEPSEEK_API_KEY');
+      if (!apiKey) {
+        setAiError(isArabic ? 'مفتاح DeepSeek API غير موجود. يرجى إدخاله في الإعدادات (Settings).' : 'DeepSeek API Key is missing. Please configure it in Settings.');
+        return;
+      }
+      setIsAiLoading(true);
+      setAiError(null);
+      try {
+        const promptText = `Analyze crypto asset ${currentSymbol} trading setup: Current Price $${currentPrice}, Decision: ${analysis.decision}, Confidence: ${analysis.confidence}%, Stop Loss: $${analysis.stopLoss}, TP1: $${analysis.targets?.tp1}, TP2: $${analysis.targets?.tp2}, TP3: $${analysis.targets?.tp3}, Market Regime: ${analysis.marketRegime}. Provide a rigorous quantitative SMC institutional analysis in ${selectedLangTab.toUpperCase()}.`;
+        const res = await callDeepSeekAPI({
+          apiKey,
+          model: model,
+          prompt: promptText,
+          systemPrompt: 'You are an elite quantitative trading AI and Smart Money Concepts (SMC) institutional risk strategist.',
+        });
+        setAiResponseText(res);
+      } catch (err: any) {
+        setAiError(err.message || 'Failed to query DeepSeek API');
+      } finally {
+        setIsAiLoading(false);
+      }
+    } else {
+      setAiResponseText(null);
+      setAiError(null);
+    }
+  };
 
   if (!analysis || !marketData) {
     return (
@@ -326,6 +363,24 @@ ${detailedText}
         <div className="space-y-5">
           {/* Deep AI Rationale Box */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+            {/* AI Model Selector */}
+            <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-800">
+              <span className="text-xs font-bold text-slate-400">AI Model:</span>
+              {(['qwen', 'gemini', 'deepseek-chat', 'deepseek-reasoner'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => handleModelChange(m)}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                    selectedAiModel === m
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {m === 'qwen' ? 'Qwen 2.5' : m === 'gemini' ? 'Gemini 3.8 Pro' : m === 'deepseek-chat' ? 'DeepSeek V3' : 'DeepSeek R1 (Reasoner)'}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-cyan-400" />
@@ -338,9 +393,20 @@ ${detailedText}
               </span>
             </div>
 
-            <div className="text-sm text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
-              {detailedText}
-            </div>
+            {isAiLoading ? (
+              <div className="flex items-center justify-center p-8 gap-2 text-purple-400 font-mono text-xs">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Querying DeepSeek AI model...</span>
+              </div>
+            ) : aiError ? (
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono">
+                {aiError}
+              </div>
+            ) : (
+              <div className="text-sm text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
+                {aiResponseText || detailedText}
+              </div>
+            )}
 
             {/* Key Catalysts / Factors */}
             {analysis.keyFactors && analysis.keyFactors.length > 0 && (

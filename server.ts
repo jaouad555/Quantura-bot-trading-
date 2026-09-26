@@ -1507,18 +1507,21 @@ app.post('/api/binance/batch-historical-klines', async (req, res) => {
 // -------------------------------------------------------------
 // AI Status & Key Configuration Endpoint
 // -------------------------------------------------------------
-app.get('/api/ai/status', (req, res) => {
+app.get('/api/ai/status', async (req, res) => {
   loadEnvFallback();
   const key = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
   const hasGeminiKey = !!(key && key !== 'MY_GEMINI_API_KEY' && key !== 'YOUR_KEY_HERE');
   const hasQwenKey = !!(process.env.QWEN_API_KEY && process.env.QWEN_API_KEY !== 'YOUR_QWEN_API_KEY');
-  const provider = hasGeminiKey ? 'gemini' : (hasQwenKey ? 'qwen' : 'deterministic');
+  const dsKeyKv = await kv.get('DEEPSEEK_API_KEY');
+  const hasDeepSeekKey = !!((process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY !== 'YOUR_DEEPSEEK_API_KEY') || (dsKeyKv && dsKeyKv.trim() !== ''));
+  const provider = hasGeminiKey ? 'gemini' : (hasQwenKey ? 'qwen' : (hasDeepSeekKey ? 'deepseek' : 'deterministic'));
   res.json({
     status: 'ok',
     provider,
     geminiConfigured: hasGeminiKey,
     qwenConfigured: hasQwenKey,
-    activeModel: hasGeminiKey ? 'gemini-2.5-flash' : (hasQwenKey ? 'qwen-2.5-32b' : 'quant-deterministic'),
+    deepseekConfigured: hasDeepSeekKey,
+    activeModel: hasGeminiKey ? 'gemini-2.5-flash' : (hasQwenKey ? 'qwen-2.5-32b' : (hasDeepSeekKey ? 'deepseek-chat' : 'quant-deterministic')),
   });
 });
 
