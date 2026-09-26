@@ -1030,10 +1030,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     return [];
   }, [botConfig.activePresets]);
 
-  const filteredPositions = activePositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
-  const displayPositions = filteredPositions.length > 0 ? filteredPositions : activePositions;
-  const displayLogs = logs.filter(l => isLiveMode ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'));
-  const maxTradesLimit = Math.max(1, botConfig.maxOpenTrades || 3);
+  const filteredPositions = (activePositions || []).filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+  const displayPositions = filteredPositions.length > 0 ? filteredPositions : (activePositions || []);
+  const displayLogs = (logs || []).filter(l => isLiveMode ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'));
+  const maxTradesLimit = Math.max(1, botConfig?.maxOpenTrades || 3);
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;
   const isOverMaxTrades = displayPositions.length > maxTradesLimit;
 
@@ -1048,21 +1048,42 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
   // Live calculation helper for Futures / Spot positions
   const getPositionMetrics = (pos: ActiveBotPosition) => {
-    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 
+    if (!pos) {
+      return { 
+        roePercent: 0, 
+        grossROE: 0,
+        netROE: 0,
+        peakROE: 0,
+        roeDrawdown: 0,
+        roeState: 'PROFIT',
+        priceDiffPct: 0, 
+        usdt: 0, 
+        currentP: currentPrice || 1,
+        margin: 0,
+        positionSizeUsdt: 0,
+        distanceToLiqPct: null as number | null,
+        estimatedFees: 0,
+        breakevenPrice: 1,
+        protectedProfitUsdt: 0
+      };
+    }
+
+    const posSym = pos.symbol || selectedSymbol || 'BTCUSDT';
+    const p = posSym.toLowerCase() === (selectedSymbol || '').toLowerCase() && currentPrice > 0 
       ? currentPrice 
-      : (pos.currentPrice || pos.entryPrice || 1);
+      : (Number(pos.currentPrice) || Number(pos.entryPrice) || 1);
     const isLong = pos.decision === 'LONG';
-    const lev = Math.max(1, pos.leverage || 1);
-    const entryP = pos.entryPrice && pos.entryPrice > 0 ? pos.entryPrice : p;
-    const priceDiffPct = ((p - entryP) / entryP) * (isLong ? 1 : -1) * 100;
-    const rawGross = pos.grossROE !== undefined && pos.grossROE !== null ? pos.grossROE : (priceDiffPct * lev);
-    const grossROE = Number(rawGross) || 0;
-    const rawNet = pos.netROE !== undefined && pos.netROE !== null ? pos.netROE : (pos.roePercent !== undefined && pos.roePercent !== null ? pos.roePercent : grossROE);
-    const netROE = Number(rawNet) || 0;
+    const lev = Math.max(1, Number(pos.leverage) || 1);
+    const entryP = Number(pos.entryPrice) > 0 ? Number(pos.entryPrice) : p;
+    const priceDiffPct = entryP > 0 ? (((p - entryP) / entryP) * (isLong ? 1 : -1) * 100) : 0;
+    const rawGross = pos.grossROE !== undefined && pos.grossROE !== null ? Number(pos.grossROE) : (priceDiffPct * lev);
+    const grossROE = !isNaN(rawGross) && isFinite(rawGross) ? rawGross : 0;
+    const rawNet = pos.netROE !== undefined && pos.netROE !== null ? Number(pos.netROE) : (pos.roePercent !== undefined && pos.roePercent !== null ? Number(pos.roePercent) : grossROE);
+    const netROE = !isNaN(rawNet) && isFinite(rawNet) ? rawNet : 0;
     const roePercent = netROE;
     const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
       ? pos.remainingAmountUsdt
-      : (pos.marginUsdt || pos.initialAmountUsdt || 0);
+      : (Number(pos.marginUsdt) || Number(pos.initialAmountUsdt) || 0);
     const usdt = calculatePositionUnrealizedPnl(pos, p) || 0;
     const rawPeak = pos.peakROE !== undefined && pos.peakROE !== null && !isNaN(Number(pos.peakROE)) ? Number(pos.peakROE) : Math.max(0, roePercent);
     const peakROE = Number(rawPeak) || 0;
@@ -1072,8 +1093,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
     // Distance to liquidation %
     let distanceToLiqPct: number | null = null;
-    if (pos.liquidationPrice && pos.liquidationPrice > 0 && p > 0) {
-      const calcDist = Math.abs((p - pos.liquidationPrice) / p) * 100;
+    const liqPrice = Number(pos.liquidationPrice);
+    if (liqPrice > 0 && p > 0) {
+      const calcDist = Math.abs((p - liqPrice) / p) * 100;
       if (!isNaN(calcDist) && isFinite(calcDist)) {
         distanceToLiqPct = calcDist;
       }
@@ -1116,13 +1138,14 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const winRate = totalTradesCount > 0 ? ((winningTrades / totalTradesCount) * 100).toFixed(1) : '0.0';
 
   const renderActiveCard = (activePosition: ActiveBotPosition, index: number) => {
+    if (!activePosition) return null;
     try {
       const metrics = getPositionMetrics(activePosition);
-    const liveRoePercent = metrics.roePercent;
-    const livePnlUsdt = metrics.usdt;
-    const lev = activePosition.leverage || 1;
-    const isFutures = (activePosition.marketType || 'FUTURES') === 'FUTURES';
-    const isLong = activePosition.decision === 'LONG';
+      const liveRoePercent = Number(metrics.roePercent) || 0;
+      const livePnlUsdt = Number(metrics.usdt) || 0;
+      const lev = Number(activePosition.leverage) || 1;
+      const isFutures = (activePosition.marketType || 'FUTURES') === 'FUTURES';
+      const isLong = activePosition.decision === 'LONG';
 
     // Emotion Determination (Winning, Losing, or Neutral / Equilibrium)
     const isWinning = liveRoePercent > 0.05 || livePnlUsdt > 0.05;
@@ -1508,7 +1531,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
               </div>
               <div className="text-[10px] text-rose-300 mt-1 font-mono">
-                {metrics.distanceToLiqPct !== null 
+                {typeof metrics.distanceToLiqPct === 'number' && !isNaN(metrics.distanceToLiqPct) && isFinite(metrics.distanceToLiqPct)
                   ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% safe margin`)
                   : (isArabic ? 'آمن جداً' : 'Safe')}
               </div>
