@@ -1160,7 +1160,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       ? (isArabic ? `منذ ${elapsedMinutes} دقيقة` : `${elapsedMinutes}m ago`)
       : (isArabic ? `منذ ${Math.floor(elapsedMinutes / 60)} س ${elapsedMinutes % 60} د` : `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}m ago`);
 
-    // Emotion Visual Theme & Aura
+    // Emotion Visual Theme & Aura (Lightweight, GPU-safe styling)
     const emotionConfig = isWinning
       ? {
           themeName: isArabic ? 'حالة النشوة والانتصار' : (isEn ? 'Euphoric Gains Mode' : 'Mode Euphorie & Gains'),
@@ -1168,12 +1168,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           whisper: isArabic
             ? 'أداء ممتاز! الصفقة في مسار صاعد متوافق مع الزخم الكمي، تم حجز الأرباح وتأمين رأس المال.'
             : (isEn ? 'Strong momentum confluence! Capital protected with progressive target scaling.' : 'Excellente dynamique! Capital sécurisé avec prise de profit progressive.'),
-          cardShell: 'border-emerald-500/50 bg-gradient-to-b from-emerald-950/30 via-slate-900/95 to-slate-950 shadow-[0_0_35px_rgba(16,185,129,0.18)] hover:border-emerald-400/70',
-          topAura: 'bg-emerald-500/25',
-          bannerBg: 'bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-emerald-500/10 border-emerald-400/40 text-emerald-300',
-          directionBadge: 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50 shadow-[0_0_16px_rgba(16,185,129,0.3)]',
+          cardShell: 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/25 via-slate-900 to-slate-950 shadow-md hover:border-emerald-400/60',
+          topAura: 'from-emerald-500/10 to-transparent',
+          bannerBg: 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300',
+          directionBadge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm',
           roeColor: 'text-emerald-400',
-          roeBg: 'bg-emerald-950/70 border-emerald-500/40 shadow-[0_0_16px_rgba(16,185,129,0.25)]',
+          roeBg: 'bg-emerald-950/60 border-emerald-500/30 shadow-sm',
           accentColor: 'emerald',
         }
       : isLosing
@@ -1183,12 +1183,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           whisper: isArabic
             ? 'تراجع تصحيحي مؤقت ضمن الحدود الآمنة. محرك إدارة المخاطر يراقب مستوى الوقف بدقة لحماية المحفظة.'
             : (isEn ? 'Controlled pullback within safety parameters. Risk engine strictly guarding stop loss.' : 'Repli contrôlé dans les tolérances. Le moteur de risque surveille le Stop Loss.'),
-          cardShell: 'border-rose-500/50 bg-gradient-to-b from-rose-950/30 via-slate-900/95 to-slate-950 shadow-[0_0_35px_rgba(244,63,94,0.18)] hover:border-rose-400/70',
-          topAura: 'bg-rose-500/25',
-          bannerBg: 'bg-gradient-to-r from-rose-500/20 via-amber-500/15 to-rose-500/10 border-rose-400/40 text-rose-300',
-          directionBadge: 'bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-[0_0_16px_rgba(244,63,94,0.3)]',
+          cardShell: 'border-rose-500/40 bg-gradient-to-b from-rose-950/25 via-slate-900 to-slate-950 shadow-md hover:border-rose-400/60',
+          topAura: 'from-rose-500/10 to-transparent',
+          bannerBg: 'bg-rose-500/15 border-rose-400/30 text-rose-300',
+          directionBadge: 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm',
           roeColor: 'text-rose-400',
-          roeBg: 'bg-rose-950/70 border-rose-500/40 shadow-[0_0_16px_rgba(244,63,94,0.25)]',
+          roeBg: 'bg-rose-950/60 border-rose-500/30 shadow-sm',
           accentColor: 'rose',
         }
       : {
@@ -1197,12 +1197,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           whisper: isArabic
             ? 'الصفقة في مرحلة بناء السيولة بعد نقطة الدخول، المسار مستقر والهدف الأول قيد الرصد المباشر.'
             : (isEn ? 'Position consolidating near entry. Real-time target tracking active.' : 'Position en stabilisation près de l\'entrée. Cibles sous surveillance active.'),
-          cardShell: 'border-cyan-500/40 bg-gradient-to-b from-cyan-950/25 via-slate-900/95 to-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.14)] hover:border-cyan-400/60',
-          topAura: 'bg-cyan-500/20',
-          bannerBg: 'bg-gradient-to-r from-cyan-500/20 via-indigo-500/15 to-cyan-500/10 border-cyan-400/40 text-cyan-300',
-          directionBadge: 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-[0_0_16px_rgba(6,182,212,0.3)]',
+          cardShell: 'border-cyan-500/40 bg-gradient-to-b from-cyan-950/20 via-slate-900 to-slate-950 shadow-md hover:border-cyan-400/60',
+          topAura: 'from-cyan-500/10 to-transparent',
+          bannerBg: 'bg-cyan-500/15 border-cyan-400/30 text-cyan-300',
+          directionBadge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm',
           roeColor: 'text-cyan-300',
-          roeBg: 'bg-cyan-950/70 border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.2)]',
+          roeBg: 'bg-cyan-950/60 border-cyan-500/30 shadow-sm',
           accentColor: 'cyan',
         };
 
@@ -1221,17 +1221,17 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
     return (
       <div 
-        key={activePosition.id} 
-        className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 transition-all duration-300 border relative overflow-hidden group ${emotionConfig.cardShell}`}
+        key={activePosition.id || `pos-${index}`} 
+        className={`rounded-2xl p-4 sm:p-5 transition-colors duration-150 border relative overflow-hidden group ${emotionConfig.cardShell}`}
       >
-        {/* Futuristic Ambient Top Light Aura */}
-        <div className={`absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-28 blur-3xl pointer-events-none rounded-full ${emotionConfig.topAura}`} />
+        {/* Ambient Top Glow (Lightweight CSS Gradient without heavy blur filter) */}
+        <div className={`absolute top-0 right-0 w-48 h-24 pointer-events-none rounded-full bg-gradient-to-bl ${emotionConfig.topAura}`} />
 
         {/* Top Emotion & Status Intelligence Banner Pill (Matching Strategy Card Header) */}
         <div className={`mb-4 px-3 py-1.5 rounded-xl ${emotionConfig.bannerBg} text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-sm relative z-10`}>
           <div className="flex items-center gap-2">
             {isWinning ? (
-              <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse shrink-0" />
+              <Sparkles className="w-4 h-4 text-emerald-300 shrink-0" />
             ) : isLosing ? (
               <ShieldAlert className="w-4 h-4 text-rose-300 shrink-0" />
             ) : (
@@ -1245,7 +1245,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
           <div className="flex items-center gap-2 text-[11px] font-mono">
             {activePosition.isTrailingActive && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
                 <Zap className="w-3 h-3 text-amber-400" />
                 <span>{isArabic ? 'الوقف المتحرك نشط' : 'Trailing SL'}</span>
               </span>
@@ -1258,11 +1258,11 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Hero Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-800/80 relative z-10">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80 relative z-10">
           {/* Left: Direction Badge, Symbol, Strategy & Margin Details */}
           <div className="flex items-start sm:items-center gap-3.5">
-            {/* 3D-styled Glowing Direction Badge */}
-            <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border shrink-0 transition-transform group-hover:scale-105 ${emotionConfig.directionBadge}`}>
+            {/* Direction Badge */}
+            <div className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center border shrink-0 transition-transform duration-150 group-hover:scale-105 ${emotionConfig.directionBadge}`}>
               {isLong ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-rose-400" />}
               <span className="text-[9px] font-black font-mono tracking-tighter uppercase mt-0.5">
                 {activePosition.decision}
@@ -1273,7 +1273,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h3 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
                   <span>{activePosition.symbol}</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 </h3>
 
                 {isFutures ? (
@@ -1297,9 +1297,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 {metrics.roeState && (
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border flex items-center gap-1 ${
                     metrics.roeState === 'LOCK_PROFIT'
-                      ? 'bg-purple-950/80 text-purple-300 border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)] animate-pulse'
+                      ? 'bg-purple-950/80 text-purple-300 border-purple-500/50 shadow-sm'
                       : metrics.roeState === 'PROTECTED'
-                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-sm'
                       : metrics.roeState === 'PROFIT'
                       ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40'
                       : metrics.roeState === 'RECOVERY'
@@ -1345,7 +1345,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
           {/* Right: Live ROE Counter & Net PnL Hero Pill */}
           <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-            <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end justify-center min-w-[160px] ${emotionConfig.roeBg}`}>
+            <div className={`px-4 py-2 rounded-xl border flex flex-col items-end justify-center min-w-[150px] ${emotionConfig.roeBg}`}>
               <div className="flex items-center justify-between w-full text-[10px] uppercase font-mono tracking-wider font-semibold text-slate-400">
                 <span>{isFutures ? (isArabic ? 'صافي ROE' : 'Net ROE') : (isArabic ? 'عائد السبوت' : 'Spot Return')}</span>
                 {isFutures && (
@@ -1367,7 +1367,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <button
               type="button"
               onClick={() => onManualClosePosition(activePosition.id)}
-              className="h-12 px-4 rounded-xl font-mono font-bold text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 hover:border-rose-400 shadow-lg shadow-rose-500/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+              className="h-11 px-3.5 rounded-xl font-mono font-bold text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 hover:border-rose-400 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
               title={isFutures ? 'Close Futures Position' : 'Sell Spot Asset'}
             >
               <Power className="w-4 h-4 text-rose-400" />
@@ -1379,7 +1379,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Sentimental Bot Live Commentary Box (Whisper) */}
-        <div className="my-4 px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs flex items-center gap-3 relative z-10">
+        <div className="my-3 px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs flex items-center gap-3 relative z-10">
           <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
             <Bot className="w-3.5 h-3.5" />
           </div>
@@ -1392,7 +1392,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Dynamic Journey Progress Track */}
-        <div className="mb-4 space-y-1.5 relative z-10">
+        <div className="mb-3 space-y-1.5 relative z-10">
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
             <span className="flex items-center gap-1 text-rose-400">
               <ShieldAlert className="w-3 h-3" />
@@ -1409,12 +1409,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
           <div className="w-full h-2 rounded-full bg-slate-950 border border-slate-800 overflow-hidden relative p-0.5">
             <div 
-              className={`h-full rounded-full transition-all duration-500 ${
+              className={`h-full rounded-full transition-[width] duration-300 ease-out ${
                 isWinning 
-                  ? 'bg-gradient-to-r from-teal-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' 
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-400' 
                   : isLosing 
-                  ? 'bg-gradient-to-r from-rose-600 to-amber-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' 
-                  : 'bg-gradient-to-r from-indigo-500 to-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                  ? 'bg-gradient-to-r from-rose-600 to-amber-500' 
+                  : 'bg-gradient-to-r from-indigo-500 to-cyan-400'
               }`}
               style={{ width: `${Math.max(5, Math.min(100, journeyProgressPct))}%` }}
             />
@@ -1422,12 +1422,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Bento Grid: 6 Critical Metric Holographic Capsules */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs relative z-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs relative z-10">
           {/* 1. Entry & Current Market Price */}
-          <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800/90 hover:border-slate-700 transition">
+          <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/90 hover:border-slate-700 transition-colors">
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
               <span className="font-medium">{isArabic ? 'الدخول / الحالي' : 'Entry / Current'}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
             </div>
             <div className="font-black text-white font-mono text-xs sm:text-sm">
               ${formatCoinPrice(activePosition.entryPrice, activePosition.symbol)}
@@ -1441,9 +1441,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
 
           {/* 2. TP1 (50% Scale-Out) */}
-          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+          <div className={`p-2.5 rounded-xl border transition-colors ${
             activePosition.tp1Hit 
-              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
               : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
           }`}>
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
@@ -1459,9 +1459,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
 
           {/* 3. TP2 (Target 2) */}
-          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+          <div className={`p-2.5 rounded-xl border transition-colors ${
             activePosition.tp2Hit 
-              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
               : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
           }`}>
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
@@ -1477,9 +1477,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
 
           {/* 4. TP3 (Max Moonshot Target) */}
-          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+          <div className={`p-2.5 rounded-xl border transition-colors ${
             activePosition.tp3Hit 
-              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.15)]' 
+              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300' 
               : 'bg-slate-950/80 border-slate-800/90 text-slate-300'
           }`}>
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
@@ -1495,9 +1495,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
 
           {/* 5. Stop Loss / Trailing Guard */}
-          <div className={`p-3 rounded-2xl border transition-all duration-300 ${
+          <div className={`p-2.5 rounded-xl border transition-colors ${
             activePosition.isTrailingActive 
-              ? 'bg-amber-950/30 border-amber-500/40 text-amber-300 shadow-[0_0_14px_rgba(245,158,11,0.15)]' 
+              ? 'bg-amber-950/30 border-amber-500/40 text-amber-300' 
               : 'bg-slate-950/80 border-rose-500/30'
           }`}>
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
@@ -1522,22 +1522,22 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
           {/* 6. Liquidation Buffer (Futures) or Spot Security (Spot) */}
           {isFutures ? (
-            <div className="bg-rose-950/20 border border-rose-500/40 p-3 rounded-2xl text-rose-200">
+            <div className="bg-rose-950/20 border border-rose-500/40 p-2.5 rounded-xl text-rose-200">
               <div className="flex items-center justify-between text-rose-400 text-[10px] mb-1 font-bold">
                 <span>{isArabic ? 'سعر التصفية (Liq)' : 'Liq Price'}</span>
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
               </div>
               <div className="font-black text-white font-mono text-xs sm:text-sm">
                 {activePosition.liquidationPrice ? `$${formatCoinPrice(activePosition.liquidationPrice, activePosition.symbol)}` : 'N/A'}
               </div>
               <div className="text-[10px] text-rose-300 mt-1 font-mono">
                 {typeof metrics.distanceToLiqPct === 'number' && !isNaN(metrics.distanceToLiqPct) && isFinite(metrics.distanceToLiqPct)
-                  ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% safe margin`)
+                  ? (isArabic ? `يبعد ${metrics.distanceToLiqPct.toFixed(1)}%` : `${metrics.distanceToLiqPct.toFixed(1)}% safe`)
                   : (isArabic ? 'آمن جداً' : 'Safe')}
               </div>
             </div>
           ) : (
-            <div className="bg-emerald-950/25 border border-emerald-500/40 p-3 rounded-2xl text-emerald-200">
+            <div className="bg-emerald-950/25 border border-emerald-500/40 p-2.5 rounded-xl text-emerald-200">
               <div className="flex items-center justify-between text-emerald-400 text-[10px] mb-1 font-bold">
                 <span>{isArabic ? 'حماية السبوت' : (isEn ? 'Spot Security' : 'Sécurité Spot')}</span>
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -1553,7 +1553,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Interactive Tactical Footer Bar (Matching Strategy Card Button Style) */}
-        <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+        <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
           <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono w-full sm:w-auto">
             <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <span>
@@ -1565,7 +1565,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           <button
             type="button"
             onClick={() => onManualClosePosition(activePosition.id)}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-rose-950/40 via-rose-900/25 to-slate-900/90 hover:from-rose-900/50 hover:to-slate-800 border border-rose-500/40 hover:border-rose-400 text-rose-300 hover:text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-[0_0_20px_rgba(244,63,94,0.25)] cursor-pointer active:scale-98"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-rose-950/40 via-rose-900/25 to-slate-900/90 hover:from-rose-900/50 hover:to-slate-800 border border-rose-500/40 hover:border-rose-400 text-rose-300 hover:text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-98"
           >
             <Power className="w-3.5 h-3.5 text-rose-400" />
             <span>
@@ -1617,7 +1617,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       )}
 
       {/* Bot Master Control Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 overflow-hidden shadow-lg">
         <div className="flex flex-col gap-5">
           {/* Bot Title & Status Header with Sentimental Robot Avatar */}
           <div className="flex items-start sm:items-center gap-3.5">
