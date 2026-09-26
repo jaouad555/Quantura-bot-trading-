@@ -127,19 +127,73 @@ const calculatePnl = (pos: any, exitPrice: number) => {
   return pos.remainingAmountUsdt * priceDiffPct * lev;
 };
 
+let lastSyncPositionsCount = -1;
+let lastSyncTimestamp = 0;
+
+/**
+ * Records an alert in the central KV store so it is synced to all connected web clients and Notification Center
+ */
+export const recordPushAlertDirect = async (alert: {
+  title: string;
+  body: string;
+  type?: string;
+  decision?: 'LONG' | 'SHORT' | 'WAIT';
+  symbol: string;
+}) => {
+  try {
+    const alertsStr = await kv.get('btc_push_alerts');
+    const alerts = alertsStr ? JSON.parse(alertsStr) : [];
+    const newAlert = {
+      id: `alert-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      title: alert.title,
+      body: alert.body,
+      timestamp: Date.now(),
+      type: alert.type || 'SIGNAL',
+      decision: alert.decision || 'WAIT',
+      symbol: alert.symbol,
+      read: false,
+    };
+    alerts.unshift(newAlert);
+    await kv.set('btc_push_alerts', JSON.stringify(alerts.slice(0, 100)));
+    return newAlert;
+  } catch (err) {
+    console.error('[ALERT] Failed to record push alert:', err);
+    return null;
+  }
+};
+
+/**
+ * Safely resolves Telegram bot credentials from KV store or system environment
+ */
+export const getTelegramCredentials = async () => {
+  const kvToken = await kv.get('app_telegram_bot_token');
+  const kvChatId = await kv.get('app_telegram_chat_id');
+  const token = (kvToken || process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '').trim();
+  const chatId = (kvChatId || process.env.TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || '').trim();
+  return { token, chatId };
+};
+
 export const startTelegramSync = () => {
   if (telegramInterval) clearInterval(telegramInterval);
 
   telegramInterval = setInterval(async () => {
     try {
-      const token = await kv.get('app_telegram_bot_token');
-      const chatId = await kv.get('app_telegram_chat_id');
-      
+      const { token, chatId } = await getTelegramCredentials();
       if (!token || !chatId) return;
 
       const positionsStr = await kv.get('btc_active_bot_positions');
       const positions = positionsStr ? JSON.parse(positionsStr) : [];
       
+      const now = Date.now();
+      const countChanged = positions.length !== lastSyncPositionsCount;
+      const isIntervalElapsed = now - lastSyncTimestamp >= 30 * 60 * 1000; // 30 minutes periodic health sync to prevent Telegram 429 rate limits
+
+      // Only send periodic summary if positions count changed or 30 minutes elapsed while trades are open
+      if (!countChanged && !isIntervalElapsed) return;
+
+      lastSyncPositionsCount = positions.length;
+      lastSyncTimestamp = now;
+
       const walletStr = await kv.get('btc_paper_wallet');
       const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
@@ -175,44 +229,35 @@ export const startTelegramSync = () => {
       const totalPnl = wallet.realizedPnl + unrealizedPnl;
       const balance = wallet.balance + unrealizedPnl;
 
-      const message = `🤖 *Bot Health Sync*\n\n` +
-                      `📊 *Active Positions:* ${positions.length}\n` +
-                      `💵 *Realized PnL:* $${wallet.realizedPnl.toFixed(2)}\n` +
-                      `📈 *Unrealized PnL:* $${unrealizedPnl.toFixed(2)}\n` +
-                      `💰 *Total PnL:* $${totalPnl.toFixed(2)}\n` +
-                      `🏦 *Est. Portfolio Value:* $${balance.toFixed(2)}`;
+      const message = `🤖 <b>Quantura Bot Health Sync</b>\n\n` +
+                      `📊 <b>Active Positions:</b> ${positions.length}\n` +
+                      `💵 <b>Realized PnL:</b> $${wallet.realizedPnl.toFixed(2)}\n` +
+                      `📈 <b>Unrealized PnL:</b> $${unrealizedPnl.toFixed(2)}\n` +
+                      `💰 <b>Total PnL:</b> $${totalPnl.toFixed(2)}\n` +
+                      `🏦 <b>Est. Portfolio Value:</b> $${balance.toFixed(2)}`;
 
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: 'Markdown'
-        })
-      });
+      await sendServerTelegramNotification(message);
 
     } catch (error) {
       console.error('Telegram Sync Error:', error);
     }
-  }, 60000); // 1 minute interval
+  }, 60000); // Check loop runs every minute, throttled to 30 mins to avoid rate limits
 
-  console.log('📢 Telegram Periodic Sync Started!');
+  console.log('📢 Telegram Periodic Smart Sync Started!');
 };
 
 /**
- * Instant Telegram Notification Helper for Trade Events
+ * Instant Telegram Notification Helper for Trade Events with Auto-Retry & Plaintext Fallback
  */
 export const sendServerTelegramNotification = async (text: string) => {
   try {
-    const token = await kv.get('app_telegram_bot_token');
-    const chatId = await kv.get('app_telegram_chat_id');
+    const { token, chatId } = await getTelegramCredentials();
     if (!token || !chatId || !text) return;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    const timeout = setTimeout(() => controller.abort(), 6000);
 
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -221,10 +266,27 @@ export const sendServerTelegramNotification = async (text: string) => {
         parse_mode: 'HTML',
       }),
       signal: controller.signal,
-    }).catch(() => {});
+    }).catch(() => null);
     clearTimeout(timeout);
-  } catch (err) {
-    // Non-blocking
+
+    if (res && !res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      // If HTML entity parsing fails (e.g. unescaped '<' or '>'), fallback to clean plain text
+      if (res.status === 400) {
+        const plainText = text.replace(/<[^>]*>/g, '');
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: plainText }),
+        }).catch(() => {});
+      } else if (res.status === 429) {
+        console.warn(`[TELEGRAM RATE LIMIT] 429 received from Telegram API: ${errData?.description || 'Too many requests'}. Notification queued.`);
+      } else {
+        console.warn(`[TELEGRAM ERROR] ${errData?.description || res.statusText}`);
+      }
+    }
+  } catch (err: any) {
+    console.warn('[TELEGRAM EXCEPTION]', err?.message);
   }
 };
 
@@ -734,6 +796,21 @@ export const startBotEngine = () => {
             walletPnlDelta += tranchePnl;
           }
 
+          sendServerTelegramNotification(
+            `🚨 <b>LIQUIDATION TRIGGERED</b>\n\n` +
+            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
+            `📊 Price: $${currentP.toLocaleString()}\n` +
+            `💵 Loss: -$${marginLost.toFixed(2)} (-100% Margin)`
+          );
+
+          recordPushAlertDirect({
+            title: `[${pos.symbol}] Liquidation Guard Triggered 🚨`,
+            body: `Margin lost: -$${marginLost.toFixed(2)} at $${currentP.toLocaleString()}`,
+            type: 'TRADE',
+            decision: pos.decision,
+            symbol: pos.symbol,
+          }).catch(() => {});
+
           logsToAdd.push({
             id: `log-liq-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -851,6 +928,14 @@ export const startBotEngine = () => {
             `🛡️ Stop Loss secured at Fee-Aware Breakeven ($${pos.stopLoss?.toLocaleString()})`
           );
 
+          recordPushAlertDirect({
+            title: `[${pos.symbol}] TP1 Target Achieved! 🎯`,
+            body: `Closed 50% at $${currentP.toLocaleString()} | PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}%)`,
+            type: 'TRADE',
+            decision: pos.decision,
+            symbol: pos.symbol,
+          }).catch(() => {});
+
           logsToAdd.push({
             id: `log-tp1-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -910,6 +995,14 @@ export const startBotEngine = () => {
             `🛡️ Stop Loss advanced to TP1 (${(pos.tp1 || 0).toLocaleString()})`
           );
 
+          recordPushAlertDirect({
+            title: `[${pos.symbol}] TP2 Target Hit! 🎯`,
+            body: `Closed 50% remaining at $${currentP.toLocaleString()} | PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}%)`,
+            type: 'TRADE',
+            decision: pos.decision,
+            symbol: pos.symbol,
+          }).catch(() => {});
+
           logsToAdd.push({
             id: `log-tp2-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -968,6 +1061,14 @@ export const startBotEngine = () => {
             `💵 Net Trade PnL: ${pnlSign}$${totalTradePnl.toFixed(2)}\n` +
             `⏱ Strategy: ${pos.strategyName || 'Quantitative'}`
           );
+
+          recordPushAlertDirect({
+            title: `[${pos.symbol}] ${isTp3 ? 'TP3 Hit 🏆' : (pos.isTrailingActive ? 'Trailing Stop Hit ⚡' : 'Stop Loss Hit 🛑')}`,
+            body: `Exit at $${currentP.toLocaleString()} | Net PnL: ${pnlSign}$${totalTradePnl.toFixed(2)}`,
+            type: 'TRADE',
+            decision: pos.decision,
+            symbol: pos.symbol,
+          }).catch(() => {});
 
           logsToAdd.push({
             id: `log-server-${Date.now()}-${i}`,

@@ -47,7 +47,8 @@ import {
   BinanceApiConfig,
   Timeframe,
   BotTimeframe,
-  PaperWallet
+  PaperWallet,
+  StrategyId
 } from '../types';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { calculatePortfolioMetrics, calculatePositionUnrealizedPnl } from '../utils/portfolioCalc';
@@ -184,206 +185,262 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   // AI Real-Time Market Reader & Strategy Matcher Engine
   // -------------------------------------------------------------
   const marketAnalysisData = useMemo(() => {
-    const regime = activeSignal?.marketRegime || 'TRENDING_BULLISH';
-    const indicators = (activeSignal as any)?.technicalIndicators || (activeSignal as any)?.timeframeAnalysis?.[activeSignal?.recommendedTimeframe || '1h']?.indicators;
-    const adx = indicators?.adx14 ?? 28.5;
-    const rsi = indicators?.rsi14 ?? 54.0;
-    const bbBandwidth = indicators?.bollingerBands?.bandwidthPercent ?? 4.2;
-    const tradeType = activeSignal?.tradeType || 'FAST_TRADE';
-    const confidence = activeSignal?.confidence ?? 78;
-    const decision = activeSignal?.decision || 'LONG';
-    const hasSmc = Boolean(
-      (activeSignal as any)?.smcAnalysis?.orderBlocks?.length || 
-      (activeSignal as any)?.smcAnalysis?.fvgZones?.length ||
-      tradeType === 'SHORT_TRADE' ||
-      tradeType === 'SWING_TRADE'
-    );
+    try {
+      const regime = activeSignal?.marketRegime || 'TRENDING_BULLISH';
+      const indicators = (activeSignal as any)?.technicalIndicators || (activeSignal as any)?.timeframeAnalysis?.[activeSignal?.recommendedTimeframe || '1h']?.indicators;
+      const rawAdx = Number(indicators?.adx14);
+      const adx = !isNaN(rawAdx) && rawAdx > 0 ? rawAdx : 28.5;
+      const rawRsi = Number(indicators?.rsi14);
+      const rsi = !isNaN(rawRsi) && rawRsi > 0 ? rawRsi : 54.0;
+      const rawBb = Number(indicators?.bollingerBands?.bandwidthPercent);
+      const bbBandwidth = !isNaN(rawBb) && rawBb > 0 ? rawBb : 4.2;
+      const tradeType = activeSignal?.tradeType || 'FAST_TRADE';
+      const confidence = Number(activeSignal?.confidence) || 78;
+      const decision = activeSignal?.decision || 'LONG';
+      const hasSmc = Boolean(
+        (activeSignal as any)?.smcAnalysis?.orderBlocks?.length || 
+        (activeSignal as any)?.smcAnalysis?.fvgZones?.length ||
+        tradeType === 'SHORT_TRADE' ||
+        tradeType === 'SWING_TRADE'
+      );
 
-    // Calculate match score for each strategy based on strict quantitative criteria
-    const scores: Record<
-      'MOMENTUM' | 'SCALPER' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC' | 'SWING',
-      {
-        score: number;
-        criteriaTagsAr: string[];
-        criteriaTagsFr: string[];
-        primaryReasonAr: string;
-        primaryReasonFr: string;
+      // Calculate match score for each strategy based on strict quantitative criteria
+      const scores: Record<
+        StrategyId,
+        {
+          score: number;
+          criteriaTagsAr: string[];
+          criteriaTagsFr: string[];
+          primaryReasonAr: string;
+          primaryReasonFr: string;
+        }
+      > = {
+        INSTITUTIONAL_SMC: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        MOMENTUM: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        SWING: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        MTF_CONFLUENCE: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        VWAP_VOLUME_DELTA: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        FUNDING_SQUEEZE: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        BREAKOUT: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        SCALPER: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        MEAN_REVERSION: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+        LIQUIDITY_HUNT: { score: 0, criteriaTagsAr: [], criteriaTagsFr: [], primaryReasonAr: '', primaryReasonFr: '' },
+      };
+
+      // 1. MOMENTUM SCORING
+      let momScore = 45;
+      if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+        momScore += 32;
+        scores.MOMENTUM.criteriaTagsAr.push(regime === 'TRENDING_BULLISH' ? 'اتجاه صاعد قوي' : 'اتجاه هابط قوي');
+        scores.MOMENTUM.criteriaTagsFr.push('Tendance Forte');
       }
-    > = {
-      MOMENTUM: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-      SCALPER: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-      BREAKOUT: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-      MEAN_REVERSION: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-      INSTITUTIONAL_SMC: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-      SWING: {
-        score: 0,
-        criteriaTagsAr: [],
-        criteriaTagsFr: [],
-        primaryReasonAr: '',
-        primaryReasonFr: '',
-      },
-    };
+      if (adx >= 25) {
+        momScore += 18;
+        scores.MOMENTUM.criteriaTagsAr.push(`ADX ${adx.toFixed(1)} > 25`);
+        scores.MOMENTUM.criteriaTagsFr.push(`ADX ${adx.toFixed(1)} (Solide)`);
+      }
+      if (tradeType === 'SHORT_TRADE' || Number((activeSignal as any)?.quantScore?.trend ?? 50) > 60) {
+        momScore += 10;
+      }
+      momScore = Math.min(98, Math.max(30, momScore));
+      scores.MOMENTUM.score = momScore;
+      scores.MOMENTUM.primaryReasonAr = `سوق في اتجاه صريح مع زخم قوي في مؤشر ADX (${adx.toFixed(1)}) وتوافق المتوسطات المتحركة EMA.`;
+      scores.MOMENTUM.primaryReasonFr = `Tendance directionnelle confirmée avec ADX (${adx.toFixed(1)}) et alignement des moyennes mobiles.`;
 
-    // 1. MOMENTUM SCORING
-    let momScore = 45;
-    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
-      momScore += 32;
-      scores.MOMENTUM.criteriaTagsAr.push(regime === 'TRENDING_BULLISH' ? 'اتجاه صاعد قوي' : 'اتجاه هابط قوي');
-      scores.MOMENTUM.criteriaTagsFr.push('Tendance Forte');
-    }
-    if (adx >= 25) {
-      momScore += 18;
-      scores.MOMENTUM.criteriaTagsAr.push(`ADX ${adx.toFixed(1)} > 25`);
-      scores.MOMENTUM.criteriaTagsFr.push(`ADX ${adx.toFixed(1)} (Solide)`);
-    }
-    if (tradeType === 'SHORT_TRADE' || ((activeSignal as any)?.quantScore?.trend ?? 50) > 60) {
-      momScore += 10;
-    }
-    momScore = Math.min(98, Math.max(30, momScore));
-    scores.MOMENTUM.score = momScore;
-    scores.MOMENTUM.primaryReasonAr = `سوق في اتجاه صريح مع زخم قوي في مؤشر ADX (${adx.toFixed(1)}) وتوافق المتوسطات المتحركة EMA.`;
-    scores.MOMENTUM.primaryReasonFr = `Tendance directionnelle confirmée avec ADX (${adx.toFixed(1)}) et alignement des moyennes mobiles.`;
+      // 2. SCALPER SCORING
+      let scalperScore = 40;
+      if (regime === 'HIGH_VOLATILITY') {
+        scalperScore += 38;
+        scores.SCALPER.criteriaTagsAr.push('تقلبات سريعة');
+        scores.SCALPER.criteriaTagsFr.push('Forte Volatilité');
+      }
+      if (activeSignal?.recommendedTimeframe === '5m' || activeSignal?.recommendedTimeframe === '15m') {
+        scalperScore += 15;
+        scores.SCALPER.criteriaTagsAr.push('فريم لحظي 15m');
+        scores.SCALPER.criteriaTagsFr.push('TF 15m');
+      }
+      if (tradeType === 'FAST_TRADE') scalperScore += 12;
+      scalperScore = Math.min(98, Math.max(30, scalperScore));
+      scores.SCALPER.score = scalperScore;
+      scores.SCALPER.primaryReasonAr = 'حركة سعرية سريعة تسمح باقتناص أهداف خاطفة بنقاط وقف خسارة ضيقة وتكرار سريع.';
+      scores.SCALPER.primaryReasonFr = 'Micro-oscillations rapides idéales pour entrées fractionnées et sorties rapides.';
 
-    // 2. SCALPER SCORING
-    let scalperScore = 40;
-    if (regime === 'HIGH_VOLATILITY') {
-      scalperScore += 38;
-      scores.SCALPER.criteriaTagsAr.push('تقلبات سريعة');
-      scores.SCALPER.criteriaTagsFr.push('Forte Volatilité');
-    }
-    if (activeSignal?.recommendedTimeframe === '5m' || activeSignal?.recommendedTimeframe === '15m') {
-      scalperScore += 15;
-      scores.SCALPER.criteriaTagsAr.push('فريم لحظي 15m');
-      scores.SCALPER.criteriaTagsFr.push('TF 15m');
-    }
-    if (tradeType === 'FAST_TRADE') scalperScore += 12;
-    scalperScore = Math.min(98, Math.max(30, scalperScore));
-    scores.SCALPER.score = scalperScore;
-    scores.SCALPER.primaryReasonAr = 'حركة سعرية سريعة تسمح باقتناص أهداف خاطفة بنقاط وقف خسارة ضيقة وتكرار سريع.';
-    scores.SCALPER.primaryReasonFr = 'Micro-oscillations rapides idéales pour entrées fractionnées et sorties rapides.';
+      // 3. BREAKOUT SCORING
+      let brkScore = 38;
+      if (bbBandwidth > 4.5 || Number((activeSignal as any)?.quantScore?.volatility ?? 50) > 65) {
+        brkScore += 35;
+        scores.BREAKOUT.criteriaTagsAr.push('انفجار بولينجر');
+        scores.BREAKOUT.criteriaTagsFr.push('Expansion BB');
+      }
+      if (regime === 'HIGH_VOLATILITY' || regime === 'TRENDING_BULLISH') {
+        brkScore += 18;
+        scores.BREAKOUT.criteriaTagsAr.push('اختراق مستويات');
+        scores.BREAKOUT.criteriaTagsFr.push('Cassure Niveaux');
+      }
+      brkScore = Math.min(98, Math.max(30, brkScore));
+      scores.BREAKOUT.score = brkScore;
+      scores.BREAKOUT.primaryReasonAr = 'اتساع في نطاقات بولينجر باند وضغط سيولة ينذر باختراق مستويات القمم والقيعان.';
+      scores.BREAKOUT.primaryReasonFr = 'Élargissement des bandes de Bollinger avec volume dynamique sur franchissement de niveaux.';
 
-    // 3. BREAKOUT SCORING
-    let brkScore = 38;
-    if (bbBandwidth > 4.5 || ((activeSignal as any)?.quantScore?.volatility ?? 50) > 65) {
-      brkScore += 35;
-      scores.BREAKOUT.criteriaTagsAr.push('انفجار بولينجر');
-      scores.BREAKOUT.criteriaTagsFr.push('Expansion BB');
-    }
-    if (regime === 'HIGH_VOLATILITY' || regime === 'TRENDING_BULLISH') {
-      brkScore += 18;
-      scores.BREAKOUT.criteriaTagsAr.push('اختراق مستويات');
-      scores.BREAKOUT.criteriaTagsFr.push('Cassure Niveaux');
-    }
-    brkScore = Math.min(98, Math.max(30, brkScore));
-    scores.BREAKOUT.score = brkScore;
-    scores.BREAKOUT.primaryReasonAr = 'اتساع في نطاقات بولينجر باند وضغط سيولة ينذر باختراق مستويات القمم والقيعان.';
-    scores.BREAKOUT.primaryReasonFr = 'Élargissement des bandes de Bollinger avec volume dynamique sur franchissement de niveaux.';
+      // 4. MEAN REVERSION SCORING
+      let revScore = 35;
+      if (regime === 'RANGING' || regime === 'LOW_VOLATILITY') {
+        revScore += 40;
+        scores.MEAN_REVERSION.criteriaTagsAr.push('نطاق عرضي Ranging');
+        scores.MEAN_REVERSION.criteriaTagsFr.push('Marché en Range');
+      }
+      if (rsi > 68 || rsi < 32) {
+        revScore += 25;
+        scores.MEAN_REVERSION.criteriaTagsAr.push(`RSI ${rsi.toFixed(1)} تشبع`);
+        scores.MEAN_REVERSION.criteriaTagsFr.push(`RSI ${rsi.toFixed(1)} Extrême`);
+      }
+      if (regime === 'RANGING') revScore += 15;
+      revScore = Math.min(98, Math.max(30, revScore));
+      scores.MEAN_REVERSION.score = revScore;
+      scores.MEAN_REVERSION.primaryReasonAr = 'سوق متذبذب داخل نطاق محدد مع تشبع مؤشر RSI، مثالي للارتداد إلى المتوسط السعري.';
+      scores.MEAN_REVERSION.primaryReasonFr = 'Marché sans tendance avec RSI en zone extrême, propice au retour à la moyenne.';
 
-    // 4. MEAN REVERSION SCORING
-    let revScore = 35;
-    if (regime === 'RANGING' || regime === 'LOW_VOLATILITY') {
-      revScore += 40;
-      scores.MEAN_REVERSION.criteriaTagsAr.push('نطاق عرضي Ranging');
-      scores.MEAN_REVERSION.criteriaTagsFr.push('Marché en Range');
-    }
-    if (rsi > 68 || rsi < 32) {
-      revScore += 25;
-      scores.MEAN_REVERSION.criteriaTagsAr.push(`RSI ${rsi.toFixed(1)} تشبع`);
-      scores.MEAN_REVERSION.criteriaTagsFr.push(`RSI ${rsi.toFixed(1)} Extrême`);
-    }
-    if (regime === 'RANGING') revScore += 15;
-    revScore = Math.min(98, Math.max(30, revScore));
-    scores.MEAN_REVERSION.score = revScore;
-    scores.MEAN_REVERSION.primaryReasonAr = 'سوق متذبذب داخل نطاق محدد مع تشبع مؤشر RSI، مثالي للارتداد إلى المتوسط السعري.';
-    scores.MEAN_REVERSION.primaryReasonFr = 'Marché sans tendance avec RSI en zone extrême, propice au retour à la moyenne.';
+      // 5. INSTITUTIONAL SMC SCORING
+      let smcScore = 48;
+      if (hasSmc) {
+        smcScore += 30;
+        scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('Order Blocks & FVG');
+        scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Zones SMC / FVG');
+      }
+      if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+        smcScore += 16;
+        scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('توافق سيولة كبرى');
+        scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Liquidité institutionnelle');
+      }
+      if (confidence >= 75) smcScore += 8;
+      smcScore = Math.min(98, Math.max(35, smcScore));
+      scores.INSTITUTIONAL_SMC.score = smcScore;
+      scores.INSTITUTIONAL_SMC.primaryReasonAr = 'تمركز أوامر السيولة المؤسسية وتغطية الفجوات السعرية FVG مع بنية هيكلية سليمة.';
+      scores.INSTITUTIONAL_SMC.primaryReasonFr = 'Balayage de liquidité et blocs d\'ordres institutionnels avec ratios risque/rendement élevés.';
 
-    // 5. INSTITUTIONAL SMC SCORING
-    let smcScore = 48;
-    if (hasSmc) {
-      smcScore += 30;
-      scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('Order Blocks & FVG');
-      scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Zones SMC / FVG');
-    }
-    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
-      smcScore += 16;
-      scores.INSTITUTIONAL_SMC.criteriaTagsAr.push('توافق سيولة كبرى');
-      scores.INSTITUTIONAL_SMC.criteriaTagsFr.push('Liquidité institutionnelle');
-    }
-    if (confidence >= 75) smcScore += 8;
-    smcScore = Math.min(98, Math.max(35, smcScore));
-    scores.INSTITUTIONAL_SMC.score = smcScore;
-    scores.INSTITUTIONAL_SMC.primaryReasonAr = 'تمركز أوامر السيولة المؤسسية وتغطية الفجوات السعرية FVG مع بنية هيكلية سليمة.';
-    scores.INSTITUTIONAL_SMC.primaryReasonFr = 'Balayage de liquidité et blocs d\'ordres institutionnels avec ratios risque/rendement élevés.';
+      // 6. SWING SCORING
+      let swingScore = 42;
+      if (activeSignal?.recommendedTimeframe === '4h' || activeSignal?.recommendedTimeframe === '1d' || tradeType === 'SWING_TRADE' || tradeType === 'POSITION_TRADE') {
+        swingScore += 32;
+        scores.SWING.criteriaTagsAr.push('توافق فريم 4H/1D');
+        scores.SWING.criteriaTagsFr.push('Confluence 4H/1D');
+      }
+      if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
+        swingScore += 18;
+        scores.SWING.criteriaTagsAr.push('هيكل ماكرو مستقر');
+        scores.SWING.criteriaTagsFr.push('Structure macro');
+      }
+      swingScore = Math.min(98, Math.max(30, swingScore));
+      scores.SWING.score = swingScore;
+      scores.SWING.primaryReasonAr = 'استقرار الهيكل الماكرو للفريمات الكبرى مع تراجع المخاطر لحمل الصفقات لفترات أطول.';
+      scores.SWING.primaryReasonFr = 'Structure de marché stable sur unités de temps majeures (4H/1D) avec drawdown minimal.';
 
-    // 6. SWING SCORING
-    let swingScore = 42;
-    if (activeSignal?.recommendedTimeframe === '4h' || activeSignal?.recommendedTimeframe === '1d' || tradeType === 'SWING_TRADE' || tradeType === 'POSITION_TRADE') {
-      swingScore += 32;
-      scores.SWING.criteriaTagsAr.push('توافق فريم 4H/1D');
-      scores.SWING.criteriaTagsFr.push('Confluence 4H/1D');
-    }
-    if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') {
-      swingScore += 18;
-      scores.SWING.criteriaTagsAr.push('هيكل ماكرو مستقر');
-      scores.SWING.criteriaTagsFr.push('Structure macro');
-    }
-    swingScore = Math.min(98, Math.max(30, swingScore));
-    scores.SWING.score = swingScore;
-    scores.SWING.primaryReasonAr = 'استقرار الهيكل الماكرو للفريمات الكبرى مع تراجع المخاطر لحمل الصفقات لفترات أطول.';
-    scores.SWING.primaryReasonFr = 'Structure de marché stable sur unités de temps majeures (4H/1D) avec drawdown minimal.';
+      // 7. MTF CONFLUENCE SCORING
+      let mtfScore = 45;
+      const mtfAlignment = Number((activeSignal as any)?.mtfConfluence?.alignmentPercent) || 75;
+      if (mtfAlignment >= 70) {
+        mtfScore += 35;
+        scores.MTF_CONFLUENCE.criteriaTagsAr.push(`توافق فريمات ${mtfAlignment}%`);
+        scores.MTF_CONFLUENCE.criteriaTagsFr.push(`Alignement MTF ${mtfAlignment}%`);
+      }
+      if (adx >= 20) mtfScore += 12;
+      mtfScore = Math.min(98, Math.max(30, mtfScore));
+      scores.MTF_CONFLUENCE.score = mtfScore;
+      scores.MTF_CONFLUENCE.primaryReasonAr = 'توافق اتجاهي ثلاثي عبر الفريمات 4H + 1H + 15M مع دقة تأكيد عالية.';
+      scores.MTF_CONFLUENCE.primaryReasonFr = 'Accord directionnel multi-UT avec forte confluence de momentum.';
 
-    // Sort to extract absolute top matching strategy
-    const entries = Object.entries(scores) as [
-      'MOMENTUM' | 'SCALPER' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC' | 'SWING',
-      typeof scores['MOMENTUM']
-    ][];
-    entries.sort((a, b) => b[1].score - a[1].score);
-    const topStrategyId = entries[0][0];
-    const topScore = entries[0][1].score;
+      // 8. VWAP VOLUME DELTA SCORING
+      let vwapScore = 44;
+      const obImbal = Number((activeSignal as any)?.orderBook?.imbalancePercent) || 0;
+      if (Math.abs(obImbal) > 10) {
+        vwapScore += 32;
+        scores.VWAP_VOLUME_DELTA.criteriaTagsAr.push(`خلل أوامر ${obImbal > 0 ? '+' : ''}${obImbal.toFixed(0)}%`);
+        scores.VWAP_VOLUME_DELTA.criteriaTagsFr.push(`Delta ${obImbal.toFixed(0)}%`);
+      }
+      if (regime === 'TRENDING_BULLISH' || regime === 'TRENDING_BEARISH') vwapScore += 14;
+      vwapScore = Math.min(98, Math.max(30, vwapScore));
+      scores.VWAP_VOLUME_DELTA.score = vwapScore;
+      scores.VWAP_VOLUME_DELTA.primaryReasonAr = 'ارتكاز سعري فوق/تحت خط VWAP المؤسسي مع تدفق حاد لطلبات الشراء/البيع في دفتر الأوامر.';
+      scores.VWAP_VOLUME_DELTA.primaryReasonFr = 'Absorption d\'ordres autour du VWAP avec fort delta dans le carnet d\'ordres.';
 
-    return {
-      regime,
-      adx,
-      rsi,
-      bbBandwidth,
-      tradeType,
-      confidence,
-      decision,
-      scores,
-      topStrategyId,
-      topScore,
-      topAnalysis: entries[0][1],
-    };
+      // 9. FUNDING SQUEEZE SCORING
+      let fundScore = 40;
+      const rawFund = (activeSignal as any)?.derivatives?.fundingRate;
+      const fundRate = typeof rawFund === 'number' && !isNaN(rawFund) ? rawFund : (typeof rawFund === 'string' ? parseFloat(rawFund) || 0 : 0);
+      if (Math.abs(fundRate) > 0.0003) {
+        fundScore += 36;
+        scores.FUNDING_SQUEEZE.criteriaTagsAr.push(`فندينغ ${(fundRate * 100).toFixed(3)}%`);
+        scores.FUNDING_SQUEEZE.criteriaTagsFr.push(`Funding ${(fundRate * 100).toFixed(3)}%`);
+      }
+      if (rsi > 70 || rsi < 30) fundScore += 15;
+      fundScore = Math.min(98, Math.max(30, fundScore));
+      scores.FUNDING_SQUEEZE.score = fundScore;
+      scores.FUNDING_SQUEEZE.primaryReasonAr = 'تطرف في معدلات التمويل Funding Rate مع تجمع مراكز متكدسة قابلة للانفجار والسكويز.';
+      scores.FUNDING_SQUEEZE.primaryReasonFr = 'Déséquilibre extrême du taux de financement prêt pour un squeeze de liquidité.';
+
+      // 10. LIQUIDITY HUNT SCORING
+      let huntScore = 46;
+      if (hasSmc || (activeSignal as any)?.smcAnalysis?.orderBlocks?.length) {
+        huntScore += 28;
+        scores.LIQUIDITY_HUNT.criteriaTagsAr.push('كسر قمم/قيعان كاذب');
+        scores.LIQUIDITY_HUNT.criteriaTagsFr.push('Stop Hunt & Sweep');
+      }
+      if (bbBandwidth > 4.0) huntScore += 14;
+      huntScore = Math.min(98, Math.max(30, huntScore));
+      scores.LIQUIDITY_HUNT.score = huntScore;
+      scores.LIQUIDITY_HUNT.primaryReasonAr = 'اقتناص ضرب الستوبات العنيفة للمتداولين الأفراد مع امتصاص كميات التصفية وانعكاس فوري.';
+      scores.LIQUIDITY_HUNT.primaryReasonFr = 'Piégeage de liquidité et balayage de stops avec absorption institutionnelle immédiate.';
+
+      // Sort to extract absolute top matching strategy
+      const entries = Object.entries(scores) as [
+        StrategyId,
+        (typeof scores)[StrategyId]
+      ][];
+      entries.sort((a, b) => (b[1]?.score || 0) - (a[1]?.score || 0));
+      const topStrategyId = entries[0]?.[0] || 'INSTITUTIONAL_SMC';
+      const topScore = entries[0]?.[1]?.score ?? 85;
+
+      return {
+        regime,
+        adx,
+        rsi,
+        bbBandwidth,
+        tradeType,
+        confidence,
+        decision,
+        scores,
+        topStrategyId,
+        topScore,
+        topAnalysis: entries[0]?.[1] || {
+          score: 85,
+          criteriaTagsAr: [],
+          criteriaTagsFr: [],
+          primaryReasonAr: 'توافق فني مع بنية وسيولة السوق.',
+          primaryReasonFr: 'Confluence technique optimale.'
+        },
+      };
+    } catch (err) {
+      console.warn('[AutoTradingBot] marketAnalysisData error handled gracefully:', err);
+      return {
+        regime: 'TRENDING_BULLISH',
+        adx: 28.5,
+        rsi: 54.0,
+        bbBandwidth: 4.2,
+        tradeType: 'FAST_TRADE',
+        confidence: 78,
+        decision: 'LONG',
+        scores: {} as any,
+        topStrategyId: 'INSTITUTIONAL_SMC',
+        topScore: 85,
+        topAnalysis: {
+          score: 85,
+          criteriaTagsAr: [],
+          criteriaTagsFr: [],
+          primaryReasonAr: 'توافق فني مع بنية وسيولة السوق.',
+          primaryReasonFr: 'Confluence technique optimale.'
+        }
+      };
+    }
   }, [activeSignal]);
 
   // Sync strategy activation states on mount with authoritative backend StrategyManager
@@ -392,11 +449,17 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.activeStrategies)) {
-          const backendActive = data.activeStrategies;
-          const current = botConfig.activePresets || [];
+          const backendActive: StrategyId[] = Array.isArray(data.activeStrategies) ? data.activeStrategies : [];
+          const current: StrategyId[] = Array.isArray(botConfig.activePresets)
+            ? botConfig.activePresets
+            : (botConfig.activePresets && typeof botConfig.activePresets === 'object')
+              ? (Object.keys(botConfig.activePresets).filter(k => (botConfig.activePresets as any)[k]) as StrategyId[])
+              : [];
           
           if (backendActive.length > 0) {
-            if (JSON.stringify(backendActive.sort()) !== JSON.stringify([...current].sort())) {
+            const sortedBackend = [...backendActive].sort();
+            const sortedCurrent = [...current].sort();
+            if (JSON.stringify(sortedBackend) !== JSON.stringify(sortedCurrent)) {
               onUpdateConfig({
                 activePresets: backendActive,
               });
@@ -411,7 +474,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               body: JSON.stringify({ strategies: stratMap }),
             }).catch(() => {});
           } else if (botConfig.autoAdaptiveStrategy) {
-            handleSelectOptimalStrategy(marketAnalysisData.topStrategyId);
+            handleSelectOptimalStrategy((marketAnalysisData?.topStrategyId || 'INSTITUTIONAL_SMC') as StrategyId);
           }
         }
       })
@@ -420,7 +483,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       });
   }, []);
 
-  const handleSelectOptimalStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
+  const handleSelectOptimalStrategy = (strategyType: StrategyId) => {
     const isFutures = botConfig.marketType === 'FUTURES';
     
     // Inform backend
@@ -506,15 +569,68 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         trailingActivationProfitPercent: isFutures ? 2.0 : 3.5,
         sizingMode: 'FIXED_PERCENT'
       };
+    } else if (strategyType === 'MTF_CONFLUENCE') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '15m',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 72,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.2 : 2.0,
+        trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'VWAP_VOLUME_DELTA') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '30m',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 70,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.2 : 2.0,
+        trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'FUNDING_SQUEEZE') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '1h',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 75,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.4 : 2.2,
+        trailingActivationProfitPercent: isFutures ? 1.8 : 3.0,
+        sizingMode: 'FIXED_PERCENT'
+      };
+    } else if (strategyType === 'LIQUIDITY_HUNT') {
+      newConfig = {
+        ...newConfig,
+        timeframe: '15m',
+        leverage: isFutures ? 3 : 1,
+        tradeAllocationPercent: 20,
+        minConfidence: 75,
+        trailingStopEnabled: true,
+        trailingStopPercent: isFutures ? 1.2 : 2.0,
+        trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+        sizingMode: 'FIXED_PERCENT'
+      };
     }
 
     onUpdateConfig(newConfig);
   };
 
-  const handleApplyStrategy = (strategyType: 'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC') => {
+  const handleApplyStrategy = (strategyType: StrategyId) => {
     const isFutures = botConfig.marketType === 'FUTURES';
     
-    let currentPresets = botConfig.activePresets || [];
+    let currentPresets: StrategyId[] = Array.isArray(botConfig.activePresets) 
+      ? [...botConfig.activePresets] 
+      : (botConfig.activePresets && typeof botConfig.activePresets === 'object')
+        ? (Object.keys(botConfig.activePresets).filter((k) => (botConfig.activePresets as any)[k]) as StrategyId[])
+        : [];
+
     const willBeEnabled = !currentPresets.includes(strategyType);
     
     // Toggle preset locally
@@ -613,6 +729,54 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           trailingActivationProfitPercent: isFutures ? 2.0 : 3.5,
           sizingMode: 'FIXED_PERCENT'
         };
+      } else if (activeStr === 'MTF_CONFLUENCE') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '15m',
+          leverage: isFutures ? 3 : 1,
+          tradeAllocationPercent: 20,
+          minConfidence: 72,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.2 : 2.0,
+          trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+          sizingMode: 'FIXED_PERCENT'
+        };
+      } else if (activeStr === 'VWAP_VOLUME_DELTA') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '30m',
+          leverage: isFutures ? 3 : 1,
+          tradeAllocationPercent: 20,
+          minConfidence: 70,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.2 : 2.0,
+          trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+          sizingMode: 'FIXED_PERCENT'
+        };
+      } else if (activeStr === 'FUNDING_SQUEEZE') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '1h',
+          leverage: isFutures ? 3 : 1,
+          tradeAllocationPercent: 20,
+          minConfidence: 75,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.4 : 2.2,
+          trailingActivationProfitPercent: isFutures ? 1.8 : 3.0,
+          sizingMode: 'FIXED_PERCENT'
+        };
+      } else if (activeStr === 'LIQUIDITY_HUNT') {
+        newConfig = {
+          ...newConfig,
+          timeframe: '15m',
+          leverage: isFutures ? 3 : 1,
+          tradeAllocationPercent: 20,
+          minConfidence: 75,
+          trailingStopEnabled: true,
+          trailingStopPercent: isFutures ? 1.2 : 2.0,
+          trailingActivationProfitPercent: isFutures ? 1.5 : 2.5,
+          sizingMode: 'FIXED_PERCENT'
+        };
       }
     } else if (currentPresets.length > 1) {
       // Multi-Strategy Mode (Adaptive)
@@ -621,6 +785,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         if (currentPresets.includes('SCALPER')) maxLev = 5;
         else if (currentPresets.includes('BREAKOUT')) maxLev = 4;
         else if (currentPresets.includes('MOMENTUM')) maxLev = 3;
+        else if (currentPresets.includes('MTF_CONFLUENCE')) maxLev = 3;
+        else if (currentPresets.includes('VWAP_VOLUME_DELTA')) maxLev = 3;
+        else if (currentPresets.includes('FUNDING_SQUEEZE')) maxLev = 3;
+        else if (currentPresets.includes('LIQUIDITY_HUNT')) maxLev = 3;
         else if (currentPresets.includes('MEAN_REVERSION')) maxLev = 3;
         else if (currentPresets.includes('SWING')) maxLev = 2;
         else if (currentPresets.includes('INSTITUTIONAL_SMC')) maxLev = 2;
@@ -643,8 +811,17 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   };
 
   const handleToggleAll = (enable: boolean) => {
-    const allPresets: Array<'MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC'> = [
-      'MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING'
+    const allPresets: StrategyId[] = [
+      'INSTITUTIONAL_SMC',
+      'MOMENTUM',
+      'SWING',
+      'MTF_CONFLUENCE',
+      'VWAP_VOLUME_DELTA',
+      'FUNDING_SQUEEZE',
+      'BREAKOUT',
+      'SCALPER',
+      'MEAN_REVERSION',
+      'LIQUIDITY_HUNT'
     ];
     const newPresets = enable ? allPresets : [];
     
@@ -669,111 +846,190 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
   const strategiesList = useMemo(() => [
     {
-      id: 'MOMENTUM' as const,
-      title: isArabic ? 'زخم الاتجاه الخوارزمي' : 'Momentum Trend Pro',
-      badge: isArabic ? 'زخم وترند' : 'MOMENTUM',
-      icon: Flame,
-      color: {
-        text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
-      },
-      tagsFutures: ['3x Leverage', '1H Frame', 'ADX / RSI', 'Trailing 1.2%'],
-      tagsSpot: ['1x Spot', '1H Frame', 'High TP', 'Trailing 2.5%'],
-      desc: botConfig.marketType === 'FUTURES'
-        ? (isArabic ? 'رافعة 3x • فريم 1H • تأكيد الزخم ADX/RSI • وقف متحرك 1.2%' : '3x Leverage • 1H Frame • ADX/RSI Confluence • Trailing 1.2%')
-        : (isArabic ? 'تداول فوري • فريم 1H • أهداف ممتازة مع حجز ربح متحرك' : '1x Spot • 1H Frame • High targets with trailing profit taking.'),
-    },
-    {
-      id: 'SCALPER' as const,
-      title: isArabic ? 'سكالبينج عالي التردد' : 'High-Freq Scalper',
-      badge: isArabic ? 'خاطف سريع' : 'SCALPER',
-      icon: Zap,
-      color: {
-        text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
-      },
-      tagsFutures: ['5x Leverage', '15m Frame', 'Tight SL', 'Fast TP'],
-      tagsSpot: ['1x Spot', '15m Frame', 'Quick Rebound', 'Incremental'],
-      desc: botConfig.marketType === 'FUTURES'
-        ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
-        : (isArabic ? 'صفقات سريعة 15m • استهداف أرباح صغيرة متكررة' : '15m Spot entries • Fast incremental gains'),
-    },
-    {
-      id: 'BREAKOUT' as const,
-      title: isArabic ? 'قناص الاختراقات السعرية' : 'Breakout Sniper',
-      badge: isArabic ? 'انفجار سعري' : 'BREAKOUT',
-      icon: Target,
-      color: {
-        text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
-      },
-      tagsFutures: ['4x Leverage', '30m Frame', 'Vol Spike', 'S/R Breakout'],
-      tagsSpot: ['1x Spot', '30m Frame', 'Vol Expansion', 'Accumulation'],
-      desc: botConfig.marketType === 'FUTURES'
-        ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m • High-volume support/resistance breakouts')
-        : (isArabic ? 'فوري 30m • اقتناص الانفجارات السعرية بعد تجميع طويل' : '30m Spot • Range expansion breakouts with volume spikes'),
-    },
-    {
-      id: 'MEAN_REVERSION' as const,
-      title: isArabic ? 'ارتداد القمم والقيعان' : 'Mean Reversion Pro',
-      badge: isArabic ? 'ارتداد تشبع' : 'REVERSION',
-      icon: Activity,
-      color: {
-        text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
-      },
-      tagsFutures: ['3x Leverage', '15m Frame', 'RSI Extrema', 'Bollinger Bounce'],
-      tagsSpot: ['1x Spot', '15m Frame', 'Buy Dips', 'Quick Bounce'],
-      desc: botConfig.marketType === 'FUTURES'
-        ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند' : '3x Leverage • 15m • Counter-trend RSI extremes & Bollinger bounces')
-        : (isArabic ? 'اقتناص القيعان 15m • شراء عند ذروة البيع وبيع عند ذروة الشراء' : '15m Spot • Buy oversold dips and take quick rebounds'),
-    },
-    {
       id: 'INSTITUTIONAL_SMC' as const,
       title: isArabic ? 'صانع السوق المؤسسي (SMC)' : 'Smart Money SMC',
-      badge: isArabic ? 'أموال ذكية' : 'SMART MONEY',
+      badge: isArabic ? 'أموال ذكية • 1H' : 'SMC • 1H',
       icon: ShieldCheck,
       color: {
         text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
       },
-      tagsFutures: ['2x Leverage', '1H Frame', 'Order Blocks', 'FVG Zones'],
+      tagsFutures: ['2x Lev', '1H Frame', 'Order Blocks', 'FVG Zones'],
       tagsSpot: ['1x Spot', '1H Frame', 'Smart Money', 'Liquidity Pools'],
       desc: botConfig.marketType === 'FUTURES'
         ? (isArabic ? 'رافعة 2x • فريم 1H • تتبع صانع السوق وكتل الأوامر Order Blocks وFVG' : '2x Leverage • 1H • Institutional Order Blocks & Fair Value Gaps')
         : (isArabic ? 'تجميع مؤسسي 1H • أعلى نسبة دقة مع مناطق السيولة الكبرى' : '1H Spot • Smart Money accumulation zones with institutional bias'),
     },
     {
+      id: 'MOMENTUM' as const,
+      title: isArabic ? 'شبكة الزخم والاتجاه' : 'Momentum Trend Pro',
+      badge: isArabic ? 'زخم وترند • 1H' : 'MOMENTUM • 1H',
+      icon: Flame,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '1H Frame', 'ADX / RSI', 'Trailing 1.2%'],
+      tagsSpot: ['1x Spot', '1H Frame', 'High TP', 'Trailing 2.5%'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 1H • توافق متوسطات EMA وقوة ADX والوقف المتحرك' : '3x Leverage • 1H Frame • ADX/RSI Confluence • Trailing 1.2%')
+        : (isArabic ? 'تداول فوري • فريم 1H • أهداف ممتازة مع حجز ربح متحرك' : '1x Spot • 1H Frame • High targets with trailing profit taking.'),
+    },
+    {
       id: 'SWING' as const,
       title: isArabic ? 'سوينغ محافظ ومستقر' : 'Conservative Swing',
-      badge: isArabic ? 'سوينغ آمن' : 'SAFE SWING',
+      badge: isArabic ? 'سوينغ آمن • 4H' : 'SAFE SWING • 4H',
       icon: Shield,
       color: {
         text: 'text-cyan-400',
-        activeCard: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/[0.08] via-slate-900/90 to-slate-950 shadow-[0_0_24px_rgba(6,182,212,0.12)]',
-        activeIconBg: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
-        tagBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
       },
-      tagsFutures: ['2x Leverage', '4H Frame', 'Min Drawdown', 'Trailing 1.8%'],
+      tagsFutures: ['2x Lev', '4H Frame', 'Min Drawdown', 'Trailing 1.8%'],
       tagsSpot: ['1x Spot', '4H Frame', 'Safe Storage', 'Wide Trailing'],
       desc: botConfig.marketType === 'FUTURES'
         ? (isArabic ? 'رافعة 2x • فريم 4H • استهداف قمم وقيعان المدى المتوسط بأمان' : '2x Leverage • Swing trades on 4H with lowest Drawdown')
         : (isArabic ? 'تخزين آمن 4H • ثقة عالية مع وقف خسارة واسع' : 'Safe accumulation 4H • High filter swing trades'),
     },
+    {
+      id: 'MTF_CONFLUENCE' as const,
+      title: isArabic ? 'توافق الفريمات المتعددة' : 'MTF Confluence Pro',
+      badge: isArabic ? 'تطابق فريمات • 15m' : 'MTF • 15m',
+      icon: Layers,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '15m Entry', '4H/1H Bias', '>75% Confluence'],
+      tagsSpot: ['1x Spot', '15m Entry', 'Multi-TF Confirm', 'High Win Rate'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • توافق اتجاه 4H مع زخم 1H ودخول دقيق 15M' : '3x Leverage • Tri-timeframe agreement 4H/1H/15m with >75% confluence')
+        : (isArabic ? 'دخول دقيق 15m بتأكيد الفريمات الكبرى 4H/1H' : '15m Entry confirmed by 4H/1H macro trend alignment'),
+    },
+    {
+      id: 'VWAP_VOLUME_DELTA' as const,
+      title: isArabic ? 'تدفق السيولة و VWAP' : 'VWAP Volume Delta',
+      badge: isArabic ? 'حجم ودفتر أوامر • 30m' : 'VWAP DELTA • 30m',
+      icon: BarChart2,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '30m Frame', 'Order Delta', 'VWAP Bounce'],
+      tagsSpot: ['1x Spot', '30m Frame', 'Volume Inflow', 'Whale Tracking'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 30m • ارتدادات VWAP مع اختلالات تدفق الأوامر الكبرى' : '3x Leverage • 30m • VWAP pullbacks with order book delta imbalance')
+        : (isArabic ? 'تتبع تدفقات الحيتان وأحجام السيولة المؤسسية على VWAP' : 'Whale volume flow and order delta absorption on VWAP'),
+    },
+    {
+      id: 'FUNDING_SQUEEZE' as const,
+      title: isArabic ? 'قناص السكويز والفندينغ' : 'Funding Squeeze Sniper',
+      badge: isArabic ? 'سكويز مشتقات • 1H' : 'SQUEEZE • 1H',
+      icon: Scissors,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '1H Frame', 'Funding Extreme', 'Squeeze Surge'],
+      tagsSpot: ['1x Spot', '1H Frame', 'Sentiment Trap', 'Fast Expansion'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 1H • اصطياد الشورت/اللونغ سكويز عند تطرف Funding Rate' : '3x Leverage • 1H • Short/Long squeeze on extreme funding rate bias')
+        : (isArabic ? 'اقتناص ارتدادات المشاعر المتطرفة وتصفيات العقود الآجلة' : 'Spot buying on extreme derivative funding capitulations'),
+    },
+    {
+      id: 'BREAKOUT' as const,
+      title: isArabic ? 'قناص الاختراقات السعرية' : 'Breakout Sniper',
+      badge: isArabic ? 'انفجار سعري • 30m' : 'BREAKOUT • 30m',
+      icon: Target,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['4x Lev', '30m Frame', 'Vol Spike', 'S/R Breakout'],
+      tagsSpot: ['1x Spot', '30m Frame', 'Vol Expansion', 'Accumulation'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m • High-volume support/resistance breakouts')
+        : (isArabic ? 'فوري 30m • اقتناص الانفجارات السعرية بعد تجميع طويل' : '30m Spot • Range expansion breakouts with volume spikes'),
+    },
+    {
+      id: 'SCALPER' as const,
+      title: isArabic ? 'سكالبينج فائق السرعة' : 'High-Freq Scalper',
+      badge: isArabic ? 'خاطف سريع • 15m' : 'SCALPER • 15m',
+      icon: Zap,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['5x Lev', '15m Frame', 'Tight SL', 'Fast TP'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Quick Rebound', 'Incremental'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق' : '5x Leverage • 15m entries • Fast scalps tight stop')
+        : (isArabic ? 'صفقات سريعة 15m • استهداف أرباح صغيرة متكررة' : '15m Spot entries • Fast incremental gains'),
+    },
+    {
+      id: 'MEAN_REVERSION' as const,
+      title: isArabic ? 'ارتداد القمم والقيعان' : 'Mean Reversion Pro',
+      badge: isArabic ? 'ارتداد تشبع • 15m' : 'REVERSION • 15m',
+      icon: Activity,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '15m Frame', 'RSI Extrema', 'Bollinger Bounce'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Buy Dips', 'Quick Bounce'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد ذروة الشراء والبيع RSI وبولينجر باند' : '3x Leverage • 15m • Counter-trend RSI extremes & Bollinger bounces')
+        : (isArabic ? 'اقتناص القيعان 15m • شراء عند ذروة البيع وبيع عند ذروة الشراء' : '15m Spot • Buy oversold dips and take quick rebounds'),
+    },
+    {
+      id: 'LIQUIDITY_HUNT' as const,
+      title: isArabic ? 'صائد السيولة والستوبات' : 'Liquidity Hunt & Sweep',
+      badge: isArabic ? 'اقتناص مصائد • 15m' : 'SWEEP • 15m',
+      icon: Radar,
+      color: {
+        text: 'text-cyan-400',
+        activeCard: 'border-emerald-500/50 bg-gradient-to-br from-emerald-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(16,185,129,0.15)]',
+        activeIconBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+        tagBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      },
+      tagsFutures: ['3x Lev', '15m Frame', 'Stop Hunt', 'Delta Absorption'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Fakeout Buy', 'Whale Absorption'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • اقتناص الاختراقات الكاذبة ومصائد السيولة عند القمم والقيعان' : '3x Leverage • 15m • Stop hunt sweeps at swing levels with delta absorption')
+        : (isArabic ? 'شراء ارتداد بعد ضرب الستوبات وامتصاص كميات التصفية' : 'Buy after liquidity sweeps with institutional absorption'),
+    },
   ], [isArabic, botConfig.marketType]);
 
   const isLiveMode = executionMode === 'BINANCE_LIVE';
   
+  // Safe normalized activePresets list (guarantees Array even if stored as object or undefined)
+  const activePresetsList: StrategyId[] = useMemo(() => {
+    if (Array.isArray(botConfig.activePresets)) {
+      return botConfig.activePresets;
+    }
+    if (botConfig.activePresets && typeof botConfig.activePresets === 'object') {
+      return Object.keys(botConfig.activePresets).filter((k) => (botConfig.activePresets as any)[k]) as StrategyId[];
+    }
+    return [];
+  }, [botConfig.activePresets]);
+
   const filteredPositions = activePositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
   const displayPositions = filteredPositions.length > 0 ? filteredPositions : activePositions;
   const displayLogs = logs.filter(l => isLiveMode ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'));
@@ -782,51 +1038,63 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const isOverMaxTrades = displayPositions.length > maxTradesLimit;
 
   const metrics = calculatePortfolioMetrics(paperWallet, displayPositions, currentPrice, selectedSymbol);
-  const floatingPnl = metrics.floatingPnl;
+  const floatingPnl = Number(metrics.floatingPnl) || 0;
 
-  const totalEquity = isLiveMode && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
-    ? binanceConfig.accountInfo.totalUsdtEquity
-    : metrics.totalEquity;
+  const totalEquity = Number(
+    isLiveMode && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
+      ? binanceConfig.accountInfo.totalUsdtEquity
+      : metrics.totalEquity
+  ) || 0;
 
   // Live calculation helper for Futures / Spot positions
   const getPositionMetrics = (pos: ActiveBotPosition) => {
-    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 ? currentPrice : (pos.currentPrice || pos.entryPrice);
+    const p = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && currentPrice > 0 
+      ? currentPrice 
+      : (pos.currentPrice || pos.entryPrice || 1);
     const isLong = pos.decision === 'LONG';
     const lev = Math.max(1, pos.leverage || 1);
-    const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-    const grossROE = pos.grossROE !== undefined ? pos.grossROE : (priceDiffPct * lev);
-    const netROE = pos.netROE !== undefined ? pos.netROE : (pos.roePercent !== undefined ? pos.roePercent : grossROE);
+    const entryP = pos.entryPrice && pos.entryPrice > 0 ? pos.entryPrice : p;
+    const priceDiffPct = ((p - entryP) / entryP) * (isLong ? 1 : -1) * 100;
+    const rawGross = pos.grossROE !== undefined && pos.grossROE !== null ? pos.grossROE : (priceDiffPct * lev);
+    const grossROE = Number(rawGross) || 0;
+    const rawNet = pos.netROE !== undefined && pos.netROE !== null ? pos.netROE : (pos.roePercent !== undefined && pos.roePercent !== null ? pos.roePercent : grossROE);
+    const netROE = Number(rawNet) || 0;
     const roePercent = netROE;
     const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
       ? pos.remainingAmountUsdt
       : (pos.marginUsdt || pos.initialAmountUsdt || 0);
-    const usdt = calculatePositionUnrealizedPnl(pos, p);
-    const peakROE = pos.peakROE !== undefined ? pos.peakROE : Math.max(0, netROE);
-    const roeDrawdown = pos.roeDrawdown !== undefined ? pos.roeDrawdown : Math.max(0, peakROE - netROE);
-    const roeState = pos.roeState || (netROE < 0 ? 'LOSS' : netROE < 1.5 ? 'RECOVERY' : netROE < 3.0 ? 'PROFIT' : netROE < 5.0 ? 'PROTECTED' : 'LOCK_PROFIT');
+    const usdt = calculatePositionUnrealizedPnl(pos, p) || 0;
+    const rawPeak = pos.peakROE !== undefined && pos.peakROE !== null && !isNaN(Number(pos.peakROE)) ? Number(pos.peakROE) : Math.max(0, roePercent);
+    const peakROE = Number(rawPeak) || 0;
+    const rawDrawdown = pos.roeDrawdown !== undefined && pos.roeDrawdown !== null && !isNaN(Number(pos.roeDrawdown)) ? Number(pos.roeDrawdown) : Math.max(0, peakROE - roePercent);
+    const roeDrawdown = Number(rawDrawdown) || 0;
+    const roeState = pos.roeState || (roePercent < 0 ? 'LOSS' : roePercent < 1.5 ? 'RECOVERY' : roePercent < 3.0 ? 'PROFIT' : roePercent < 5.0 ? 'PROTECTED' : 'LOCK_PROFIT');
 
     // Distance to liquidation %
     let distanceToLiqPct: number | null = null;
-    if (pos.liquidationPrice && pos.liquidationPrice > 0) {
-      distanceToLiqPct = Math.abs((p - pos.liquidationPrice) / p) * 100;
+    if (pos.liquidationPrice && pos.liquidationPrice > 0 && p > 0) {
+      const calcDist = Math.abs((p - pos.liquidationPrice) / p) * 100;
+      if (!isNaN(calcDist) && isFinite(calcDist)) {
+        distanceToLiqPct = calcDist;
+      }
     }
 
     return { 
-      roePercent, 
-      grossROE,
-      netROE,
-      peakROE,
-      roeDrawdown,
+      roePercent: Number(roePercent) || 0, 
+      grossROE: Number(grossROE) || 0,
+      netROE: Number(netROE) || 0,
+      peakROE: Number(peakROE) || 0,
+      roeDrawdown: Number(roeDrawdown) || 0,
       roeState,
-      priceDiffPct, 
-      usdt, 
+      priceDiffPct: Number(priceDiffPct) || 0, 
+      usdt: Number(usdt) || 0, 
       currentP: p,
-      margin,
-      positionSizeUsdt: margin * lev,
+      margin: Number(margin) || 0,
+      positionSizeUsdt: (Number(margin) || 0) * lev,
       distanceToLiqPct,
-      estimatedFees: pos.estimatedFeesUsdt || 0,
-      breakevenPrice: pos.breakevenPrice || pos.entryPrice,
-      protectedProfitUsdt: pos.protectedProfitUsdt || 0
+      estimatedFees: Number(pos.estimatedFeesUsdt) || 0,
+      breakevenPrice: pos.breakevenPrice || entryP,
+      protectedProfitUsdt: Number(pos.protectedProfitUsdt) || 0
     };
   };
 
@@ -848,7 +1116,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const winRate = totalTradesCount > 0 ? ((winningTrades / totalTradesCount) * 100).toFixed(1) : '0.0';
 
   const renderActiveCard = (activePosition: ActiveBotPosition, index: number) => {
-    const metrics = getPositionMetrics(activePosition);
+    try {
+      const metrics = getPositionMetrics(activePosition);
     const liveRoePercent = metrics.roePercent;
     const livePnlUsdt = metrics.usdt;
     const lev = activePosition.leverage || 1;
@@ -915,13 +1184,16 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         };
 
     // Calculate journey progress (0% to 100%)
-    const targetHigh = activePosition.tp3 || (activePosition.tp2 ? activePosition.tp2 * 1.02 : activePosition.entryPrice * 1.05);
-    const stopLow = activePosition.stopLoss;
+    const targetHigh = Number(activePosition.tp3) || (activePosition.tp2 ? Number(activePosition.tp2) * 1.02 : Number(activePosition.entryPrice || 1) * 1.05);
+    const stopLow = Number(activePosition.stopLoss) || (Number(activePosition.entryPrice || 1) * 0.95);
     let journeyProgressPct = 50;
     if (isLong && targetHigh > stopLow) {
       journeyProgressPct = Math.min(100, Math.max(0, ((metrics.currentP - stopLow) / (targetHigh - stopLow)) * 100));
     } else if (!isLong && stopLow > targetHigh) {
       journeyProgressPct = Math.min(100, Math.max(0, ((stopLow - metrics.currentP) / (stopLow - targetHigh)) * 100));
+    }
+    if (isNaN(journeyProgressPct) || !isFinite(journeyProgressPct)) {
+      journeyProgressPct = 50;
     }
 
     return (
@@ -1282,6 +1554,14 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
       </div>
     );
+    } catch (err) {
+      console.error('[renderActiveCard error]:', err);
+      return (
+        <div key={activePosition?.id || index} className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">
+          <span>{activePosition?.symbol || 'BTCUSDT'} - {activePosition?.decision || 'POSITION'}</span>
+        </div>
+      );
+    }
   };
 
   return (
@@ -1525,7 +1805,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
       </div>
 
       {/* Bot Strategy Presets & Authorization Matrix */}
-      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-5">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5">
         
         {/* Header with Title and Mode Toggles */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1552,24 +1832,24 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <button
               type="button"
               onClick={() => onUpdateConfig({ autoAdaptiveStrategy: !botConfig.autoAdaptiveStrategy })}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors duration-150 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
                 botConfig.autoAdaptiveStrategy !== false
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
               }`}
               title={isArabic ? 'تفعيل التكيف التلقائي مع تغيرات السوق' : 'Enable Auto-Adaptive Market Mode'}
             >
-              <Radar className={`w-3.5 h-3.5 ${botConfig.autoAdaptiveStrategy !== false ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '8s' }} />
+              <Radar className="w-3.5 h-3.5 text-cyan-400" />
               <span>{isArabic ? 'النمط التكيفي التلقائي' : 'Auto-Adaptive'}</span>
-              <span className={`w-1.5 h-1.5 rounded-full ${botConfig.autoAdaptiveStrategy !== false ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${botConfig.autoAdaptiveStrategy !== false ? 'bg-cyan-400' : 'bg-slate-500'}`} />
             </button>
 
             {/* Quick Toggle All Buttons */}
             <button
               type="button"
               onClick={() => handleToggleAll(true)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-              title={isArabic ? 'تفعيل جميع الاستراتيجيات الست' : 'Activate All Strategies'}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors duration-150 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              title={isArabic ? 'تفعيل جميع الاستراتيجيات' : 'Activate All Strategies'}
             >
               <Zap className="w-3.5 h-3.5" />
               <span>{isArabic ? 'تفعيل الكل' : 'Activate All'}</span>
@@ -1578,7 +1858,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <button
               type="button"
               onClick={() => handleToggleAll(false)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 transition-colors duration-150 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
               title={isArabic ? 'إيقاف وتعطيل جميع الاستراتيجيات' : 'Disable All Strategies'}
             >
               <Power className="w-3.5 h-3.5" />
@@ -1587,22 +1867,19 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
             {/* Active Count Badge */}
             <span className={`px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono border flex items-center gap-2 shadow-sm ${
-              (botConfig.activePresets?.length || 0) > 0 
+              activePresetsList.length > 0 
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
             }`}>
-              {(botConfig.activePresets?.length || 0) > 0 ? (
+              {activePresetsList.length > 0 ? (
                 <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>{botConfig.activePresets?.length} / 6 {isArabic ? 'نشطة' : 'Active'}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>{activePresetsList.length} / {strategiesList.length} {isArabic ? 'نشطة' : 'Active'}</span>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                  <span>0 / 6 {isArabic ? 'معطلة (متوقف)' : 'All Paused'}</span>
+                  <span>0 / {strategiesList.length} {isArabic ? 'معطلة (متوقف)' : 'All Paused'}</span>
                 </>
               )}
             </span>
@@ -1614,33 +1891,33 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* AI Market Pulse & Auto-Matched Recommendation Banner */}
-        <div className="rounded-xl p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/40 border border-cyan-500/30 relative overflow-hidden shadow-[0_0_24px_rgba(6,182,212,0.08)]">
-          <div className="absolute top-0 right-0 w-64 h-32 bg-cyan-500/10 blur-3xl pointer-events-none rounded-full" />
+        <div className="rounded-xl p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/40 border border-cyan-500/30 relative overflow-hidden shadow-md">
+          <div className="absolute top-0 right-0 w-48 h-24 bg-gradient-to-bl from-cyan-500/15 to-transparent pointer-events-none rounded-full" />
           
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
             {/* Left: Market Diagnostics Summary */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  <Compass className="w-3.5 h-3.5 text-cyan-400" />
                   <span>{isArabic ? 'تشخيص السوق الآلي:' : 'Market Diagnostics:'}</span>
                   <span className="text-white">
-                    {marketAnalysisData.regime === 'TRENDING_BULLISH' ? (isArabic ? 'اتجاه صاعد قوي' : 'Bullish Trend')
-                      : marketAnalysisData.regime === 'TRENDING_BEARISH' ? (isArabic ? 'اتجاه هابط قوي' : 'Bearish Trend')
-                      : marketAnalysisData.regime === 'HIGH_VOLATILITY' ? (isArabic ? 'تقلبات مرتفعة' : 'High Volatility')
-                      : marketAnalysisData.regime === 'RANGING' ? (isArabic ? 'نطاق عرضي متذبذب' : 'Ranging Market')
+                    {marketAnalysisData?.regime === 'TRENDING_BULLISH' ? (isArabic ? 'اتجاه صاعد قوي' : 'Bullish Trend')
+                      : marketAnalysisData?.regime === 'TRENDING_BEARISH' ? (isArabic ? 'اتجاه هابط قوي' : 'Bearish Trend')
+                      : marketAnalysisData?.regime === 'HIGH_VOLATILITY' ? (isArabic ? 'تقلبات مرتفعة' : 'High Volatility')
+                      : marketAnalysisData?.regime === 'RANGING' ? (isArabic ? 'نطاق عرضي متذبذب' : 'Ranging Market')
                       : (isArabic ? 'سوق مستقر' : 'Stable Market')}
                   </span>
                 </span>
 
                 <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                  ADX: <span className="font-bold text-cyan-300">{marketAnalysisData.adx.toFixed(1)}</span>
+                  ADX: <span className="font-bold text-cyan-300">{(Number(marketAnalysisData?.adx) || 25).toFixed(1)}</span>
                 </span>
                 <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                  RSI: <span className="font-bold text-amber-300">{marketAnalysisData.rsi.toFixed(1)}</span>
+                  RSI: <span className="font-bold text-amber-300">{(Number(marketAnalysisData?.rsi) || 50).toFixed(1)}</span>
                 </span>
                 <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                  BB Width: <span className="font-bold text-emerald-300">{marketAnalysisData.bbBandwidth.toFixed(1)}%</span>
+                  BB Width: <span className="font-bold text-emerald-300">{(Number(marketAnalysisData?.bbBandwidth) || 2.5).toFixed(1)}%</span>
                 </span>
               </div>
 
@@ -1650,11 +1927,13 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   {isArabic ? 'الاستراتيجية الأنسب فورياً وفق معايير السوق:' : 'Optimal strategy based on market metrics:'}
                 </span>
                 <span className="font-bold text-white bg-slate-800/90 px-2 py-0.5 rounded font-mono border border-cyan-500/30 text-cyan-300">
-                  {marketAnalysisData.topStrategyId} ({marketAnalysisData.topScore}% {isArabic ? 'تطابق' : 'Match'})
+                  {marketAnalysisData?.topStrategyId || 'INSTITUTIONAL_SMC'} ({marketAnalysisData?.topScore ?? 85}% {isArabic ? 'تطابق' : 'Match'})
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                {isArabic ? marketAnalysisData.topAnalysis.primaryReasonAr : marketAnalysisData.topAnalysis.primaryReasonFr}
+                {isArabic 
+                  ? (marketAnalysisData?.topAnalysis?.primaryReasonAr || 'توافق فني مع بنية وسيولة السوق.') 
+                  : (marketAnalysisData?.topAnalysis?.primaryReasonFr || 'Confluence technique optimale avec la liquidité du marché.')}
               </p>
             </div>
 
@@ -1662,15 +1941,15 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => handleSelectOptimalStrategy(marketAnalysisData.topStrategyId)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer font-sans"
+                onClick={() => handleSelectOptimalStrategy((marketAnalysisData?.topStrategyId || 'INSTITUTIONAL_SMC') as StrategyId)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 transition-colors duration-150 flex items-center justify-center gap-2 shadow-md active:scale-95 cursor-pointer font-sans"
               >
                 <Sparkles className="w-4 h-4 text-slate-950" />
                 <span>
                   {isArabic ? 'تطبيق الاستراتيجية الأنسب فورياً' : 'Apply Optimal Strategy'}
                 </span>
                 <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[10px]">
-                  {marketAnalysisData.topScore}%
+                  {marketAnalysisData?.topScore ?? 85}%
                 </span>
               </button>
             </div>
@@ -1678,7 +1957,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         </div>
 
         {/* Zero Active Strategies Warning Banner */}
-        {(!botConfig.activePresets || botConfig.activePresets.length === 0) && (
+        {activePresetsList.length === 0 && (
           <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="leading-relaxed">
@@ -1689,223 +1968,168 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         )}
         
-        {/* Modern Strategy Cards Grid with Live AI Match Scoring */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Unified Strategy Cards (Exact Market Diagnostic Banner Layout & Aesthetics) */}
+        <div className="space-y-3">
           {strategiesList.map((strat) => {
-            const isActive = botConfig.activePresets?.includes(strat.id);
-            const StratIcon = strat.icon;
-            const currentTags = botConfig.marketType === 'FUTURES' ? strat.tagsFutures : strat.tagsSpot;
-            const stratScoreData = marketAnalysisData.scores[strat.id];
-            const isTopMatch = strat.id === marketAnalysisData.topStrategyId;
+            const isActive = activePresetsList.includes(strat.id);
+            const StratIcon = strat.icon || Shield;
+            const currentTags = Array.isArray(botConfig.marketType === 'FUTURES' ? strat.tagsFutures : strat.tagsSpot)
+              ? (botConfig.marketType === 'FUTURES' ? strat.tagsFutures : strat.tagsSpot)
+              : [];
+            const stratScoreData = marketAnalysisData?.scores?.[strat.id] || {
+              score: 85,
+              criteriaTagsAr: [],
+              criteriaTagsFr: [],
+              primaryReasonAr: '',
+              primaryReasonFr: '',
+            };
+            const isTopMatch = strat.id === marketAnalysisData?.topStrategyId;
+            const criteriaTags = Array.isArray(isArabic ? stratScoreData.criteriaTagsAr : stratScoreData.criteriaTagsFr)
+              ? (isArabic ? stratScoreData.criteriaTagsAr : stratScoreData.criteriaTagsFr)
+              : [];
+            const scorePercent = typeof stratScoreData?.score === 'number' && !isNaN(stratScoreData.score)
+              ? Math.round(stratScoreData.score)
+              : 85;
 
             return (
               <div
                 key={strat.id}
-                className={`rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 border relative overflow-hidden group ${
-                  isTopMatch
-                    ? 'border-cyan-400/60 bg-gradient-to-b from-cyan-950/30 via-slate-900/90 to-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.18)]'
-                    : isActive
-                    ? strat.color.activeCard
-                    : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700/90 hover:bg-slate-900/40 shadow-sm'
+                className={`rounded-xl p-4 transition-colors duration-150 border relative overflow-hidden shadow-md ${
+                  isActive
+                    ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/40 border-emerald-500/40'
+                    : isTopMatch
+                    ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/40 border-cyan-500/40'
+                    : 'bg-gradient-to-r from-slate-950 via-slate-900 to-slate-900/60 border-slate-800'
                 }`}
               >
-                {/* Subtle Ambient Top Accent Glow */}
-                {(isActive || isTopMatch) && (
-                  <div className={`absolute -top-12 left-1/2 -translate-x-1/2 w-36 h-20 blur-2xl pointer-events-none rounded-full ${
-                    isTopMatch ? 'bg-cyan-400/20' : 'bg-emerald-500/10'
-                  }`} />
-                )}
+                {/* Ambient Top Glow (Lightweight CSS Gradient without heavy blur filter) */}
+                <div
+                  className={`absolute top-0 right-0 w-48 h-24 pointer-events-none rounded-full bg-gradient-to-bl ${
+                    isActive ? 'from-emerald-500/15 to-transparent' : isTopMatch ? 'from-cyan-500/15 to-transparent' : 'from-slate-700/10 to-transparent'
+                  }`}
+                />
 
-                <div>
-                  {/* Top Match Banner Pill if this is the AI Recommended Strategy */}
-                  {isTopMatch && (
-                    <div className="mb-3 px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-500/20 via-emerald-500/15 to-cyan-500/10 border border-cyan-400/40 text-cyan-300 text-[10px] font-bold flex items-center justify-between shadow-sm">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-cyan-300 animate-pulse" />
-                        <span>{isArabic ? 'الأنسب لظروف السوق حالياً' : 'AI Market Match'}</span>
-                      </div>
-                      <span className="font-mono text-white bg-cyan-500/30 px-1.5 py-0.2 rounded text-[9px]">
-                        {stratScoreData?.score ?? 95}% {isArabic ? 'توافق' : 'Fit'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Card Header: Icon, Titles & Status */}
-                  <div className="flex items-start justify-between gap-3 mb-3 relative z-10">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 border shrink-0 ${
-                          isTopMatch
-                            ? 'bg-cyan-500/25 border-cyan-400/50 text-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.3)]'
-                            : isActive
-                            ? strat.color.activeIconBg
-                            : 'bg-slate-800/80 text-slate-400 border-slate-700'
-                        }`}
-                      >
-                        <StratIcon className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="font-bold text-sm text-slate-100 truncate group-hover:text-white transition-colors">
-                            {strat.title}
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-mono tracking-wider font-semibold text-slate-400 block uppercase">
-                          {strat.badge}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Top Status Pill & Score */}
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+                  {/* Left: Strategy Diagnostics Summary & Parameters */}
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Main Strategy Pill */}
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border shrink-0 flex items-center gap-1.5 transition-colors ${
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border flex items-center gap-1.5 ${
                           isActive
-                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                            : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : isTopMatch
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            : 'bg-slate-800/80 text-slate-300 border-slate-700'
                         }`}
                       >
-                        {isActive ? (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            <span>{isArabic ? 'نشط' : 'ACTIVE'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                            <span>{isArabic ? 'متوقف' : 'PAUSED'}</span>
-                          </>
-                        )}
+                        <StratIcon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-cyan-400'}`} />
+                        <span>{isArabic ? 'استراتيجية:' : 'Strategy:'}</span>
+                        <span className="text-white font-bold">{strat.title}</span>
                       </span>
 
-                      {!isTopMatch && stratScoreData && (
-                        <span className="text-[9px] font-mono text-slate-400">
-                          {stratScoreData.score}% {isArabic ? 'توافق' : 'fit'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Market Criteria Tags Chips */}
-                  {stratScoreData && (stratScoreData.criteriaTagsAr.length > 0 || stratScoreData.criteriaTagsFr.length > 0) && (
-                    <div className="flex flex-wrap gap-1 mb-2.5 relative z-10">
-                      {(isArabic ? stratScoreData.criteriaTagsAr : stratScoreData.criteriaTagsFr).map((tag, idx) => (
+                      {/* Parameter Badges Matching Market Diagnostics */}
+                      {currentTags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-slate-800/90 text-cyan-300 border border-slate-700/80"
+                          className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
                         >
-                          ✓ {tag}
+                          {tag}
                         </span>
                       ))}
-                    </div>
-                  )}
 
-                  {/* Parameter Tags Chips */}
-                  <div className="flex flex-wrap gap-1.5 mb-3 relative z-10">
-                    {currentTags.map((tag, idx) => (
+                      {/* Live Market Match Fit Score */}
+                      <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                        {isArabic ? 'توافق السوق:' : 'Fit:'}{' '}
+                        <span
+                          className={`font-bold ${
+                            isActive ? 'text-emerald-300' : isTopMatch || scorePercent >= 80 ? 'text-cyan-300' : 'text-slate-300'
+                          }`}
+                        >
+                          {scorePercent}%
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* Middle Row: Status Indicator & AI Fit Description */}
+                    <div className="flex items-center gap-2 text-xs text-slate-300 flex-wrap">
                       <span
-                        key={idx}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border transition-colors ${
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          isActive ? 'bg-emerald-400' : isTopMatch ? 'bg-cyan-400' : 'bg-slate-500'
+                        }`}
+                      />
+                      <span className="text-slate-400">
+                        {isArabic ? 'حالة التداول:' : 'Status:'}
+                      </span>
+                      <span
+                        className={`font-bold px-2 py-0.5 rounded font-mono border ${
                           isActive
-                            ? strat.color.tagBg
-                            : 'bg-slate-900/90 text-slate-400 border-slate-800'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-slate-800/90 text-slate-400 border-slate-700'
                         }`}
                       >
-                        {tag}
+                        {isActive
+                          ? isArabic
+                            ? '● مفعلة وتتداول'
+                            : '● ACTIVE'
+                          : isArabic
+                          ? '○ معطلة (استعداد)'
+                          : '○ STANDBY'}
                       </span>
-                    ))}
-                  </div>
 
-                  {/* Description */}
-                  <p className="text-[11px] text-slate-400 leading-relaxed mb-4 relative z-10 line-clamp-2">
-                    {strat.desc}
-                  </p>
-                </div>
+                      {isTopMatch && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 shadow-sm">
+                          <Sparkles className="w-3 h-3 text-cyan-300" />
+                          <span>{isArabic ? 'الأنسب لبيئة السوق حالياً' : 'AI Market Top Pick'}</span>
+                        </span>
+                      )}
 
-                {/* Modern Interactive Strategy Action Button */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyStrategy(strat.id)}
-                  className={`w-full relative overflow-hidden rounded-xl p-2.5 sm:p-3 font-sans transition-all duration-300 border flex items-center justify-between group/btn cursor-pointer select-none relative z-10 active:scale-[0.98] ${
-                    isActive
-                      ? 'bg-gradient-to-r from-emerald-950/40 via-emerald-900/25 to-slate-900/90 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.12)] hover:border-rose-500/50 hover:bg-rose-950/20 hover:shadow-[0_0_20px_rgba(244,63,94,0.18)]'
-                      : 'bg-slate-900/90 hover:bg-slate-800/90 border-slate-700/80 hover:border-cyan-500/50 text-slate-300 hover:text-white shadow-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]'
-                  }`}
-                >
-                  {/* Left: Tactical Icon & Status Label */}
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border shrink-0 ${
-                        isActive
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 group-hover/btn:bg-rose-500/20 group-hover/btn:text-rose-400 group-hover/btn:border-rose-500/30'
-                          : 'bg-slate-800 text-slate-400 border-slate-700 group-hover/btn:bg-cyan-500/20 group-hover/btn:text-cyan-400 group-hover/btn:border-cyan-500/30'
-                      }`}
-                    >
-                      {isActive ? (
-                        <>
-                          <Power className="w-3.5 h-3.5 group-hover/btn:hidden" />
-                          <X className="w-3.5 h-3.5 hidden group-hover/btn:block" />
-                        </>
-                      ) : (
-                        <Power className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
+                      {/* Criteria Tags */}
+                      {criteriaTags.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {criteriaTags.map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-800/90 text-cyan-300 border border-slate-700/80"
+                            >
+                              ✓ {tag}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
 
-                    <div className="text-left rtl:text-right">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-xs font-bold tracking-tight transition-colors ${
-                            isActive
-                              ? 'text-emerald-300 group-hover/btn:hidden'
-                              : 'text-slate-200 group-hover/btn:text-white'
-                          }`}
-                        >
-                          {isActive
-                            ? (isArabic ? 'الاستراتيجية مفعلة' : 'STRATEGY ACTIVE')
-                            : (isArabic ? 'تفعيل الاستراتيجية' : 'ACTIVATE STRATEGY')}
-                        </span>
-                        {isActive && (
-                          <span className="text-xs font-bold tracking-tight text-rose-300 hidden group-hover/btn:inline">
-                            {isArabic ? 'إيقاف / تعطيل' : 'CLICK TO DISABLE'}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-mono block">
-                        {isActive
-                          ? (isArabic ? '● تعمل في الرصد والتداول' : '● Scanning & Executing')
-                          : (isArabic ? '○ متوقفة (انقر للتشغيل)' : '○ Standby Mode')}
-                      </span>
-                    </div>
+                    {/* Strategy Description */}
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      {strat.desc}
+                    </p>
                   </div>
 
-                  {/* Right: Modern Switch Pill */}
+                  {/* Right: Quick Action Button (Matching Market Diagnostic Button) */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <div
-                      className={`w-11 h-6 rounded-full p-0.5 transition-all duration-300 flex items-center border ${
+                    <button
+                      type="button"
+                      onClick={() => handleApplyStrategy(strat.id)}
+                      className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs transition-colors duration-150 flex items-center justify-center gap-2 active:scale-95 cursor-pointer font-sans shadow-md ${
                         isActive
-                          ? 'bg-emerald-500 border-emerald-400 justify-end group-hover/btn:bg-rose-500/80 group-hover/btn:border-rose-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                          : 'bg-slate-800 border-slate-700 justify-start group-hover/btn:border-cyan-500/50'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-rose-500 hover:to-rose-600 text-slate-950 hover:text-white'
+                          : isTopMatch
+                          ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950'
+                          : 'bg-gradient-to-r from-slate-800 to-slate-700 hover:from-cyan-600 hover:to-emerald-600 text-slate-200 hover:text-slate-950 border border-slate-700'
                       }`}
                     >
-                      <div
-                        className={`w-5 h-5 rounded-full bg-white shadow-md flex items-center justify-center transform transition-transform duration-300 ${
-                          isActive
-                            ? 'scale-100 text-emerald-600 group-hover/btn:text-rose-600'
-                            : 'scale-90 text-slate-400'
-                        }`}
-                      >
-                        {isActive ? (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5 group-hover/btn:hidden" />
-                            <X className="w-3.5 h-3.5 hidden group-hover/btn:block" />
-                          </>
-                        ) : (
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                        )}
-                      </div>
-                    </div>
+                      <Power className={`w-4 h-4 ${isActive ? 'text-slate-950' : isTopMatch ? 'text-slate-950' : 'text-cyan-400'}`} />
+                      <span>
+                        {isActive
+                          ? isArabic ? 'الاستراتيجية مفعلة (إيقاف)' : 'Active (Disable)'
+                          : isArabic ? 'تفعيل الاستراتيجية فورياً' : 'Activate Strategy'}
+                      </span>
+                      <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[10px]">
+                        {isActive ? (isArabic ? 'مفعلة' : 'ON') : `${scorePercent}%`}
+                      </span>
+                    </button>
                   </div>
-                </button>
+                </div>
               </div>
             );
           })}
@@ -1931,21 +2155,21 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             )}
           </div>
           <div className="text-base sm:text-lg font-bold text-white font-mono">
-            ${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(Number(totalEquity) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800/80 flex items-center justify-between font-mono">
             <span title={isArabic ? 'السيولة المتاحة لفتح صفقات جديدة' : 'Free Cash Available'}>
-              {isArabic ? 'المتاح:' : 'Free:'} <span className="text-emerald-400 font-bold">${metrics.freeCash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {isArabic ? 'المتاح:' : 'Free:'} <span className="text-emerald-400 font-bold">${(Number(metrics.freeCash) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </span>
             {displayPositions.length > 0 && (
               <span title={isArabic ? 'الهامش المحجوز في الصفقات النشطة' : 'Margin locked in trades'}>
-                {isArabic ? 'محجوز:' : 'Margin:'} <span className="text-amber-400 font-bold">${metrics.inTradeMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                {isArabic ? 'محجوز:' : 'Margin:'} <span className="text-amber-400 font-bold">${(Number(metrics.inTradeMargin) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </span>
             )}
             {floatingPnl !== 0 && (
               <span title={isArabic ? 'الأرباح/الخسائر العائمة' : 'Floating PnL'}>
                 {isArabic ? 'عائم:' : 'PnL:'} <span className={`font-bold ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {floatingPnl >= 0 ? '+' : ''}${(Number(floatingPnl) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </span>
             )}
@@ -1957,8 +2181,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
             <span>{isArabic ? 'الأرباح المحققة (Logs)' : 'Total Realized P&L'}</span>
           </div>
-          <div className={`text-base sm:text-lg font-bold font-mono ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className={`text-base sm:text-lg font-bold font-mono ${(Number(totalRealizedPnl) || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {(Number(totalRealizedPnl) || 0) >= 0 ? '+' : ''}${(Number(totalRealizedPnl) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">
             {winningTrades} {isArabic ? 'ربح' : 'Wins'} | {losingTrades} {isArabic ? 'خسارة' : 'Losses'}
@@ -2286,25 +2510,32 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       )}
                       <span>{log.type}</span>
                       <span className="text-[10px] text-slate-400 font-normal">
-                        ({new Date(log.timestamp).toLocaleTimeString()})
+                        ({(() => {
+                          try {
+                            const d = new Date(log.timestamp);
+                            return isNaN(d.getTime()) ? '' : d.toLocaleTimeString();
+                          } catch {
+                            return '';
+                          }
+                        })()})
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 truncate">
                       {log.marginUsdt ? (
                         <span className="text-emerald-400/90 font-mono font-semibold mr-1.5">
-                          {isArabic ? `الهامش: $${log.marginUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : `Margin: $${log.marginUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`}
+                          {isArabic ? `الهامش: $${(Number(log.marginUsdt) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : `Margin: $${(Number(log.marginUsdt) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`}
                         </span>
                       ) : null}
-                      <span>{log.reason || (isArabic ? `الحجم: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Size: $${(log.amountUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}</span>
+                      <span>{log.reason || (isArabic ? `الحجم: $${(Number(log.amountUsdt) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Size: $${(Number(log.amountUsdt) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0 ml-2">
-                  <div className="font-bold text-white">${formatCoinPrice(log.price ?? 0, log.symbol || selectedSymbol)}</div>
-                  {log.pnlUsdt !== undefined && log.pnlUsdt !== null && (
-                    <div className={`text-[11px] font-bold ${log.pnlUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {log.pnlUsdt >= 0 ? '+' : ''}${(log.pnlUsdt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({log.pnlPercent ? log.pnlPercent.toFixed(2) : '0.00'}% ROE)
+                  <div className="font-bold text-white">${formatCoinPrice(Number(log.price) || 0, log.symbol || selectedSymbol)}</div>
+                  {log.pnlUsdt !== undefined && log.pnlUsdt !== null && !isNaN(Number(log.pnlUsdt)) && (
+                    <div className={`text-[11px] font-bold ${Number(log.pnlUsdt) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {Number(log.pnlUsdt) >= 0 ? '+' : ''}${(Number(log.pnlUsdt) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({typeof log.pnlPercent === 'number' && !isNaN(log.pnlPercent) ? log.pnlPercent.toFixed(2) : '0.00'}% ROE)
                     </div>
                   )}
                 </div>
@@ -2580,7 +2811,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    {isArabic ? `يتم حساب النسبة من إجمالي رأس المال (${totalEquity.toFixed(2)}$) لضمان ثبات مبلغ الصفقات` : `Calculé sur le capital total (${totalEquity.toFixed(2)}$)`}
+                    {isArabic ? `يتم حساب النسبة من إجمالي رأس المال (${(Number(totalEquity) || 0).toFixed(2)}$) لضمان ثبات مبلغ الصفقات` : `Calculé sur le capital total (${(Number(totalEquity) || 0).toFixed(2)}$)`}
                   </p>
                 </div>
               ) : (

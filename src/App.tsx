@@ -18,6 +18,7 @@ import {
   BinanceApiConfig,
   TradingExecutionMode,
   MarketType,
+  StrategyId,
 } from './types';
 import { Header } from './components/Header';
 import { GlobalMarketScanner } from './components/GlobalMarketScanner';
@@ -33,6 +34,7 @@ import { TradeHistory } from './components/TradeHistory';
 import { SettingsModal } from './components/SettingsModal';
 import { RiskManagementModal } from './components/RiskManagementModal';
 import { HelpQuickStartModal } from './components/HelpQuickStartModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { NotificationCenter } from './components/NotificationCenter';
 import { BinanceConnectionModal } from './components/BinanceConnectionModal';
@@ -322,6 +324,9 @@ export const App: React.FC = () => {
       return [];
     }
   });
+  const alertsRef = useRef<PushAlert[]>(alerts);
+  alertsRef.current = alerts;
+  const seenPushAlertIdsRef = useRef<Set<string>>(new Set(alerts.map((a) => a.id)));
 
   // Binance API Integration & Real Live Trading State
   
@@ -507,7 +512,18 @@ export const App: React.FC = () => {
     try {
       const saved = apiStorage.getItem('btc_bot_config');
       if (saved) {
-        return { ...defaults, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const rawPresets = parsed.activePresets;
+        const normalizedPresets: StrategyId[] = Array.isArray(rawPresets)
+          ? rawPresets
+          : (rawPresets && typeof rawPresets === 'object')
+            ? (Object.keys(rawPresets).filter(k => rawPresets[k]) as StrategyId[])
+            : [];
+        return {
+          ...defaults,
+          ...parsed,
+          activePresets: normalizedPresets
+        };
       }
       return defaults;
     } catch {
@@ -1921,7 +1937,7 @@ export const App: React.FC = () => {
   const handleToggleBot = useCallback(() => {
     setBotConfig((prev) => {
       const nextEnabled = !prev.enabled;
-      let effectivePresets: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[] = prev.activePresets && prev.activePresets.length > 0
+      let effectivePresets: StrategyId[] = prev.activePresets && prev.activePresets.length > 0
         ? prev.activePresets
         : ['MOMENTUM'];
 
@@ -2565,7 +2581,30 @@ export const App: React.FC = () => {
                      }
                  }
 
-                 // Check if bot config changed on server
+                 // Check if push alerts changed on server
+                  if (serverData.btc_push_alerts) {
+                      try {
+                          const remoteAlerts: PushAlert[] = JSON.parse(serverData.btc_push_alerts);
+                          if (Array.isArray(remoteAlerts)) {
+                              const currentIds = new Set((alertsRef.current || []).map((a) => a.id));
+                              const newIncoming = remoteAlerts.filter((a) => a && a.id && !seenPushAlertIdsRef.current.has(a.id) && !currentIds.has(a.id));
+                              
+                              if (newIncoming.length > 0 || remoteAlerts.length !== (alertsRef.current || []).length) {
+                                  setAlerts(remoteAlerts);
+                                  alertsRef.current = remoteAlerts;
+                                  
+                                  if (newIncoming.length > 0 && notificationsEnabledRef.current) {
+                                      const topAlert = newIncoming[0];
+                                      triggerToastAlert(topAlert);
+                                      playAudioChime();
+                                  }
+                              }
+                              remoteAlerts.forEach((a) => { if (a?.id) seenPushAlertIdsRef.current.add(a.id); });
+                          }
+                      } catch (e) {}
+                  }
+
+                  // Check if bot config changed on server
                  if (serverData.btc_bot_config) {
                      const currentLocal = JSON.stringify(botConfigRef.current);
                      if (serverData.btc_bot_config !== currentLocal) {
@@ -3296,102 +3335,104 @@ export const App: React.FC = () => {
 
           {/* Tab: Automated AI Trading Bot (Auto Buy, TP1 Exit 50%, Rebuy, TP2 Exit) */}
           {activeTab === 'autoBot' && (
-            <AutoTradingBot
-              language={language}
-              botConfig={botConfig}
-              activePositions={activeBotPositions}
-              selectedSymbol={selectedSymbol}
-              logs={botLogs}
-              walletBalance={paperWallet.balance}
-              paperWallet={paperWallet}
-              currentPrice={ticker?.price || 0}
-              activeSignal={activeSignal}
-              effectiveBotTimeframe={botConfig.timeframe === 'AUTO' || !botConfig.timeframe ? autoBotTimeframeInfo.effectiveTimeframe : (botConfig.timeframe as Timeframe)}
-              timeframeReason={language === 'ar' ? autoBotTimeframeInfo.reasonAr : autoBotTimeframeInfo.reasonEn}
-              executionMode={executionMode}
-              binanceConfig={binanceConfig}
-              onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
-              onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
-              onToggleBot={handleToggleBot}
-              onUpdateConfig={(partial) => {
-                if (partial.marketType && partial.marketType !== botConfig.marketType) {
-                  handleToggleMarketType(partial.marketType);
-                  setBotConfig((prev) => ({ ...prev, ...partial }));
-                } else {
-                  setBotConfig((prev) => ({ ...prev, ...partial }));
-                }
-              }}
-              onManualClosePosition={(posId) => {
-                if (posId) {
-                  const currentPositions = activeBotPositionsRef.current;
-                  const pos = currentPositions.find(p => p.id === posId);
-                  if (pos) {
-                    const isSelected = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase();
-                    const priceToUse = (isSelected && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice);
-                    executeAutoTradeAction('SL', priceToUse, 'Manual exit triggered', posId);
+            <ErrorBoundary fallbackTitle={language === 'ar' ? 'حماية صفحة الاستراتيجيات والتداول' : 'Strategies Page Shield'}>
+              <AutoTradingBot
+                language={language}
+                botConfig={botConfig}
+                activePositions={activeBotPositions}
+                selectedSymbol={selectedSymbol}
+                logs={botLogs}
+                walletBalance={paperWallet.balance}
+                paperWallet={paperWallet}
+                currentPrice={ticker?.price || 0}
+                activeSignal={activeSignal}
+                effectiveBotTimeframe={botConfig.timeframe === 'AUTO' || !botConfig.timeframe ? autoBotTimeframeInfo.effectiveTimeframe : (botConfig.timeframe as Timeframe)}
+                timeframeReason={language === 'ar' ? autoBotTimeframeInfo.reasonAr : autoBotTimeframeInfo.reasonEn}
+                executionMode={executionMode}
+                binanceConfig={binanceConfig}
+                onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
+                onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+                onToggleBot={handleToggleBot}
+                onUpdateConfig={(partial) => {
+                  if (partial.marketType && partial.marketType !== botConfig.marketType) {
+                    handleToggleMarketType(partial.marketType);
+                    setBotConfig((prev) => ({ ...prev, ...partial }));
                   } else {
-                    updateBotPositionsSync((prev) => prev.filter(p => p.id !== posId));
+                    setBotConfig((prev) => ({ ...prev, ...partial }));
                   }
-                }
-              }}
-              onManualTriggerBuy={() => {
-                if (ticker?.price) {
-                  const currentPositions = activeBotPositionsRef.current;
-                  const isLive = executionModeRef.current === 'BINANCE_LIVE';
-                  const modePositions = currentPositions.filter(p => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
-                  const maxTrades = botConfigRef.current.maxOpenTrades || 3;
-                  if (modePositions.length >= maxTrades) {
-                    const msg = language === 'ar'
-                      ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                      : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
-                    const rejectAlert: PushAlert = {
-                      id: `alert-manual-max-${Date.now()}`,
-                      title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
-                      body: msg,
-                      timestamp: Date.now(),
-                      type: 'SYSTEM',
-                      read: false,
-                    };
-                    setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
-                    triggerToastAlert(rejectAlert);
-                    playAudioChime();
-                    return;
+                }}
+                onManualClosePosition={(posId) => {
+                  if (posId) {
+                    const currentPositions = activeBotPositionsRef.current;
+                    const pos = currentPositions.find(p => p.id === posId);
+                    if (pos) {
+                      const isSelected = pos.symbol.toLowerCase() === selectedSymbol.toLowerCase();
+                      const priceToUse = (isSelected && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice);
+                      executeAutoTradeAction('SL', priceToUse, 'Manual exit triggered', posId);
+                    } else {
+                      updateBotPositionsSync((prev) => prev.filter(p => p.id !== posId));
+                    }
                   }
-                  executeAutoTradeAction('OPEN', ticker.price, 'Manual buy triggered');
-                }
-              }}
-              onManualTriggerOpen={(direction) => {
-                if (ticker?.price) {
-                  const currentPositions = activeBotPositionsRef.current;
-                  const isLive = executionModeRef.current === 'BINANCE_LIVE';
-                  const modePositions = currentPositions.filter(p => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
-                  const maxTrades = botConfigRef.current.maxOpenTrades || 3;
-                  if (modePositions.length >= maxTrades) {
-                    const msg = language === 'ar'
-                      ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                      : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
-                    const rejectAlert: PushAlert = {
-                      id: `alert-manual-max-${Date.now()}`,
-                      title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
-                      body: msg,
-                      timestamp: Date.now(),
-                      type: 'SYSTEM',
-                      read: false,
-                    };
-                    setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
-                    triggerToastAlert(rejectAlert);
-                    playAudioChime();
-                    return;
+                }}
+                onManualTriggerBuy={() => {
+                  if (ticker?.price) {
+                    const currentPositions = activeBotPositionsRef.current;
+                    const isLive = executionModeRef.current === 'BINANCE_LIVE';
+                    const modePositions = currentPositions.filter(p => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+                    const maxTrades = botConfigRef.current.maxOpenTrades || 3;
+                    if (modePositions.length >= maxTrades) {
+                      const msg = language === 'ar'
+                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
+                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                      const rejectAlert: PushAlert = {
+                        id: `alert-manual-max-${Date.now()}`,
+                        title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
+                        body: msg,
+                        timestamp: Date.now(),
+                        type: 'SYSTEM',
+                        read: false,
+                      };
+                      setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
+                      triggerToastAlert(rejectAlert);
+                      playAudioChime();
+                      return;
+                    }
+                    executeAutoTradeAction('OPEN', ticker.price, 'Manual buy triggered');
                   }
-                  executeAutoTradeAction('OPEN', ticker.price, `Manual ${direction} triggered`, undefined, direction);
-                }
-              }}
-              onClearLogs={() => setBotLogs([])}
-              onPanicCloseAll={handlePanicCloseAll}
-              onResetCircuitBreaker={handleResetCircuitBreaker}
-              onTrimExcessPositions={handleTrimExcessPositions}
-              onFullReset={handleFullReset}
-            />
+                }}
+                onManualTriggerOpen={(direction) => {
+                  if (ticker?.price) {
+                    const currentPositions = activeBotPositionsRef.current;
+                    const isLive = executionModeRef.current === 'BINANCE_LIVE';
+                    const modePositions = currentPositions.filter(p => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+                    const maxTrades = botConfigRef.current.maxOpenTrades || 3;
+                    if (modePositions.length >= maxTrades) {
+                      const msg = language === 'ar'
+                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
+                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                      const rejectAlert: PushAlert = {
+                        id: `alert-manual-max-${Date.now()}`,
+                        title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
+                        body: msg,
+                        timestamp: Date.now(),
+                        type: 'SYSTEM',
+                        read: false,
+                      };
+                      setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
+                      triggerToastAlert(rejectAlert);
+                      playAudioChime();
+                      return;
+                    }
+                    executeAutoTradeAction('OPEN', ticker.price, `Manual ${direction} triggered`, undefined, direction);
+                  }
+                }}
+                onClearLogs={() => setBotLogs([])}
+                onPanicCloseAll={handlePanicCloseAll}
+                onResetCircuitBreaker={handleResetCircuitBreaker}
+                onTrimExcessPositions={handleTrimExcessPositions}
+                onFullReset={handleFullReset}
+              />
+            </ErrorBoundary>
           )}
 
           {/* Tab: Dedicated Global Market Scanner */}

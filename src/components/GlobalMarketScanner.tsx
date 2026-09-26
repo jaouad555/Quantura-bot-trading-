@@ -410,18 +410,28 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
             </div>
           </div>
 
-          {/* Active AI Strategies */}
-          <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
-            <span className="text-[11px] font-medium text-slate-400">{isArabic ? 'استراتيجيات الفحص' : 'Active Strategies'}</span>
+          {/* Active AI Strategies (Clickable to jump to Strategies tab) */}
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('autoBot')}
+            className="bg-slate-900/70 hover:bg-slate-850 border border-slate-800/80 hover:border-cyan-500/50 rounded-xl p-3 flex flex-col justify-between text-left cursor-pointer transition active:scale-95 group shadow-xs"
+            title={isArabic ? 'الانتقال إلى صفحة الاستراتيجيات' : 'Go to Strategies page'}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-[11px] font-medium text-slate-400 group-hover:text-cyan-300 transition">
+                {isArabic ? 'استراتيجيات الفحص' : 'Active Strategies'}
+              </span>
+              <Bot className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 transition" />
+            </div>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-lg font-black text-cyan-400">
-                {scannerData?.activeStrategiesCount ?? 4}
+                {scannerData?.activeStrategiesCount ?? 0}
               </span>
-              <span className="text-[10px] text-slate-500 font-bold">
-                {botEnabled ? (isArabic ? 'تداول مفعل' : 'Auto Trade') : (isArabic ? 'رصد ومراقبة' : 'Monitor Only')}
+              <span className="text-[10px] text-slate-500 font-bold group-hover:text-slate-400">
+                {botEnabled ? (isArabic ? 'تداول مفعل ↗' : 'Auto Trade ↗') : (isArabic ? 'تعديل الاستراتيجيات ↗' : 'Configure ↗')}
               </span>
             </div>
-          </div>
+          </button>
         </div>
       </div>
 

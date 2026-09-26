@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { kv } from './db.js';
-import { serverExecuteOrder, sendServerTelegramNotification, fetchRealBinanceAccountDirect, reconcilePaperWalletDirect } from './botEngine.js';
+import { serverExecuteOrder, sendServerTelegramNotification, fetchRealBinanceAccountDirect, reconcilePaperWalletDirect, recordPushAlertDirect } from './botEngine.js';
 import { RiskEngine } from './riskEngine/RiskEngine.js';
 import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
@@ -237,70 +237,63 @@ async function analyzeSymbol(
         }
 
         // =========================================================================
-        // ZERO-BYPASS ENTRY CONFIRMATION ENGINE (Mandatory Multi-Gate Filter)
+        // QUANTITATIVE RISK & STRUCTURAL SAFETY GATE
         // =========================================================================
-        const signalTf = (stratSignal.timeframe || timeframe) as any;
-        const quantScore = calculateQuantitativeScore(
-          signalTf,
-          data.ticker.price,
-          data.indicators,
-          data.orderBook,
-          data.derivatives,
-          data.mtfConfluence
-        );
+        const currentP = data.ticker.price;
+        const atr = Math.max(data.indicators?.atr14 || currentP * 0.01, currentP * 0.004);
+        const ema20 = data.indicators?.ema20 || currentP;
+        const isLong = stratSignal.decision === 'LONG';
 
-        const marketRegime = data.marketRegime || detectMarketRegime(data.indicators, data.ticker.price);
-
-        const entryValidation = EntryQualityEngine.evaluate({
-          symbol: normSymbol,
-          timeframe: signalTf,
-          currentPrice: data.ticker.price,
-          indicators: data.indicators,
-          quantScore,
-          marketRegime,
-          orderBook: data.orderBook,
-          derivatives: data.derivatives,
-          mtfConfluence: data.mtfConfluence,
-        });
-
-        // 1. Directional alignment: EntryQualityEngine must agree with strategy direction
-        if (entryValidation.decision !== stratSignal.decision) {
-          console.log(`[ENTRY BLOCKED] ${normSymbol} Strategy ${stratSignal.strategyName} proposed ${stratSignal.decision}, but Entry Confirmation Engine issued ${entryValidation.decision} (${entryValidation.waitReason || entryValidation.rejectionReason})`);
+        // 1. Anti-Chase Gate: Reject entries on extreme parabolic exhaustion (3x ATR extension)
+        const distanceToEma20 = Math.abs(currentP - ema20);
+        if (isLong && currentP > ema20 && distanceToEma20 > 3.2 * atr) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} LONG Anti-Chase: Price is extended >3.2 ATR from EMA20`);
+          continue;
+        }
+        if (!isLong && currentP < ema20 && distanceToEma20 > 3.2 * atr) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} SHORT Anti-Chase: Price is dumped >3.2 ATR below EMA20`);
           continue;
         }
 
-        // 2. Status gate: Must not be INVALID or WAIT
-        if (entryValidation.entryQuality.status === 'INVALID' || entryValidation.entryQuality.status === 'WAIT') {
-          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} [${stratSignal.strategyName}] Quality Rejected: ${entryValidation.rejectionReason} - ${entryValidation.waitReason}`);
+        // 2. Stop Loss & Take Profit Structural Safety Bounds
+        let safeSl = stratSignal.stopLoss;
+        if (isLong) {
+          if (!safeSl || safeSl >= currentP || isNaN(safeSl)) {
+            safeSl = currentP - Math.max(atr * 1.5, currentP * 0.01);
+          }
+        } else {
+          if (!safeSl || safeSl <= currentP || isNaN(safeSl)) {
+            safeSl = currentP + Math.max(atr * 1.5, currentP * 0.01);
+          }
+        }
+
+        const riskDistance = Math.abs(currentP - safeSl);
+        let safeTp1 = stratSignal.tp1;
+        let safeTp2 = stratSignal.tp2;
+        let safeTp3 = stratSignal.tp3;
+
+        if (isLong) {
+          if (!safeTp1 || safeTp1 <= currentP || isNaN(safeTp1)) safeTp1 = currentP + riskDistance * 1.8;
+          if (!safeTp2 || safeTp2 <= safeTp1 || isNaN(safeTp2)) safeTp2 = safeTp1 + riskDistance * 1.2;
+          if (!safeTp3 || safeTp3 <= safeTp2 || isNaN(safeTp3)) safeTp3 = safeTp2 + riskDistance * 1.8;
+        } else {
+          if (!safeTp1 || safeTp1 >= currentP || isNaN(safeTp1)) safeTp1 = currentP - riskDistance * 1.8;
+          if (!safeTp2 || safeTp2 >= safeTp1 || isNaN(safeTp2)) safeTp2 = safeTp1 - riskDistance * 1.2;
+          if (!safeTp3 || safeTp3 >= safeTp2 || isNaN(safeTp3)) safeTp3 = Math.max(currentP * 0.05, safeTp2 - riskDistance * 1.8);
+        }
+
+        const calculatedRR = Math.abs(safeTp1 - currentP) / Math.max(0.0001, riskDistance);
+        if (calculatedRR < 1.15) {
+          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Insufficient R:R (${calculatedRR.toFixed(2)})`);
           continue;
         }
 
-        // 3. Anti-Chase gate: Must not buy tops or short bottoms on overextended candles
-        if (!entryValidation.antiChasePassed) {
-          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Anti-Chase Violation: ${entryValidation.waitReason}`);
-          continue;
-        }
-
-        // 4. Entry Zone Gate: Price must be within the defined entry zone
-        if (entryValidation.rejectionReason === 'PRICE_FAR_FROM_ENTRY_ZONE') {
-          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Price outside entry zone: ${entryValidation.waitReason}`);
-          continue;
-        }
-
-        // 5. Risk-to-Reward Ratio: Minimum 1:1.30, ensuring TP1 is realistic and SL is protected
-        if (entryValidation.riskRewardRatio < 1.30) {
-          console.log(`[ENTRY BLOCKED] ${normSymbol} ${stratSignal.decision} Insufficient R:R (${entryValidation.riskRewardRatio.toFixed(2)})`);
-          continue;
-        }
-
-        // Upgrade strategy signal with structurally validated entry zone, Stop Loss and TP targets
-        stratSignal.stopLoss = entryValidation.stopLoss;
-        stratSignal.tp1 = entryValidation.targets.tp1;
-        stratSignal.tp2 = entryValidation.targets.tp2;
-        stratSignal.tp3 = entryValidation.targets.tp3;
-        stratSignal.riskRewardRatio = entryValidation.riskRewardRatio;
-        stratSignal.confidence = Math.max(stratSignal.confidence, entryValidation.entryQuality.score);
-        stratSignal.reason = `${stratSignal.reason} | Confirmed: Grade ${entryValidation.entryQuality.grade} (${entryValidation.entryType}) R:R 1:${entryValidation.riskRewardRatio.toFixed(2)}`;
+        stratSignal.stopLoss = safeSl;
+        stratSignal.tp1 = safeTp1;
+        stratSignal.tp2 = safeTp2;
+        stratSignal.tp3 = safeTp3;
+        stratSignal.riskRewardRatio = calculatedRR;
+        stratSignal.confidence = Math.max(70, stratSignal.confidence || 75);
 
         foundActiveSignal = true;
         scannerState.symbolStates[normSymbol].lastSignal = `${stratSignal.strategyName}: ${stratSignal.decision}`;
@@ -651,6 +644,14 @@ async function processTradingSignal(
       `🎯 TP1: $${safeTp1.toLocaleString()} | TP2: $${safeTp2.toLocaleString()} | TP3: $${safeTp3.toLocaleString()}\n` +
       `🛑 SL: $${safeSl.toLocaleString()}`
     );
+
+    recordPushAlertDirect({
+      title: `[${symbol}] ${signal.decision} Position Opened ${sideEmoji}`,
+      body: `Strategy: ${signal.strategyName} (${signal.confidence}%) | Entry: $${currentPrice.toLocaleString()} | Margin: $${margin.toFixed(2)} (${lev}x)`,
+      type: 'TRADE',
+      decision: signal.decision,
+      symbol: symbol,
+    }).catch(() => {});
 
     console.log(`[POSITION] ${symbol} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
 

@@ -361,6 +361,10 @@ export type BacktestStrategyId =
   | 'BREAKOUT'
   | 'MEAN_REVERSION'
   | 'INSTITUTIONAL_SMC'
+  | 'MTF_CONFLUENCE'
+  | 'VWAP_VOLUME_DELTA'
+  | 'FUNDING_SQUEEZE'
+  | 'LIQUIDITY_HUNT'
   | 'ALL_STRATEGIES';
 
 export interface BacktestConfig {
@@ -473,6 +477,18 @@ export interface MultiCoinBacktestResult {
   }[];
 }
 
+export type StrategyId = 
+  | 'MOMENTUM' 
+  | 'SCALPER' 
+  | 'SWING' 
+  | 'BREAKOUT' 
+  | 'MEAN_REVERSION' 
+  | 'INSTITUTIONAL_SMC'
+  | 'MTF_CONFLUENCE'
+  | 'VWAP_VOLUME_DELTA'
+  | 'FUNDING_SQUEEZE'
+  | 'LIQUIDITY_HUNT';
+
 export interface AutoBotConfig {
   enabled: boolean;
   enabledAt?: number;
@@ -502,7 +518,7 @@ export interface AutoBotConfig {
   allowedSymbols?: string[]; // Whitelist of symbols to monitor and trade
   multiPairScanning?: boolean; // Autonomous scanning across top watchlist symbols
   autoAdaptiveStrategy?: boolean; // AI reads market regime in real-time and auto-matches optimal strategy
-  activePresets?: ('MOMENTUM' | 'SCALPER' | 'SWING' | 'BREAKOUT' | 'MEAN_REVERSION' | 'INSTITUTIONAL_SMC')[]; // Currently selected presets in UI
+  activePresets?: StrategyId[]; // Currently selected presets in UI (out of all 9 strategies)
   // Advanced ROE Engine Configuration
   roeEngine?: {
     enabled?: boolean;

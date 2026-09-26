@@ -47,7 +47,7 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'Moteur Quantitatif & Bot Auto',
+      autoBot: 'Stratégies & Bot Automatique',
       globalScanner: 'Scanner Global du Marché',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Carnet & Dérivés',
@@ -313,7 +313,7 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'المنصة والإشارة',
-      autoBot: 'البوت الكمي والآلي',
+      autoBot: 'الاستراتيجيات والتداول الآلي',
       globalScanner: 'رادار ومسّاح السوق الشامل',
       mtf: 'تعدد الأطر الزمنية (MTF)',
       market: 'الدفتر والمشتقات',
@@ -579,7 +579,7 @@ export const translations: Record<Language, any> = {
     tagline: 'TRADE SMARTER',
     tabs: {
       signal: 'Terminal & Signal',
-      autoBot: 'AI Quant Engine & Bot',
+      autoBot: 'Strategies & Auto Bot',
       globalScanner: 'Global Market Scanner',
       mtf: 'Multi-Timeframe (MTF)',
       market: 'Order Book & Derivatives',

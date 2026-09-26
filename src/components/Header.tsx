@@ -853,23 +853,30 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Active Trades / Open Positions Shortcut */}
+          {/* Dedicated Strategies & Auto Bot Shortcut */}
           {onNavigateTab && (
             <button
+              id="btn-header-nav-strategies"
               type="button"
               onClick={() => onNavigateTab('autoBot')}
-              className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                openPositionsCount > 0
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
-                  : activeTab === 'autoBot'
-                  ? 'bg-slate-800 text-indigo-300 border-indigo-500/40'
-                  : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
+              className={`h-8 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                activeTab === 'autoBot'
+                  ? 'bg-gradient-to-r from-cyan-500/25 to-emerald-500/25 text-white border-cyan-400/60 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                  : 'bg-slate-900/80 text-slate-300 border-slate-700/80 hover:text-cyan-300 hover:border-cyan-500/40 hover:bg-slate-800'
               }`}
-              title={isArabic ? 'الصفقات المفتوحة وإدارة البوت' : isFrench ? 'Positions ouvertes et Bot' : 'Open Positions & Bot'}
+              title={isArabic ? 'صفحة الاستراتيجيات والتداول الآلي' : isFrench ? 'Stratégies & Bot Automatique' : 'Strategies & Auto Bot'}
             >
-              <Activity className={`w-3.5 h-3.5 shrink-0 ${openPositionsCount > 0 ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} strokeWidth={2} />
-              <span>{openPositionsCount}</span>
-              <span className="hidden xl:inline">{isArabic ? 'صفقات' : 'Trades'}</span>
+              <Bot className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'autoBot' ? 'text-cyan-400 animate-pulse' : 'text-cyan-400'}`} strokeWidth={2} />
+              <span className="font-bold">{isArabic ? 'الاستراتيجيات' : 'Strategies'}</span>
+              {openPositionsCount > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-mono">
+                  {openPositionsCount}
+                </span>
+              ) : (
+                botEnabled && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                )
+              )}
             </button>
           )}
 

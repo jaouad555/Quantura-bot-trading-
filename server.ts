@@ -61,7 +61,8 @@ const app = express();
 const PORT = 3000;
 
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // --- HEALTH CHECK: Must be first and unthrottled for container/platform ingress ---
 app.get('/api/health', (req, res) => {
@@ -313,12 +314,15 @@ app.post('/api/trading/reset', async (req, res) => {
   try {
     strategyManager.resetToDefaults();
     await kv.set('quantura_active_strategies', JSON.stringify({
-      MOMENTUM: false,
-      SCALPER: false,
-      SWING: false,
-      BREAKOUT: false,
-      MEAN_REVERSION: false,
       INSTITUTIONAL_SMC: false,
+      MOMENTUM: false,
+      SWING: false,
+      MTF_CONFLUENCE: false,
+      VWAP_VOLUME_DELTA: false,
+      FUNDING_SQUEEZE: false,
+      BREAKOUT: false,
+      SCALPER: false,
+      MEAN_REVERSION: false,
     }));
     
     let cfg: any = {
@@ -400,12 +404,16 @@ app.post('/api/system/reset', async (req, res) => {
   try {
     strategyManager.resetToDefaults();
     await kv.set('quantura_active_strategies', JSON.stringify({
-      MOMENTUM: false,
-      SCALPER: false,
-      SWING: false,
-      BREAKOUT: false,
-      MEAN_REVERSION: false,
       INSTITUTIONAL_SMC: false,
+      MOMENTUM: false,
+      SWING: false,
+      MTF_CONFLUENCE: false,
+      VWAP_VOLUME_DELTA: false,
+      FUNDING_SQUEEZE: false,
+      BREAKOUT: false,
+      SCALPER: false,
+      MEAN_REVERSION: false,
+      LIQUIDITY_HUNT: false,
     }));
     
     const defaultCfg = {

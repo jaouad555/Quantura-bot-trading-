@@ -300,31 +300,37 @@ export function getTradingPair(symbol: string): TradingPair | undefined {
  * Format any cryptocurrency price according to its real magnitude & symbol precision
  */
 export function formatCoinPrice(price: number | null | undefined, symbol?: string): string {
-  if (price === null || price === undefined || isNaN(price)) return '0.00';
+  if (price === null || price === undefined || typeof price !== 'number' || isNaN(price) || !isFinite(price)) {
+    return '0.00';
+  }
   
   const pair = symbol ? getTradingPair(symbol) : undefined;
   
-  if (price >= 1000) {
-    return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  try {
+    if (price >= 1000) {
+      return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (price >= 50) {
+      return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (price >= 1) {
+      const maxDec = Math.min(20, Math.max(2, Math.floor(pair?.decimals ?? 3)));
+      const minDec = Math.min(2, maxDec);
+      return price.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
+    }
+    if (price >= 0.01) {
+      const maxDec = Math.min(20, Math.max(2, Math.floor(pair?.decimals ?? 4)));
+      const minDec = Math.min(2, maxDec);
+      return price.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
+    }
+    if (price >= 0.0001) {
+      return price.toFixed(6);
+    }
+    const maxDec = Math.min(20, Math.max(2, Math.floor(pair?.decimals ?? 8)));
+    return price.toFixed(maxDec);
+  } catch {
+    return String(price);
   }
-  if (price >= 50) {
-    return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  if (price >= 1) {
-    const maxDec = Math.min(20, Math.max(2, pair?.decimals ?? 3));
-    const minDec = Math.min(2, maxDec);
-    return price.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
-  }
-  if (price >= 0.01) {
-    const maxDec = Math.min(20, Math.max(2, pair?.decimals ?? 4));
-    const minDec = Math.min(2, maxDec);
-    return price.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec });
-  }
-  if (price >= 0.0001) {
-    return price.toFixed(6);
-  }
-  const maxDec = Math.min(20, Math.max(2, pair?.decimals ?? 8));
-  return price.toFixed(maxDec);
 }
 
 /**

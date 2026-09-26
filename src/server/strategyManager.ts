@@ -7,7 +7,11 @@ export type StrategyId =
   | 'SWING' 
   | 'BREAKOUT' 
   | 'MEAN_REVERSION' 
-  | 'INSTITUTIONAL_SMC';
+  | 'INSTITUTIONAL_SMC'
+  | 'MTF_CONFLUENCE'
+  | 'VWAP_VOLUME_DELTA'
+  | 'FUNDING_SQUEEZE'
+  | 'LIQUIDITY_HUNT';
 
 export interface StrategyDefinition {
   id: StrategyId;
@@ -40,9 +44,18 @@ export interface StrategySignal {
 }
 
 // -------------------------------------------------------------
-// DEFAULT INACTIVE STATE: ALL 6 STRATEGIES MUST BE INACTIVE BY DEFAULT
+// DEFAULT INACTIVE STATE: ALL 9 STRATEGIES MUST BE INACTIVE BY DEFAULT
 // -------------------------------------------------------------
 const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>> = {
+  INSTITUTIONAL_SMC: {
+    id: 'INSTITUTIONAL_SMC',
+    name: 'Institutional SMC',
+    nameAr: 'المؤسساتي الذكي (Institutional SMC)',
+    description: 'Smart Money Concepts: Order blocks, Fair Value Gaps, and liquidity sweeps.',
+    descriptionAr: 'مفاهيم صانع السوق الذكي: كتل الأوامر والفجوات السعرية واقتناص السيولة.',
+    timeframe: '1h',
+    defaultLeverage: 3,
+  },
   MOMENTUM: {
     id: 'MOMENTUM',
     name: 'Momentum Grid',
@@ -51,15 +64,6 @@ const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>
     descriptionAr: 'تتبع الاتجاه القوي بتوافق متوسطات EMA وقوة مؤشر ADX وتوسع زخم MACD.',
     timeframe: '1h',
     defaultLeverage: 3,
-  },
-  SCALPER: {
-    id: 'SCALPER',
-    name: 'HFT Scalper',
-    nameAr: 'سكالبينج فائق السرعة (HFT Scalper)',
-    description: 'High-frequency fast micro-pullbacks on RSI & Stochastic extremes.',
-    descriptionAr: 'اقتناص ارتدادات سريعة وصغيرة بناءً على تشبعات RSI ومؤشر Stochastic.',
-    timeframe: '15m',
-    defaultLeverage: 5,
   },
   SWING: {
     id: 'SWING',
@@ -70,6 +74,33 @@ const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>
     timeframe: '4h',
     defaultLeverage: 2,
   },
+  MTF_CONFLUENCE: {
+    id: 'MTF_CONFLUENCE',
+    name: 'MTF Confluence',
+    nameAr: 'توافق الفريمات (MTF Confluence)',
+    description: 'Tri-timeframe directional agreement (4H Trend + 1H Momentum + 15M Trigger) with >75% alignment.',
+    descriptionAr: 'توافق الاتجاه عبر 3 فريمات زمنية (اتجاه 4H + زخم 1H + دخول دقيق 15M) بدقة توافق عالية.',
+    timeframe: '15m',
+    defaultLeverage: 3,
+  },
+  VWAP_VOLUME_DELTA: {
+    id: 'VWAP_VOLUME_DELTA',
+    name: 'VWAP Volume Delta',
+    nameAr: 'تدفق السيولة و VWAP (Volume Delta)',
+    description: 'Volume-weighted average price (VWAP) pullbacks with aggressive institutional order book delta imbalance.',
+    descriptionAr: 'ارتدادات مؤشر VWAP الحجمي مع اختلالات تدفق الأوامر الشرائية والبيعية الكبيرة في دفتر الأوامر.',
+    timeframe: '30m',
+    defaultLeverage: 3,
+  },
+  FUNDING_SQUEEZE: {
+    id: 'FUNDING_SQUEEZE',
+    name: 'Funding Squeeze',
+    nameAr: 'قناص السكويز (Funding Squeeze)',
+    description: 'Short/Long squeeze setups on extreme funding rate bias, crowded open interest, and breakout spikes.',
+    descriptionAr: 'اقتناص انفجارات الشورت/اللونغ سكويز عند تطرف معدلات التمويل Funding Rate واصطياد التصفيات.',
+    timeframe: '1h',
+    defaultLeverage: 3,
+  },
   BREAKOUT: {
     id: 'BREAKOUT',
     name: 'Volatility Breakout',
@@ -78,6 +109,15 @@ const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>
     descriptionAr: 'اقتناص الانفجارات السعرية بعد انضغاط البولنجر مع تصاعد أحجام التداول.',
     timeframe: '30m',
     defaultLeverage: 4,
+  },
+  SCALPER: {
+    id: 'SCALPER',
+    name: 'HFT Scalper',
+    nameAr: 'سكالبينج فائق السرعة (HFT Scalper)',
+    description: 'High-frequency fast micro-pullbacks on RSI & Stochastic extremes.',
+    descriptionAr: 'اقتناص ارتدادات سريعة وصغيرة بناءً على تشبعات RSI ومؤشر Stochastic.',
+    timeframe: '15m',
+    defaultLeverage: 5,
   },
   MEAN_REVERSION: {
     id: 'MEAN_REVERSION',
@@ -88,14 +128,14 @@ const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>
     timeframe: '15m',
     defaultLeverage: 3,
   },
-  INSTITUTIONAL_SMC: {
-    id: 'INSTITUTIONAL_SMC',
-    name: 'Institutional SMC',
-    nameAr: 'المؤسساتي الذكي (Institutional SMC)',
-    description: 'Smart Money Concepts: Order blocks, Fair Value Gaps, and liquidity sweeps.',
-    descriptionAr: 'مفاهيم صانع السوق الذكي: كتل الأوامر والفجوات السعرية واقتناص السيولة.',
-    timeframe: '1h',
-    defaultLeverage: 2,
+  LIQUIDITY_HUNT: {
+    id: 'LIQUIDITY_HUNT',
+    name: 'Liquidity Hunt',
+    nameAr: 'صائد السيولة والستوبات (Liquidity Hunt)',
+    description: 'Sniper entries on fakeouts and retail stop-loss sweeps at swing highs/lows with instant order delta absorption.',
+    descriptionAr: 'اقتناص الاختراقات الكاذبة ومصائد السيولة عند القمم والقيعان مع امتصاص فوري لأوامر التصفية.',
+    timeframe: '15m',
+    defaultLeverage: 3,
   },
 };
 
@@ -598,6 +638,121 @@ class StrategyManager {
           tp1 = currentPrice - risk * 1.8;
           tp2 = currentPrice - risk * 3.0;
           tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
+        }
+        break;
+      }
+
+      case 'MTF_CONFLUENCE': {
+        // Multi-Timeframe Tri-Agreement (4H Bias + 1H Trend + 15M Entry)
+        const alignment = mtfConfluence?.alignmentPercent || 75;
+        const mtfBias = mtfConfluence?.overallBias || (currentPrice >= ema50 ? 'BULLISH' : 'BEARISH');
+        const isMtfBullish = mtfBias === 'BULLISH' && alignment >= 66 && currentPrice >= ema50;
+        const isMtfBearish = mtfBias === 'BEARISH' && alignment >= 66 && currentPrice <= ema50;
+
+        if (isMtfBullish && rsi >= 44 && rsi <= 68) {
+          decision = 'LONG';
+          confidence = Math.min(97, Math.round(82 + (alignment - 66) * 0.3 + (currentPrice > ema200 ? 5 : 0)));
+          reason = `MTF Confluence: High directional alignment (${alignment.toFixed(0)}%) across 4H/1H/15M timeframes with bullish bias.`;
+          const risk = Math.max(atr * 1.3, currentPrice * 0.009);
+          stopLoss = currentPrice - risk;
+          tp1 = currentPrice + risk * 1.8;
+          tp2 = currentPrice + risk * 3.2;
+          tp3 = currentPrice + risk * 5.0;
+        } else if (isMtfBearish && rsi <= 56 && rsi >= 32) {
+          decision = 'SHORT';
+          confidence = Math.min(97, Math.round(82 + (alignment - 66) * 0.3 + (currentPrice < ema200 ? 5 : 0)));
+          reason = `MTF Confluence: Strong multi-period bearish alignment (${alignment.toFixed(0)}%) across higher timeframes.`;
+          const risk = Math.max(atr * 1.3, currentPrice * 0.009);
+          stopLoss = currentPrice + risk;
+          tp1 = currentPrice - risk * 1.8;
+          tp2 = currentPrice - risk * 3.2;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.0);
+        }
+        break;
+      }
+
+      case 'VWAP_VOLUME_DELTA': {
+        // Institutional Volume Flow & VWAP Trend
+        const vwapVal = indicators?.vwap || ema20;
+        const vol = indicators?.volume || 0;
+        const volAvg = indicators?.volumeAvg20 || 0;
+        const hasVolConfirmation = volAvg > 0 ? vol >= volAvg * 1.05 : true;
+        const obImbalance = orderBook?.imbalancePercent || 0;
+
+        if (currentPrice >= vwapVal && (obImbalance > 5 || hasVolConfirmation) && rsi >= 45 && rsi <= 68 && currentPrice >= ema50) {
+          decision = 'LONG';
+          confidence = Math.min(95, Math.round(78 + Math.min(10, obImbalance * 0.4) + (currentPrice > ema200 ? 4 : 0)));
+          reason = `VWAP Volume Delta: Bullish price hold above VWAP with order book buy imbalance (+${obImbalance.toFixed(1)}%) & volume surge.`;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = Math.min(vwapVal * 0.995, currentPrice - risk);
+          tp1 = currentPrice + risk * 1.8;
+          tp2 = currentPrice + risk * 3.0;
+          tp3 = currentPrice + risk * 4.8;
+        } else if (currentPrice <= vwapVal && (obImbalance < -5 || hasVolConfirmation) && rsi <= 55 && rsi >= 32 && currentPrice <= ema50) {
+          decision = 'SHORT';
+          confidence = Math.min(95, Math.round(78 + Math.min(10, Math.abs(obImbalance) * 0.4) + (currentPrice < ema200 ? 4 : 0)));
+          reason = `VWAP Volume Delta: Bearish price rejection below VWAP with order book sell pressure (${obImbalance.toFixed(1)}%).`;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = Math.max(vwapVal * 1.005, currentPrice + risk);
+          tp1 = currentPrice - risk * 1.8;
+          tp2 = currentPrice - risk * 3.0;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 4.8);
+        }
+        break;
+      }
+
+      case 'FUNDING_SQUEEZE': {
+        // Futures Squeeze & Overcrowded Sentiment Reversal
+        const fundingRate = derivatives?.fundingRate ?? 0.0001;
+        const isNegativeFunding = fundingRate < -0.0002; // Crowded short positions
+        const isHighPositiveFunding = fundingRate > 0.0008; // Crowded long positions
+
+        if ((isNegativeFunding || (rsi <= 36 && stoch.k > stoch.d)) && currentPrice >= bb.lower) {
+          decision = 'LONG';
+          confidence = Math.min(94, Math.round(80 + (isNegativeFunding ? 8 : 4)));
+          reason = `Funding Squeeze: Negative funding rate (${(fundingRate * 100).toFixed(4)}%) indicating crowded short liquidation surge potential.`;
+          const risk = Math.max(atr * 1.5, currentPrice * 0.01);
+          stopLoss = currentPrice - risk;
+          tp1 = currentPrice + risk * 2.0;
+          tp2 = currentPrice + risk * 3.5;
+          tp3 = currentPrice + risk * 5.5;
+        } else if ((isHighPositiveFunding || (rsi >= 74 && stoch.k < stoch.d)) && currentPrice <= bb.upper) {
+          decision = 'SHORT';
+          confidence = Math.min(94, Math.round(80 + (isHighPositiveFunding ? 8 : 4)));
+          reason = `Funding Squeeze: Extreme long funding rate (${(fundingRate * 100).toFixed(4)}%) indicating long squeeze reversal risk.`;
+          const risk = Math.max(atr * 1.5, currentPrice * 0.01);
+          stopLoss = currentPrice + risk;
+          tp1 = currentPrice - risk * 2.0;
+          tp2 = currentPrice - risk * 3.5;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.5);
+        }
+        break;
+      }
+
+      case 'LIQUIDITY_HUNT': {
+        // Institutional Stop Hunt / False Breakout Reversal
+        const hasLowSweep = (ms.swingLow > 0 && currentPrice < ms.swingLow * 1.002 && currentPrice >= ms.swingLow * 0.992) || (currentPrice <= bb.lower && rsi <= 35);
+        const hasHighSweep = (ms.swingHigh > 0 && currentPrice > ms.swingHigh * 0.998 && currentPrice <= ms.swingHigh * 1.008) || (currentPrice >= bb.upper && rsi >= 65);
+        const obImbalance = orderBook?.imbalancePercent || 0;
+
+        if (hasLowSweep && (obImbalance > 0 || stoch.k > stoch.d)) {
+          decision = 'LONG';
+          confidence = Math.min(96, Math.round(82 + Math.min(10, obImbalance * 0.3) + (currentPrice > ema50 ? 4 : 0)));
+          reason = `Liquidity Hunt: Liquidity sweep below key support/swing low with aggressive absorption and RSI rebound (${rsi.toFixed(1)}).`;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = currentPrice - risk;
+          tp1 = currentPrice + risk * 2.0;
+          tp2 = currentPrice + risk * 3.5;
+          tp3 = currentPrice + risk * 5.5;
+        } else if (hasHighSweep && (obImbalance < 0 || stoch.k < stoch.d)) {
+          decision = 'SHORT';
+          confidence = Math.min(96, Math.round(82 + Math.min(10, Math.abs(obImbalance) * 0.3) + (currentPrice < ema50 ? 4 : 0)));
+          reason = `Liquidity Hunt: Liquidity sweep above key resistance/swing high with selling absorption and RSI exhaustion (${rsi.toFixed(1)}).`;
+          const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+          stopLoss = currentPrice + risk;
+          tp1 = currentPrice - risk * 2.0;
+          tp2 = currentPrice - risk * 3.5;
+          tp3 = Math.max(currentPrice * 0.05, currentPrice - risk * 5.5);
         }
         break;
       }

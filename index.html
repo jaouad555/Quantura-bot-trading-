@@ -1,17 +1,6 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" style="background-color: #020617; color: #f8fafc;">
   <head>
-<script>
-window.addEventListener('error', function(e) {
-  fetch('/api/log-error', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: e.message, filename: e.filename, lineno: e.lineno }) }).catch(()=>{});
-});
-const oldError = console.error;
-console.error = function(...args) {
-  fetch('/api/log-error', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: args.join(' ') }) }).catch(()=>{});
-  oldError.apply(console, args);
-};
-</script>
-
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#020617" />
@@ -27,7 +16,7 @@ console.error = function(...args) {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Syncopate:wght@400;700&family=Outfit:wght@400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
   </head>
-  <body>
+  <body style="background-color: #020617; color: #f8fafc; margin: 0; padding: 0;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
