@@ -6,6 +6,7 @@ import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs.js';
 import { strategyManager, StrategySignal, StrategyDefinition } from './strategyManager.js';
 import { EntryQualityEngine } from '../utils/entryQualityEngine.js';
 import { calculateQuantitativeScore, detectMarketRegime } from '../utils/quantEngine.js';
+import { isSignalThrottled, recordSignalRejection, resetSignalRejection } from './rejectionThrottler.js';
 
 // Interfaces
 export type MarketDataProvider = (symbol: string, timeframe: any, marketType: any, isDevMode?: boolean) => Promise<any>;
@@ -489,6 +490,19 @@ async function processTradingSignal(
       return;
     }
 
+    // CRITICAL GATE 2.5: REJECTION COOLDOWN & CIRCUIT BREAKER THROTTLING
+    const throttleStatus = isSignalThrottled(symbol, signal.strategyId);
+    if (throttleStatus.throttled) {
+      if (throttleStatus.shouldLog) {
+        if (throttleStatus.isCircuitBreaker) {
+          console.log(`[CIRCUIT BREAKER] ${symbol}:${signal.strategyId} paused (circuit breaker active, retry in ${throttleStatus.remainingSec}s, ${throttleStatus.consecutive} consecutive rejections)`);
+        } else {
+          console.log(`[COOLDOWN] ${symbol}:${signal.strategyId} skipped (retry in ${throttleStatus.remainingSec}s, attempt #${throttleStatus.consecutive})`);
+        }
+      }
+      return;
+    }
+
     // Build real market depth and quote structure for MarketProtection validation
     const topBids = orderBook?.topBids?.map((b: any) => ({ price: b.price, amount: b.qty || b.amount })) || [];
     const topAsks = orderBook?.topAsks?.map((a: any) => ({ price: a.price, amount: a.qty || a.amount })) || [];
@@ -525,7 +539,12 @@ async function processTradingSignal(
 
     const riskEvaluation = await riskEngine.evaluateProposal(riskProposal, positions);
     if (riskEvaluation.decision === 'REJECTED') {
-      console.log(`[RISK ENGINE BLOCKED] ${symbol} [${signal.strategyName}] -> REJECTED: ${riskEvaluation.message} (${riskEvaluation.reasonCode})`);
+      const rejResult = recordSignalRejection(symbol, signal.strategyId, riskEvaluation.reasonCode, riskEvaluation.message);
+      if (rejResult.isCircuitBreaker) {
+        console.log(`[CIRCUIT BREAKER TRIPPED] ${symbol} [${signal.strategyName}] -> PAUSED for ${rejResult.cooldownMinutes}m after ${rejResult.consecutive} consecutive rejections: ${riskEvaluation.message} (${riskEvaluation.reasonCode})`);
+      } else {
+        console.log(`[RISK ENGINE BLOCKED] ${symbol} [${signal.strategyName}] -> REJECTED: ${riskEvaluation.message} (${riskEvaluation.reasonCode}) | Cooldown: ${rejResult.cooldownMinutes}m`);
+      }
       return;
     }
 
@@ -628,6 +647,9 @@ async function processTradingSignal(
     const freshPositions = freshPosStr ? JSON.parse(freshPosStr) : [];
     freshPositions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
+    
+    // Reset rejection counter on successful position creation
+    resetSignalRejection(symbol, signal.strategyId);
     
     if (!isLive) {
       await reconcilePaperWalletDirect();
