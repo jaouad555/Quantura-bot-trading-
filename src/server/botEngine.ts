@@ -1175,13 +1175,42 @@ export const startBotEngine = () => {
 /**
  * Server-authoritative position closer (Manual / SL / TP / Panic)
  */
-export const closePositionDirect = async (posId: string, customExitPrice?: number, reason: string = 'Manual Close') => {
+export const closePositionDirect = async (
+  posId: string,
+  customExitPrice?: number,
+  reason: string = 'Manual Close',
+  extraData?: {
+    realizedPnlUsdt?: number;
+    profitPercent?: number;
+    tradeHistoryItem?: any;
+    marketType?: string;
+    leverage?: number;
+    symbol?: string;
+    side?: string;
+  }
+) => {
   try {
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
     const pos = positions.find((p: any) => p.id === posId);
+
+    // If position is not in the array (e.g. client removed it first), handle fallback gracefully
     if (!pos) {
-      return { success: false, error: 'Position not found' };
+      permanentlyClosedPositionIds.add(posId);
+      if (extraData?.tradeHistoryItem) {
+        const histStr = await kv.get('btc_trade_history');
+        const history = histStr ? JSON.parse(histStr) : [];
+        const seenHistIds = new Set<string>();
+        const deduplicatedHist = [extraData.tradeHistoryItem, ...history].filter((h: any) => {
+          const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
+          if (seenHistIds.has(id)) return false;
+          seenHistIds.add(id);
+          return true;
+        });
+        await kv.set('btc_trade_history', JSON.stringify(deduplicatedHist.slice(0, 500)));
+      }
+      await reconcilePaperWalletDirect();
+      return { success: true, message: 'Position already closed & wallet reconciled', posId };
     }
 
     const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
@@ -1189,25 +1218,33 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
     const lev = Math.max(1, pos.leverage || 1);
     const marginClosed = pos.remainingAmountUsdt || 0;
 
-    const roeMetrics = RoeEngine.getInstance().evaluatePosition({
-      symbol: pos.symbol,
-      decision: pos.decision,
-      entryPrice: pos.entryPrice,
-      currentPrice: currentP,
-      leverage: lev,
-      marginUsdt: marginClosed,
-      initialMarginUsdt: pos.initialAmountUsdt,
-      realizedPnlUsdt: pos.realizedPnlUsdt,
-      tp1Hit: pos.tp1Hit,
-      tp2Hit: pos.tp2Hit,
-      tp3Hit: pos.tp3Hit,
-      openedAt: pos.openedAt,
-    });
+    let roePercent = 0;
+    let tranchePnl = 0;
 
-    const roePercent = roeMetrics.netROE;
-    let tranchePnl = roeMetrics.netPnL;
+    if (extraData?.realizedPnlUsdt !== undefined && !isNaN(Number(extraData.realizedPnlUsdt))) {
+      tranchePnl = Number(extraData.realizedPnlUsdt);
+      roePercent = extraData.profitPercent !== undefined ? Number(extraData.profitPercent) : (marginClosed > 0 ? (tranchePnl / marginClosed) * 100 : 0);
+    } else {
+      const roeMetrics = RoeEngine.getInstance().evaluatePosition({
+        symbol: pos.symbol,
+        decision: pos.decision,
+        entryPrice: pos.entryPrice,
+        currentPrice: currentP,
+        leverage: lev,
+        marginUsdt: marginClosed,
+        initialMarginUsdt: pos.initialAmountUsdt,
+        realizedPnlUsdt: pos.realizedPnlUsdt,
+        tp1Hit: pos.tp1Hit,
+        tp2Hit: pos.tp2Hit,
+        tp3Hit: pos.tp3Hit,
+        openedAt: pos.openedAt,
+      });
+
+      roePercent = roeMetrics.netROE;
+      tranchePnl = roeMetrics.netPnL;
+    }
+
     if (tranchePnl < -marginClosed) tranchePnl = -marginClosed;
-    const cashReturned = Math.max(0, marginClosed + tranchePnl);
     const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
     const binanceConfig = await getBinanceConfig();
@@ -1229,7 +1266,7 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
     const histStr = await kv.get('btc_trade_history');
     const history = histStr ? JSON.parse(histStr) : [];
     const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || marginClosed || 10;
-    const historyItem = {
+    const historyItem = extraData?.tradeHistoryItem || {
       id: `history-manual-${Date.now()}`,
       posId: posId,
       timestamp: Date.now(),
@@ -1302,17 +1339,27 @@ export const closePositionDirect = async (posId: string, customExitPrice?: numbe
 /**
  * Panic close all active positions immediately
  */
-export const panicCloseAllDirect = async () => {
+export const panicCloseAllDirect = async (fallbackPositions?: any[]) => {
   try {
     const posStr = await kv.get('btc_active_bot_positions');
-    const positions = posStr ? JSON.parse(posStr) : [];
+    let positions = posStr ? JSON.parse(posStr) : [];
     if (!Array.isArray(positions) || positions.length === 0) {
-      return { success: true, closedCount: 0 };
+      if (Array.isArray(fallbackPositions) && fallbackPositions.length > 0) {
+        positions = fallbackPositions;
+      } else {
+        await reconcilePaperWalletDirect();
+        return { success: true, closedCount: 0 };
+      }
     }
 
     for (const pos of positions) {
-      await closePositionDirect(pos.id, undefined, 'Panic emergency close all');
+      if (pos && pos.id) {
+        await closePositionDirect(pos.id, undefined, 'Panic emergency close all');
+      }
     }
+
+    await kv.set('btc_active_bot_positions', '[]');
+    await reconcilePaperWalletDirect();
 
     return { success: true, closedCount: positions.length };
   } catch (err: any) {

@@ -1724,42 +1724,21 @@ export const App: React.FC = () => {
               setBotLogs(prev => [{ id: `log-${Date.now()}`, timestamp: Date.now(), type: 'ERROR' as any, symbol: pos.symbol, side: isLong ? 'SELL' : 'BUY', price: actualP, amountUsdt: marginClosed * lev, reason: 'TP3 FAILED: ' + (orderRes?.error || 'Unknown'), mode: 'BINANCE_LIVE' as any, marketType: pos.marketType, leverage: lev }, ...(prev || []).slice(0, 49)]);
             }
           });
+        } else {
+          // Guaranteed paper wallet balance update with full profits credited
+          updatePaperWalletSync((prev) => ({
+            ...prev,
+            balance: Math.round(((prev.balance || 0) + cashReturned) * 100) / 100,
+            realizedPnl: Math.round(((prev.realizedPnl || 0) + finalPnlUsdt) * 100) / 100,
+          }));
         }
 
         lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
         recentlyClosedPositionIdsRef.current.add(pos.id);
         updateBotPositionsSync((prev) => prev.filter(p => p.id !== pos.id));
 
-        // Call server-side authoritative close endpoint to update backend KV and reconcile paper wallet
-        fetch('/api/bot/close-position', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            positionId: pos.id,
-            exitPrice: actualP,
-            reason: customReason || (actionType === 'SL' ? (pos.isTrailingActive ? 'TRAILING_SL' : 'SL_HIT') : (actionType === 'TP3' ? 'TP3_HIT' : 'MANUAL_CLOSE')),
-            realizedPnlUsdt: finalPnlUsdt,
-            profitPercent: roePercent,
-          }),
-        }).then(async (res) => {
-          if (res.ok) {
-            // Immediate sync of authoritative server wallet state
-            try {
-              const confRes = await fetch('/api/config/all');
-              if (confRes.ok) {
-                const confData = await confRes.json();
-                if (confData.btc_paper_wallet) {
-                  const sWallet = JSON.parse(confData.btc_paper_wallet);
-                  setPaperWallet(sWallet);
-                  paperWalletRef.current = sWallet;
-                }
-              }
-            } catch (e) {}
-          }
-        }).catch(() => {});
-
         const closedHistoryItem: TradeHistoryItem = {
-          id: `history-${Date.now()}`,
+          id: `history-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           timestamp: Date.now(),
           symbol: pos.symbol,
           decision: pos.decision,
@@ -1777,7 +1756,48 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
         };
-        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
+        setTradeHistory((prev) => {
+          const updated = [closedHistoryItem, ...(prev || [])].slice(0, 500);
+          try {
+            apiStorage.setItem('btc_trade_history', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+
+        // Call server-side authoritative close endpoint to update backend KV and reconcile paper wallet
+        fetch('/api/bot/close-position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            posId: pos.id,
+            positionId: pos.id,
+            exitPrice: actualP,
+            price: actualP,
+            reason: customReason || (actionType === 'SL' ? (pos.isTrailingActive ? 'TRAILING_SL' : 'SL_HIT') : (actionType === 'TP3' ? 'TP3_HIT' : 'MANUAL_CLOSE')),
+            realizedPnlUsdt: finalPnlUsdt,
+            profitPercent: roePercent,
+            tradeHistoryItem: closedHistoryItem,
+            marketType: pos.marketType,
+            leverage: lev,
+            symbol: pos.symbol,
+            side: isLong ? 'SELL' : 'BUY',
+          }),
+        }).then(async (res) => {
+          if (res.ok) {
+            // Immediate sync of authoritative server wallet state
+            try {
+              const confRes = await fetch('/api/config/all');
+              if (confRes.ok) {
+                const confData = await confRes.json();
+                if (confData.btc_paper_wallet) {
+                  const sWallet = JSON.parse(confData.btc_paper_wallet);
+                  setPaperWallet(sWallet);
+                  paperWalletRef.current = sWallet;
+                }
+              }
+            } catch (e) {}
+          }
+        }).catch(() => {});
 
         const newLog: AutoTradeLog = {
           id: `log-${Date.now()}`,
@@ -1863,7 +1883,13 @@ export const App: React.FC = () => {
           strategyName: pos.strategyName,
           pnlHistory: pos.pnlHistory,
         };
-        setTradeHistory((prev) => [closedHistoryItem, ...(prev || [])].slice(0, 500));
+        setTradeHistory((prev) => {
+          const updated = [closedHistoryItem, ...(prev || [])].slice(0, 500);
+          try {
+            apiStorage.setItem('btc_trade_history', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
       }
     }
 
@@ -1881,6 +1907,24 @@ export const App: React.FC = () => {
     fetch('/api/bot/panic-close-all', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        positions: currentPositions,
+        currentPrice: currentP,
+      }),
+    }).then(async (res) => {
+      if (res.ok) {
+        try {
+          const confRes = await fetch('/api/config/all');
+          if (confRes.ok) {
+            const confData = await confRes.json();
+            if (confData.btc_paper_wallet) {
+              const sWallet = JSON.parse(confData.btc_paper_wallet);
+              setPaperWallet(sWallet);
+              paperWalletRef.current = sWallet;
+            }
+          }
+        } catch (e) {}
+      }
     }).catch(() => {});
     fetch('/api/config', {
       method: 'POST',

@@ -239,19 +239,26 @@ app.get('/api/bot/prices', async (req, res) => {
 
 // Explicit Server-Authoritative Position Closing Endpoints
 app.post('/api/bot/close-position', async (req, res) => {
-  const { posId, price, reason } = req.body;
+  const posId = req.body.posId || req.body.positionId || req.body.id;
+  const { price, exitPrice, reason, realizedPnlUsdt, profitPercent, tradeHistoryItem, marketType, leverage, symbol, side } = req.body;
   if (!posId) {
-    return res.status(400).json({ error: 'posId is required' });
+    return res.status(400).json({ error: 'posId or positionId is required' });
   }
-  const result = await closePositionDirect(posId, price ? Number(price) : undefined, reason || 'Manual Close');
-  if (!result.success) {
-    return res.status(400).json(result);
-  }
+  const result = await closePositionDirect(posId, (price || exitPrice) ? Number(price || exitPrice) : undefined, reason || 'Manual Close', {
+    realizedPnlUsdt,
+    profitPercent,
+    tradeHistoryItem,
+    marketType,
+    leverage,
+    symbol,
+    side,
+  });
   return res.json(result);
 });
 
 app.post('/api/bot/panic-close-all', async (req, res) => {
-  const result = await panicCloseAllDirect();
+  const { positions } = req.body || {};
+  const result = await panicCloseAllDirect(positions);
   return res.json(result);
 });
 
