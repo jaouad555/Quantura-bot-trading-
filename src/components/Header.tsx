@@ -55,6 +55,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { GeminiLogo, QwenLogo, DeepSeekLogo, QuantMathCoreLogo } from './AiLogos';
+import { SentimentalBotAvatar } from './SentimentalBotAvatar';
 
 interface HeaderProps {
   onOpenMenu?: () => void;
@@ -871,16 +872,12 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title={isArabic ? 'صفحة الاستراتيجيات والتداول الآلي' : isFrench ? 'Stratégies & Bot Automatique' : 'Strategies & Auto Bot'}
             >
-              <Bot className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'autoBot' ? 'text-cyan-400 animate-pulse' : 'text-cyan-400'}`} strokeWidth={2} />
+              <Bot className="w-3.5 h-3.5 shrink-0 text-cyan-400" strokeWidth={2} />
               <span className="font-bold">{isArabic ? 'الاستراتيجيات' : 'Strategies'}</span>
-              {openPositionsCount > 0 ? (
+              {openPositionsCount > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-mono">
                   {openPositionsCount}
                 </span>
-              ) : (
-                botEnabled && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                )
               )}
             </button>
           )}
@@ -1162,21 +1159,46 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Bot Status & Quick Toggle */}
+            {/* Bot Status & Quick Toggle with Sentimental Robot Avatar */}
             {onToggleBot && (
               <button
                 type="button"
                 onClick={onToggleBot}
-                className={`h-8 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 ${
+                className={`h-8 px-1.5 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 ${
                   botEnabled
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    ? (portfolioMetrics.floatingPnl > 0.05
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                        : portfolioMetrics.floatingPnl < -0.05
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                        : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40')
                     : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-slate-300'
                 }`}
-                title={isArabic ? 'تبديل تشغيل/إيقاف البوت الآلي' : isFrench ? 'Activer / Désactiver le Bot' : 'Enable / Disable Trading Bot'}
+                title={
+                  isArabic 
+                    ? `البوت الآلي: ${botEnabled ? 'نشط ومتزامن' : 'متوقف'} (انقر للتشغيل/الإيقاف)`
+                    : isFrench 
+                    ? `Bot de Trading: ${botEnabled ? 'Actif' : 'En Pause'}` 
+                    : `Trading Bot: ${botEnabled ? 'Active' : 'Disabled'}`
+                }
               >
-                <Bot className={`w-3.5 h-3.5 shrink-0 ${botEnabled ? 'text-emerald-400' : 'text-slate-500'}`} strokeWidth={2} />
-                <span className={`w-1.5 h-1.5 rounded-full ${botEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="hidden sm:inline">{botEnabled ? 'BOT: ON' : 'BOT: OFF'}</span>
+                <div className="shrink-0 pointer-events-none flex items-center">
+                  <SentimentalBotAvatar
+                    enabled={botEnabled}
+                    floatingPnlUsdt={portfolioMetrics.floatingPnl}
+                    realizedPnlUsdt={portfolioMetrics.realizedPnl}
+                    activePositionsCount={(activeBotPositions || []).length}
+                    marketSentiment={isPricePositive ? 'BULLISH' : 'BEARISH'}
+                    size="xs"
+                    language={language}
+                  />
+                </div>
+                <span className="hidden sm:inline font-mono">
+                  {botEnabled ? (
+                    portfolioMetrics.floatingPnl !== 0 
+                      ? (portfolioMetrics.floatingPnl > 0 ? `+${portfolioMetrics.floatingPnl.toFixed(1)}$` : `${portfolioMetrics.floatingPnl.toFixed(1)}$`)
+                      : 'BOT: ON'
+                  ) : 'BOT: OFF'}
+                </span>
               </button>
             )}
 

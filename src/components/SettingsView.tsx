@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { translations } from '../utils/translations';
 import { apiStorage } from '../utils/apiStorage';
+import { sendTelegramMessage } from '../utils/telegram';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
 import {
   Globe,
@@ -407,16 +408,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsTestingTg(true);
     setTgFeedback(null);
     try {
-      const text = encodeURIComponent(
-        `🔔 [Quantura Engine]\nTest alert from Quantura Trading Terminal.\nStatus: Connected\nTime: ${new Date().toISOString()}`
-      );
-      const url = `https://api.telegram.org/bot${localTgToken}/sendMessage?chat_id=${localTgChatId}&text=${text}`;
-      const res = await fetch(url);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
+      const testMsg = `🔔 <b>Quantura Terminal Notification</b>\n\n✅ <b>Status:</b> Telegram Bot Connected Successfully!\n⏱️ <b>Time:</b> ${new Date().toLocaleString()}\n⚡ <b>Engine:</b> Quantitative Scalper & AI Confluence`;
+      
+      const success = await sendTelegramMessage(localTgToken, localTgChatId, testMsg);
+      if (success) {
         setTgFeedback({
           success: true,
-          message: isArabic ? 'تم إرسال رسالة الاختبار بنجاح إلى تليجرام!' : 'Test message sent successfully to Telegram!',
+          message: isArabic ? 'تم إرسال رسالة الاختبار بنجاح وبشكل فوري إلى تليجرام!' : 'Test message sent instantly to Telegram!',
         });
         if (onTelegramConfigChange) {
           onTelegramConfigChange(localTgToken, localTgChatId);
@@ -424,7 +422,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       } else {
         setTgFeedback({
           success: false,
-          message: isArabic ? `فشل الإرسال: ${data.description || 'تأكد من صحة البيانات'}` : `Failed: ${data.description || 'Check Token and Chat ID'}`,
+          message: isArabic ? 'تعذر الإرسال: تأكد من صحة الـ Token و الـ Chat ID أو أرسل /start للبوت أولاً.' : 'Failed: Check Token & Chat ID, or send /start to your bot first.',
         });
       }
     } catch (err: any) {

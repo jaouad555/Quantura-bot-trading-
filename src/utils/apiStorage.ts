@@ -1,6 +1,8 @@
 class ApiStorage {
   private mem: Record<string, string> = {};
   private initialized = false;
+  private pendingSync: Record<string, string | null> = {};
+  private syncTimeout: any = null;
 
   async init() {
     if (this.initialized) return;
@@ -70,8 +72,51 @@ class ApiStorage {
     return null;
   }
 
-  
+  // High-performance batched backend synchronization
+  private scheduleBackendSync(key: string, value: string | null) {
+    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
+    if (AUTH_SESSION_KEYS.includes(key)) return;
+
+    this.pendingSync[key] = value;
+
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+    }
+
+    this.syncTimeout = setTimeout(() => {
+      const itemsToSync = { ...this.pendingSync };
+      this.pendingSync = {};
+      this.syncTimeout = null;
+
+      const keys = Object.keys(itemsToSync);
+      if (keys.length === 0) return;
+
+      if (keys.length === 1) {
+        const singleKey = keys[0];
+        fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: singleKey, value: itemsToSync[singleKey] }),
+        }).catch(() => {});
+      } else {
+        // Multi-key batch sync
+        Promise.all(
+          keys.map((k) =>
+            fetch('/api/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: k, value: itemsToSync[k] }),
+            }).catch(() => {})
+          )
+        ).catch(() => {});
+      }
+    }, 250); // 250ms batching window
+  }
+
   setItem(key: string, value: string) {
+    const prev = this.mem[key];
+    if (prev === value) return; // Prevent unnecessary dirty writes & event cascades
+
     this.mem[key] = value;
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -79,37 +124,23 @@ class ApiStorage {
       } catch (e) {}
     }
     
-    // Fire event for UI to update
+    // Fire event for UI to update only if value actually changed
     if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('apiStorage_updated', { detail: { key, value } }));
+      window.dispatchEvent(new CustomEvent('apiStorage_updated', { detail: { key, value } }));
     }
 
-    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
-    if (!AUTH_SESSION_KEYS.includes(key)) {
-      fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value }),
-      }).catch(() => {});
-    }
+    this.scheduleBackendSync(key, value);
   }
 
-
   removeItem(key: string) {
+    if (this.mem[key] === undefined) return;
     delete this.mem[key];
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.removeItem(key);
       } catch (e) {}
     }
-    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
-    if (!AUTH_SESSION_KEYS.includes(key)) {
-      fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: null }),
-      }).catch(() => {});
-    }
+    this.scheduleBackendSync(key, null);
   }
 
   async resetTradingData() {
@@ -209,4 +240,3 @@ class ApiStorage {
 }
 
 export const apiStorage = new ApiStorage();
-

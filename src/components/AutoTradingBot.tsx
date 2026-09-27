@@ -1626,6 +1626,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <SentimentalBotAvatar
               enabled={botConfig.enabled}
               floatingPnlUsdt={floatingPnl}
+              floatingPnlPercent={totalEquity > 0 ? (floatingPnl / totalEquity) * 100 : 0}
               realizedPnlUsdt={totalRealizedPnl}
               circuitBreakerTriggered={botConfig.circuitBreakerTripped}
               marketSentiment={activeSignal?.bias || (activeSignal?.decision === 'LONG' ? 'BULLISH' : activeSignal?.decision === 'SHORT' ? 'BEARISH' : 'NEUTRAL')}
@@ -2435,6 +2436,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             <SentimentalBotAvatar
               enabled={botConfig.enabled}
               floatingPnlUsdt={floatingPnl}
+              floatingPnlPercent={totalEquity > 0 ? (floatingPnl / totalEquity) * 100 : 0}
               realizedPnlUsdt={totalRealizedPnl}
               circuitBreakerTriggered={botConfig.circuitBreakerTripped}
               marketSentiment={activeSignal?.bias || (activeSignal?.decision === 'LONG' ? 'BULLISH' : activeSignal?.decision === 'SHORT' ? 'BEARISH' : 'NEUTRAL')}

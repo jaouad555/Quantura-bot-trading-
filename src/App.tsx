@@ -2203,43 +2203,44 @@ export const App: React.FC = () => {
     };
 
     const interval = setInterval(async () => {
-      const positions = activeBotPositionsRef.current;
-      const pricesMap: Record<string, number> = {};
+      if (typeof document !== 'undefined' && document.hidden) return; // Skip work when tab is in background
 
+      const positions = activeBotPositionsRef.current;
+      if (!positions || positions.length === 0) return; // No open positions, no need to poll prices
+
+      const pricesMap: Record<string, number> = {};
       const currentTicker = latestTickerRef.current;
       if (currentTicker?.price && !isNaN(currentTicker.price) && currentTicker.price > 0) {
         pricesMap[normalizeSymbol(currentTicker.symbol)] = currentTicker.price;
         pricesMap[currentTicker.symbol.toUpperCase()] = currentTicker.price;
       }
 
-      if (positions && positions.length > 0) {
-        const symbolsToFetch = Array.from(new Set(positions.map(p => p.symbol.toUpperCase())))
-          .filter(sym => !pricesMap[normalizeSymbol(sym)]);
+      const symbolsToFetch = Array.from(new Set(positions.map(p => p.symbol.toUpperCase())))
+        .filter(sym => !pricesMap[normalizeSymbol(sym)]);
 
-        if (symbolsToFetch.length > 0) {
-          try {
-            const res = await fetch(`/api/bot/prices?symbols=${symbolsToFetch.join(',')}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.prices) {
-                Object.entries(data.prices).forEach(([sym, price]) => {
-                  if (typeof price === 'number' && price > 0) {
-                    pricesMap[normalizeSymbol(sym)] = price;
-                    pricesMap[sym.toUpperCase()] = price;
-                  }
-                });
-              }
+      if (symbolsToFetch.length > 0) {
+        try {
+          const res = await fetch(`/api/bot/prices?symbols=${symbolsToFetch.join(',')}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.prices) {
+              Object.entries(data.prices).forEach(([sym, price]) => {
+                if (typeof price === 'number' && price > 0) {
+                  pricesMap[normalizeSymbol(sym)] = price;
+                  pricesMap[sym.toUpperCase()] = price;
+                }
+              });
             }
-          } catch (e) {
-            // Silently fall back to ticker prices
           }
+        } catch (e) {
+          // Silently fall back to ticker prices
         }
       }
 
       if (Object.keys(pricesMap).length > 0) {
         updatePositionsWithPrices(pricesMap);
       }
-    }, 3000);
+    }, 3500);
 
     return () => clearInterval(interval);
   }, []); // Empty dependency array prevents interval from resetting on every tick
@@ -2600,6 +2601,8 @@ export const App: React.FC = () => {
   // (because server writing to kv won't trigger frontend events automatically without WS)
   useEffect(() => {
      const interval = setInterval(async () => {
+         if (typeof document !== 'undefined' && document.hidden) return; // Skip CPU when tab is in background
+
          try {
              // We just re-init apiStorage memory with latest server data
              const res = await fetch('/api/config/all');
@@ -2687,7 +2690,7 @@ export const App: React.FC = () => {
                  }
              }
          } catch(e) {}
-     }, 2500);
+     }, 3500);
      return () => clearInterval(interval);
   }, []);
 
@@ -2697,6 +2700,8 @@ export const App: React.FC = () => {
   const [scannerState, setScannerState] = useState<any>(null);
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return; // Skip work when tab is in background
+
       try {
         const res = await fetch('/api/scanner/status');
         if (res.ok) {

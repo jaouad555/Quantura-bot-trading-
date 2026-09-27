@@ -533,7 +533,7 @@ app.post('/api/config/batch', async (req, res) => {
   }
 });
 
-// Telegram Safe Proxy (Prevents browser CORS or fetch failures)
+// Telegram High-Speed Safe Proxy (Instant delivery with HTML & Plaintext auto-fallback)
 app.post('/api/telegram/send', async (req, res) => {
   const { token, chatId, message } = req.body;
   if (!token || !chatId || !message) {
@@ -541,20 +541,37 @@ app.post('/api/telegram/send', async (req, res) => {
   }
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4500);
-    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    
+    // First attempt: HTML formatted
+    let tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: message,
+        text: String(message),
         parse_mode: 'HTML',
       }),
       signal: controller.signal,
-    });
+    }).catch(() => null);
+
+    // If HTML parsing failed (status 400), instantly retry without HTML formatting
+    if (!tgRes || (!tgRes.ok && tgRes.status === 400)) {
+      const plainText = String(message).replace(/<[^>]*>/g, '');
+      tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: plainText,
+        }),
+        signal: controller.signal,
+      }).catch(() => null);
+    }
+
     clearTimeout(timeout);
-    const data = await tgRes.json().catch(() => ({}));
-    return res.json({ success: tgRes.ok, data });
+    const data = tgRes ? await tgRes.json().catch(() => ({})) : {};
+    return res.json({ success: tgRes?.ok ?? false, data });
   } catch (err: any) {
     return res.json({ success: false, error: err.message || 'Telegram network issue' });
   }
