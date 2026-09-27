@@ -4,6 +4,7 @@ import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { callDeepSeekAPI } from '../utils/deepseek';
 import { apiStorage } from '../utils/apiStorage';
+import { GeminiLogo, QwenLogo, DeepSeekLogo } from './AiLogos';
 import {
   Sparkles,
   Activity,
@@ -366,19 +367,25 @@ ${detailedText}
             {/* AI Model Selector */}
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-800">
               <span className="text-xs font-bold text-slate-400">AI Model:</span>
-              {(['qwen', 'gemini', 'deepseek-chat', 'deepseek-reasoner'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => handleModelChange(m)}
-                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-                    selectedAiModel === m
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-                  }`}
-                >
-                  {m === 'qwen' ? 'Qwen 2.5' : m === 'gemini' ? 'Gemini 3.8 Pro' : m === 'deepseek-chat' ? 'DeepSeek V3' : 'DeepSeek R1 (Reasoner)'}
-                </button>
-              ))}
+              {(['qwen', 'gemini', 'deepseek-chat', 'deepseek-reasoner'] as const).map((m) => {
+                const isSelected = selectedAiModel === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => handleModelChange(m)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {m === 'qwen' && <QwenLogo active={isSelected} className="w-3.5 h-3.5" />}
+                    {m === 'gemini' && <GeminiLogo active={isSelected} className="w-3.5 h-3.5" />}
+                    {m.startsWith('deepseek') && <DeepSeekLogo active={isSelected} className="w-3.5 h-3.5" />}
+                    <span>{m === 'qwen' ? 'Qwen 2.5' : m === 'gemini' ? 'Gemini 3.8 Pro' : m === 'deepseek-chat' ? 'DeepSeek V3' : 'DeepSeek R1 (Reasoner)'}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">

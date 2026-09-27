@@ -32,6 +32,7 @@ import { RiskCalculatorView } from './components/RiskCalculatorView';
 import { QwenAnalysisView } from './components/QwenAnalysisView';
 import { TradeHistory } from './components/TradeHistory';
 import { SettingsModal } from './components/SettingsModal';
+import { SettingsView } from './components/SettingsView';
 import { RiskManagementModal } from './components/RiskManagementModal';
 import { HelpQuickStartModal } from './components/HelpQuickStartModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -155,7 +156,7 @@ export const App: React.FC = () => {
   }, []);
 
   const [activeTab, setActiveTab] = useState<
-    'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet'
+    'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet' | 'settings'
   >('signal');
   const [language, setLanguage] = useState<Language>(() => {
     try {
@@ -256,6 +257,16 @@ export const App: React.FC = () => {
 
   const toggleNotifications = useCallback(() => {
     setNotificationsEnabled((prev) => !prev);
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        apiStorage.setItem('app_sound_enabled', String(next));
+      } catch {}
+      return next;
+    });
   }, []);
 
   const [telegramBotToken, setTelegramBotToken] = useState<string>(() => {
@@ -1164,6 +1175,27 @@ export const App: React.FC = () => {
         let leverage = isFutures ? Math.max(1, currentConfig.leverage || 10) : 1;
         const marginMode = currentConfig.marginMode || 'ISOLATED';
 
+        // Spot Market Protection: Spot market only supports LONG (Buy) orders. SHORT is strictly disallowed.
+        if (!isFutures && decision === 'SHORT') {
+          const rejectMsg = isArabicLang
+            ? 'تنبيه: صفقات الهبوط (SHORT) غير متاحة في سوق Spot الفوري. صفقات البيع على المكشوف متاحة فقط في سوق العقود الآجلة (Futures).'
+            : 'Spot Market Rule: SHORT positions are only supported in Futures markets. Spot supports BUY/LONG only.';
+          if (customDecision) {
+            const rejectAlert: PushAlert = {
+              id: `alert-spot-short-${Date.now()}`,
+              title: isArabicLang ? 'غير متاح في Spot' : 'Not Allowed in Spot',
+              body: rejectMsg,
+              timestamp: Date.now(),
+              type: 'SYSTEM',
+              read: false,
+            };
+            setAlerts((prev) => [rejectAlert, ...(prev || []).slice(0, 29)]);
+            triggerToastAlert(rejectAlert);
+            playAudioChime();
+          }
+          return;
+        }
+
         const maxTrades = Math.max(1, currentConfig.maxOpenTrades || 3);
         const currentModePositions = workingPositions.filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
         if (currentModePositions.length >= maxTrades) {
@@ -1981,7 +2013,7 @@ export const App: React.FC = () => {
   const handleToggleBot = useCallback(() => {
     setBotConfig((prev) => {
       const nextEnabled = !prev.enabled;
-      let effectivePresets: StrategyId[] = prev.activePresets && prev.activePresets.length > 0
+      const effectivePresets: StrategyId[] = prev.activePresets && prev.activePresets.length > 0
         ? prev.activePresets
         : ['MOMENTUM'];
 
@@ -1994,7 +2026,7 @@ export const App: React.FC = () => {
           type: 'STRATEGY_AUDIT',
           symbol: 'PORTFOLIO',
           side: 'BUY',
-          price: ticker?.price || 0,
+          price: tickerRef.current?.price || 0,
           amountUsdt: 0,
           reason: isAr
             ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${effectivePresets.length} استراتيجية نشطة).`
@@ -2011,7 +2043,7 @@ export const App: React.FC = () => {
           type: 'STRATEGY_AUDIT',
           symbol: 'PORTFOLIO',
           side: 'SELL',
-          price: ticker?.price || 0,
+          price: tickerRef.current?.price || 0,
           amountUsdt: 0,
           reason: isAr
             ? 'تم إيقاف البوت يدوياً. لن يتم فتح أي صفقات جديدة حتى يتم تفعيله يدوياً.'
@@ -2022,31 +2054,25 @@ export const App: React.FC = () => {
         playAudioChime();
       }
 
-      let nextConfig: AutoBotConfig;
-      if (nextEnabled && prev.circuitBreakerTripped) {
-        nextConfig = {
-          ...prev,
-          enabled: true,
-          activePresets: effectivePresets,
-          enabledAt: Date.now(),
+      const nextConfig: AutoBotConfig = {
+        ...prev,
+        enabled: nextEnabled,
+        activePresets: effectivePresets,
+        enabledAt: nextEnabled ? Date.now() : prev.enabledAt,
+        ...(nextEnabled && prev.circuitBreakerTripped ? {
           circuitBreakerTripped: false,
           circuitBreakerTrippedAt: undefined,
           circuitBreakerResetAt: Date.now(),
-        };
-      } else {
-        nextConfig = {
-          ...prev,
-          enabled: nextEnabled,
-          activePresets: effectivePresets,
-          enabledAt: nextEnabled ? Date.now() : prev.enabledAt,
-        };
-      }
+        } : {})
+      };
       botConfigRef.current = nextConfig;
       lastConfigUpdateRef.current = Date.now();
-      apiStorage.setItem('btc_bot_config', JSON.stringify(nextConfig));
+      try {
+        apiStorage.setItem('btc_bot_config', JSON.stringify(nextConfig));
+      } catch {}
       return nextConfig;
     });
-  }, [language, ticker?.price, playAudioChime, addBotLog]);
+  }, [language, playAudioChime, addBotLog]);
 
   const handleFullReset = useCallback(async () => {
     // 1. Immediately zero out refs to prevent background intervals or ticks from writing back stale positions
@@ -2844,11 +2870,18 @@ export const App: React.FC = () => {
   };
 
   const handleToggleMarketType = (newMarketType: MarketType) => {
-    setBotConfig((prev) => ({
-      ...prev,
-      marketType: newMarketType,
-      leverage: newMarketType === 'FUTURES' ? ((prev.leverage && prev.leverage > 1) ? prev.leverage : 3) : 1,
-    }));
+    setBotConfig((prev) => {
+      const updated = {
+        ...prev,
+        marketType: newMarketType,
+        leverage: newMarketType === 'FUTURES' ? ((prev.leverage && prev.leverage > 1) ? prev.leverage : 3) : 1,
+      };
+      botConfigRef.current = updated;
+      try {
+        apiStorage.setItem('btc_bot_config', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     
     const sym = selectedSymbolRef.current;
     const tf = timeframeRef.current;
@@ -2857,6 +2890,26 @@ export const App: React.FC = () => {
     instantFetchMarketData(sym, tf, newMarketType);
     binanceWsManager.setMarketType(newMarketType);
     fetchMarketData(tf, sym, newMarketType);
+  };
+
+  // Centralized Bot Config Updater with immediate ref and persistence sync
+  const handleUpdateBotConfig = (partial: Partial<AutoBotConfig>) => {
+    if (partial.marketType && partial.marketType !== botConfigRef.current.marketType) {
+      handleToggleMarketType(partial.marketType);
+    }
+    setBotConfig((prev) => {
+      const updated: AutoBotConfig = {
+        ...prev,
+        ...partial,
+        ...(partial.marketType === 'SPOT' ? { leverage: 1 } : {}),
+      };
+      botConfigRef.current = updated;
+      lastConfigUpdateRef.current = Date.now();
+      try {
+        apiStorage.setItem('btc_bot_config', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const handleClearTradeHistory = () => {
@@ -3184,7 +3237,7 @@ export const App: React.FC = () => {
               displayMode={displayMode}
               onChangeDisplayMode={setDisplayMode}
               onOpenNotifications={() => setIsNotificationsOpen(true)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenSettings={() => setActiveTab('settings')}
               onOpenRiskModal={() => setIsRiskModalOpen(true)}
               onOpenHelp={() => setIsHelpModalOpen(true)}
               onPanicCloseAll={handlePanicCloseAll}
@@ -3397,14 +3450,7 @@ export const App: React.FC = () => {
                 onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
                 onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
                 onToggleBot={handleToggleBot}
-                onUpdateConfig={(partial) => {
-                  if (partial.marketType && partial.marketType !== botConfig.marketType) {
-                    handleToggleMarketType(partial.marketType);
-                    setBotConfig((prev) => ({ ...prev, ...partial }));
-                  } else {
-                    setBotConfig((prev) => ({ ...prev, ...partial }));
-                  }
-                }}
+                onUpdateConfig={handleUpdateBotConfig}
                 onManualClosePosition={(posId) => {
                   if (posId) {
                     const currentPositions = activeBotPositionsRef.current;
@@ -3446,6 +3492,24 @@ export const App: React.FC = () => {
                 }}
                 onManualTriggerOpen={(direction) => {
                   if (ticker?.price) {
+                    if (direction === 'SHORT' && botConfigRef.current.marketType === 'SPOT') {
+                      const msg = language === 'ar'
+                        ? 'تنبيه: صفقات الهبوط (SHORT) غير متاحة في سوق Spot الفوري. صفقات البيع على المكشوف متاحة فقط في سوق العقود الآجلة (Futures).'
+                        : 'Spot Market Rule: SHORT positions are only supported in Futures markets. Spot supports BUY/LONG only.';
+                      const rejectAlert: PushAlert = {
+                        id: `alert-manual-spot-short-${Date.now()}`,
+                        title: language === 'ar' ? 'غير متاح في Spot' : 'Not Allowed in Spot',
+                        body: msg,
+                        timestamp: Date.now(),
+                        type: 'SYSTEM',
+                        read: false,
+                      };
+                      setAlerts(prev => [rejectAlert, ...(prev || []).slice(0, 29)]);
+                      triggerToastAlert(rejectAlert);
+                      playAudioChime();
+                      return;
+                    }
+
                     const currentPositions = activeBotPositionsRef.current;
                     const isLive = executionModeRef.current === 'BINANCE_LIVE';
                     const modePositions = currentPositions.filter(p => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
@@ -3621,6 +3685,49 @@ export const App: React.FC = () => {
               onFullReset={handleFullReset}
             />
           )}
+
+          {/* Tab 9: Comprehensive Engineered Settings View */}
+          {activeTab === 'settings' && (
+            <SettingsView
+              language={language}
+              timezone={timezone}
+              isDeveloperMode={isDeveloperMode}
+              soundEnabled={soundEnabled}
+              notificationsEnabled={notificationsEnabled}
+              minConfidenceThreshold={minConfidenceThreshold}
+              telegramBotToken={telegramBotToken}
+              telegramChatId={telegramChatId}
+              binanceConfig={binanceConfig}
+              executionMode={executionMode}
+              paperWallet={paperWallet}
+              displayMode={displayMode}
+              botConfig={botConfig}
+              activeBotPositions={activeBotPositions}
+              username={username || 'JAOUAD'}
+              onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
+              onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+              onOpenHelp={() => setIsHelpModalOpen(true)}
+              onRefreshBinancePermissions={fetchLiveBinanceBalance}
+              onLanguageChange={setLanguage}
+              onTimezoneChange={setTimezone}
+              onToggleDeveloperMode={setIsDeveloperMode}
+              onToggleSound={toggleSound}
+              onToggleNotifications={toggleNotifications}
+              onConfidenceChange={setMinConfidenceThreshold}
+              onTelegramConfigChange={(token, chatId) => {
+                setTelegramBotToken(token);
+                setTelegramChatId(chatId);
+              }}
+              onChangeDisplayMode={setDisplayMode}
+              onUpdatePaperWallet={(newWallet) => {
+                updatePaperWalletSync(() => newWallet);
+              }}
+              onUpdateBotConfig={handleUpdateBotConfig}
+              onNavigateTab={setActiveTab}
+              onLogout={handleLogout}
+              onFullReset={handleFullReset}
+            />
+          )}
         </main>
 
         {/* Global Institutional Platform Footer */}
@@ -3632,7 +3739,7 @@ export const App: React.FC = () => {
           binanceConfig={binanceConfig}
           onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
           onOpenRiskModal={() => setIsRiskModalOpen(true)}
-          onOpenSettingsModal={() => setIsSettingsOpen(true)}
+          onOpenSettingsModal={() => setActiveTab('settings')}
           onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
           onOpenHelpModal={() => setIsHelpModalOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
@@ -3686,7 +3793,7 @@ export const App: React.FC = () => {
           onLanguageChange={setLanguage}
           onTimezoneChange={setTimezone}
           onToggleDeveloperMode={setIsDeveloperMode}
-          onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          onToggleSound={toggleSound}
           onToggleNotifications={toggleNotifications}
           onConfidenceChange={setMinConfidenceThreshold}
           onTelegramConfigChange={(token, chatId) => {
@@ -3695,6 +3802,10 @@ export const App: React.FC = () => {
           }}
           onLogout={handleLogout}
           onFullReset={handleFullReset}
+          onNavigateToSettingsPage={() => {
+            setIsSettingsOpen(false);
+            setActiveTab('settings');
+          }}
         />
 
         {/* Custom Paper Balance Management Modal */}

@@ -56,6 +56,7 @@ export const translations: Record<Language, any> = {
       analysis: 'Rapport Détaillé',
       history: 'Historique des Signaux',
       riskWallet: 'Gestion Risque & Wallet',
+      settings: 'Paramètres Système',
     },
 
     terminal: {
@@ -322,6 +323,7 @@ export const translations: Record<Language, any> = {
       analysis: 'التقرير المفصل',
       history: 'سجل الإشارات',
       riskWallet: 'إدارة المخاطر والمحفظة',
+      settings: 'الإعدادات والنظام',
     },
 
     terminal: {
@@ -588,6 +590,7 @@ export const translations: Record<Language, any> = {
       analysis: 'Full Report',
       history: 'Signal History',
       riskWallet: 'Risk & Wallet',
+      settings: 'System Settings',
     },
 
     terminal: {

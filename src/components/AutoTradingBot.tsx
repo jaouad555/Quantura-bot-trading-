@@ -36,6 +36,7 @@ import {
   SlidersHorizontal,
   Check,
   Scissors,
+  Cpu,
 } from 'lucide-react';
 import { 
   AutoBotConfig, 
@@ -131,6 +132,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const [riskPerTradeInput, setRiskPerTradeInput] = useState((botConfig.riskPerTradePercent || 2.0).toString());
   const [cooldownInput, setCooldownInput] = useState((botConfig.cooldownMinutes || 10).toString());
   const [multiPairInput, setMultiPairInput] = useState(botConfig.multiPairScanning ?? true);
+  const [configModalTab, setConfigModalTab] = useState<'market' | 'timeframe' | 'sizing' | 'safety' | 'universe'>('market');
   React.useEffect(() => {
     if (!botConfig.enabled && botConfig.activePresets?.length) {
       // If manually disabled from top button, we can optionally clear presets, or leave them.
@@ -1854,7 +1856,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             {/* Auto Adaptive Mode Toggle */}
             <button
               type="button"
-              onClick={() => onUpdateConfig({ autoAdaptiveStrategy: !botConfig.autoAdaptiveStrategy })}
+              onClick={() => {
+                const isCurrentlyActive = botConfig.autoAdaptiveStrategy !== false;
+                onUpdateConfig({ autoAdaptiveStrategy: !isCurrentlyActive });
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors duration-150 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
                 botConfig.autoAdaptiveStrategy !== false
                   ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
@@ -2468,18 +2473,24 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           <div className="pt-2 flex flex-wrap justify-center gap-2">
             <button
               onClick={() => onManualTriggerOpen ? onManualTriggerOpen('LONG') : onManualTriggerBuy()}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-emerald-600/20"
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-emerald-600/20 cursor-pointer"
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>{isArabic ? `فتح LONG يدوي (${selectedSymbol} ${botConfig.leverage || 10}x)` : `Open LONG (${selectedSymbol} ${botConfig.leverage || 10}x)`}</span>
+              <span>
+                {botConfig.marketType === 'SPOT'
+                  ? (isArabic ? `شراء فوري Spot Buy (${selectedSymbol} 1x)` : `Spot Buy (${selectedSymbol} 1x)`)
+                  : (isArabic ? `فتح LONG يدوي (${selectedSymbol} ${botConfig.leverage || 10}x)` : `Open LONG (${selectedSymbol} ${botConfig.leverage || 10}x)`)}
+              </span>
             </button>
-            <button
-              onClick={() => onManualTriggerOpen ? onManualTriggerOpen('SHORT') : onManualTriggerBuy()}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-rose-600/20"
-            >
-              <TrendingDown className="w-3.5 h-3.5" />
-              <span>{isArabic ? `فتح SHORT يدوي (${selectedSymbol} ${botConfig.leverage || 10}x)` : `Open SHORT (${selectedSymbol} ${botConfig.leverage || 10}x)`}</span>
-            </button>
+            {botConfig.marketType === 'FUTURES' && (
+              <button
+                onClick={() => onManualTriggerOpen ? onManualTriggerOpen('SHORT') : onManualTriggerBuy()}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-rose-600/20 cursor-pointer"
+              >
+                <TrendingDown className="w-3.5 h-3.5" />
+                <span>{isArabic ? `فتح SHORT يدوي (${selectedSymbol} ${botConfig.leverage || 10}x)` : `Open SHORT (${selectedSymbol} ${botConfig.leverage || 10}x)`}</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2568,515 +2579,794 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         )}
       </div>
 
-      {/* Enhanced Quantitative Futures Settings Modal */}
+      {/* Engineered Quantitative Bot Settings Modal */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-lg w-full shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <Sliders className="w-5 h-5 text-cyan-400" />
-              <span>{isArabic ? 'إعدادات العقود الآجلة والرافعة (Futures Settings)' : 'Paramètres Futures & Effet de Levier'}</span>
-            </h3>
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className={`bg-[#080d19] border border-cyan-500/40 rounded-3xl w-full max-w-2xl shadow-[0_0_80px_rgba(6,182,212,0.25)] overflow-hidden flex flex-col my-auto max-h-[92vh] ring-1 ring-cyan-500/30 relative ${isArabic ? 'rtl text-right' : 'ltr'}`}>
+            
+            {/* Top Glowing Laser Accent Line */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500/60 via-cyan-400 to-emerald-400/60" />
 
-            <div className="space-y-4 text-xs">
-              {/* 0. Market Type Selection: Futures vs Spot */}
-              <div className="p-3 bg-slate-950 border border-cyan-500/30 rounded-xl space-y-3">
-                <label className="block text-slate-200 font-bold">
-                  {isArabic ? 'نوع السوق المعتمد (Market Type)' : 'Type de Marché'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMarketTypeInput('FUTURES')}
-                    className={`p-2.5 rounded-xl border text-left font-bold transition ${
-                      marketTypeInput === 'FUTURES'
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-500/20'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-white text-xs flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{isArabic ? 'عقود آجلة (USDT-M Futures)' : 'USDT-M Futures'}</span>
-                    </div>
-                    <div className="text-[10px] font-normal text-slate-400 mt-1">
-                      {isArabic ? 'رافعة مالية + صفقات LONG و SHORT' : 'Effet de levier + LONG & SHORT'}
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMarketTypeInput('SPOT')}
-                    className={`p-2.5 rounded-xl border text-left font-bold transition ${
-                      marketTypeInput === 'SPOT'
-                        ? 'bg-brand-500/20 border-brand-500 text-brand-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-white text-xs">{isArabic ? 'تداول فوري (Spot 1x)' : 'Marché Spot (1x)'}</div>
-                    <div className="text-[10px] font-normal text-slate-400 mt-1">
-                      {isArabic ? 'شراء بدون رافعة مالية وبدون تصفية' : 'Achat direct sans effet de levier'}
-                    </div>
-                  </button>
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-inner">
+                  <Sliders className="w-5 h-5" />
                 </div>
-
-                {/* Leverage Settings (If Futures) */}
-                {marketTypeInput === 'FUTURES' && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <label className="text-slate-300 font-bold">
-                        {isArabic ? `الرافعة المالية (Leverage): ${leverageInput}x` : `Effet de Levier: ${leverageInput}x`}
-                      </label>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setMarginModeInput('ISOLATED')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            marginModeInput === 'ISOLATED' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          ISOLATED
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMarginModeInput('CROSS')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            marginModeInput === 'CROSS' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          CROSS
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {LEVERAGE_PRESETS.map((lev) => (
-                        <button
-                          key={lev}
-                          type="button"
-                          onClick={() => setLeverageInput(lev)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition ${
-                            leverageInput === lev
-                              ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/20'
-                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
-                          }`}
-                        >
-                          {lev}x
-                        </button>
-                      ))}
-                    </div>
-
-                    <input
-                      type="range"
-                      min="1"
-                      max="50"
-                      value={leverageInput}
-                      onChange={(e) => setLeverageInput(Number(e.target.value))}
-                      className="w-full accent-amber-400 bg-slate-800 h-1.5 rounded-lg"
-                    />
-
-                    
-                    <p className="text-[10px] text-amber-300/80">
-                      {isArabic 
-                        ? `عند رافعة ${leverageInput}x: كل 100$ هامش تتحكم في عقد بقيمة ${(100 * leverageInput).toLocaleString()}$ USDT.`
-                        : `À ${leverageInput}x: 100$ de marge contrôle un contrat de ${(100 * leverageInput).toLocaleString()}$ USDT.`}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Timeframe Strategy Selection */}
-              <div className="p-3.5 bg-slate-950 border border-cyan-500/30 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-cyan-400" />
-                    <span>{isArabic ? 'فريم استراتيجية البوت (Bot Timeframe Strategy)' : 'Bot Trading Timeframe Strategy'}</span>
-                  </label>
-                  {timeframeInput === 'AUTO' && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse">
-                      {isArabic ? 'وضع الذكاء التكيفي' : 'Adaptive Mode'}
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-['Syncopate',sans-serif] font-black text-white tracking-wider text-xs sm:text-sm uppercase text-sweep-shine">
+                      QUANTURA BOT ENGINE
+                    </h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                      {marketTypeInput === 'FUTURES' ? `${leverageInput}x FUTURES` : 'SPOT (1x NO LEV)'}
                     </span>
-                  )}
-                </div>
-
-                {/* Auto vs Fixed Selection */}
-                <div className="space-y-2">
-                  {/* AUTO Dynamic Adaptive Option */}
-                  <button
-                    type="button"
-                    onClick={() => setTimeframeInput('AUTO')}
-                    className={`w-full p-2.5 rounded-xl border text-left font-bold transition flex items-center justify-between ${
-                      timeframeInput === 'AUTO'
-                        ? 'bg-cyan-950/70 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-950/50 ring-1 ring-cyan-500/30'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${timeframeInput === 'AUTO' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
-                        <Sparkles className="w-4 h-4 text-cyan-400" />
-                      </div>
-                      <div>
-                        <div className="text-white text-xs font-bold flex items-center gap-1.5">
-                          <span>{isArabic ? 'اختيار تلقائي ذكي (Dynamic AUTO)' : (isEn ? 'Dynamic AUTO (Adaptive Regime)' : 'AUTO Dynamique (Régime Adaptatif)')}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-300 font-mono font-semibold">
-                            {isArabic ? 'موصى به' : (isEn ? 'Recommended' : 'Recommandé')}
-                          </span>
-                        </div>
-                        <div className="text-[10px] font-normal text-slate-400 mt-0.5">
-                          {isArabic 
-                            ? 'يحلل البوت تقلبات السوق وزخم الاتجاه ويتكيف آلياً بين 15m و 1h و 4h.'
-                            : (isEn 
-                                ? 'Automatically switches between 15m, 1h, and 4h based on market volatility and momentum.'
-                                : 'Bascule automatiquement entre 15m, 1h et 4h selon la volatilité et le momentum.')}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className={`text-xs font-mono font-black ${timeframeInput === 'AUTO' ? 'text-cyan-300' : 'text-slate-500'}`}>
-                        {timeframeInput === 'AUTO' ? `[${effectiveBotTimeframe.toUpperCase()}]` : 'AUTO'}
-                      </span>
-                    </div>
-                  </button>
-
-                  {/* Manual Timeframe Grid */}
-                  <div>
-                    <div className="text-[11px] text-slate-400 mb-1.5 font-medium">
-                      {isArabic ? 'أو حدد فريماً ثابتاً للبوت:' : (isEn ? 'Or select a fixed bot timeframe:' : 'Ou choisissez une période fixe :')}
-                    </div>
-                    <div className="grid grid-cols-6 gap-1.5">
-                      {[
-                        { id: '5m', label: '5M', desc: isArabic ? 'سكالبينج فائق السرعة' : (isEn ? 'Ultra Scalp' : 'Scalping Ultra-Rapide') },
-                        { id: '15m', label: '15M', desc: isArabic ? 'مضاربة سريعة وزخم' : (isEn ? 'Fast Momentum' : 'Momentum Rapide') },
-                        { id: '30m', label: '30M', desc: isArabic ? 'مضاربة قصيرة' : (isEn ? 'Short Swing' : 'Court Terme') },
-                        { id: '1h', label: '1H', desc: isArabic ? 'تداول يومي ومضاعفة' : (isEn ? 'Day Compounding' : 'Intrajournalier & Intérêts Composés') },
-                        { id: '4h', label: '4H', desc: isArabic ? 'سوينغ وتأكيد قوي' : (isEn ? 'Swing Trend' : 'Tendance Swing') },
-                        { id: '1d', label: '1D', desc: isArabic ? 'اتجاه استثماري' : (isEn ? 'Daily Trend' : 'Tendance Journalière') },
-                      ].map((tf) => (
-                        <button
-                          key={tf.id}
-                          type="button"
-                          onClick={() => setTimeframeInput(tf.id as BotTimeframe)}
-                          className={`py-2 px-1 rounded-xl text-xs font-bold font-mono transition text-center border ${
-                            timeframeInput === tf.id
-                              ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-black shadow-md shadow-cyan-500/20 ring-2 ring-cyan-400/40'
-                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
-                          }`}
-                          title={tf.desc}
-                        >
-                          {tf.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Active Explanation Pill */}
-                <div className="text-[10px] bg-slate-900/80 p-2 rounded-lg border border-slate-800 text-slate-400">
-                  <span className="text-cyan-300 font-semibold">{isArabic ? 'سلوك الفريم المعتمد: ' : (isEn ? 'Active Behavior: ' : 'Comportement Actif : ')}</span>
-                  {timeframeInput === 'AUTO' && (isArabic 
-                    ? `الوضع التلقائي يختار حالياً [${effectiveBotTimeframe.toUpperCase()}] بناءً على: ${timeframeReason || 'توازن الزخم وتقلبات السوق الحالية'}`
-                    : (isEn 
-                        ? `Auto mode currently trading on [${effectiveBotTimeframe.toUpperCase()}] because: ${timeframeReason || 'Current market momentum balance'}`
-                        : `Mode Auto sélectionne actuellement [${effectiveBotTimeframe.toUpperCase()}] : ${timeframeReason || 'Équilibre de volatilité et de momentum'}`))}
-                  {timeframeInput === '5m' && (isArabic ? 'فريم 5 دقائق: إشارات سكالبينج سريعة جداً مع أهداف صغيرة ومخاطرة محسوبة.' : (isEn ? '5M: Ultra-fast scalp signals with tight targets and quick turnover.' : '5M : Signaux de scalping ultra-rapides avec objectifs courts.'))}
-                  {timeframeInput === '15m' && (isArabic ? 'فريم 15 دقيقة: اقتناص موجات الزخم الصاعدة والهابطة اليومية بدقة.' : (isEn ? '15M: Intraday momentum capturing with rapid confirmation.' : '15M : Capture du momentum intrajournalier avec confirmation rapide.'))}
-                  {timeframeInput === '30m' && (isArabic ? 'فريم 30 دقيقة: يجمع بين سرعة الدخول وتصفية جزء كبير من التذبذبات.' : (isEn ? '30M: Balances fast response with reduced market noise.' : '30M : Équilibre entre réactivité et réduction du bruit de marché.'))}
-                  {timeframeInput === '1h' && (isArabic ? 'فريم 1 ساعة (الافتراضي): الفريم القياسي المؤسساتي لتحقيق أعلى توازن بين الأرباح ونسبة النجاح.' : (isEn ? '1H (Default): Institutional compounding standard with high win-rate balance.' : '1H (Par défaut) : Standard institutionnel avec équilibre optimal de réussite.'))}
-                  {timeframeInput === '4h' && (isArabic ? 'فريم 4 ساعات: صفقات سوينغ موثوقة جداً بعد تأكيد الاتجاه وتصفية الضوضاء اليومية.' : (isEn ? '4H: High-conviction swing trends with minimal market noise.' : '4H : Tendances swing fiables avec un bruit de marché minimal.'))}
-                  {timeframeInput === '1d' && (isArabic ? 'فريم يومي: صفقات اتجاهية كبرى طويلة المدى.' : (isEn ? '1D: Macro directional trend position trading.' : '1D : Positionnement sur les grandes tendances macroéconomiques.'))}
-                </div>
-              </div>
-
-              {/* 1. Sizing Mode Selection */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5">
-                  {isArabic ? '1. نموذج تحجيم الهامش المودع (Margin Sizing Mode)' : '1. Modèle de Dimensionnement de Marge'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSizingModeInput('FIXED_PERCENT')}
-                    className={`p-2.5 rounded-xl border text-left font-bold transition ${
-                      sizingModeInput === 'FIXED_PERCENT'
-                        ? 'bg-brand-500/20 border-brand-500 text-brand-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-white text-xs">{isArabic ? 'حصة ثابتة (% من رأس المال)' : 'Allocation Fixe (% Equity)'}</div>
-                    <div className="text-[10px] font-normal text-slate-400 mt-0.5">{isArabic ? 'تخصيص نسبة مئوية متساوية' : 'Taille identique par slot'}</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSizingModeInput('RISK_BASED')}
-                    className={`p-2.5 rounded-xl border text-left font-bold transition ${
-                      sizingModeInput === 'RISK_BASED'
-                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-white text-xs">{isArabic ? 'حساب بالمخاطر (Risk-Based)' : 'Volatilité / Risque Fixe'}</div>
-                    <div className="text-[10px] font-normal text-slate-400 mt-0.5">{isArabic ? 'معايرة الحجم حسب بُعد الوقف' : 'Dimensionné selon le Stop'}</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Sizing Value Inputs */}
-              {sizingModeInput === 'FIXED_PERCENT' ? (
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    {isArabic ? 'هامش كل صفقة من إجمالي الرصيد (%)' : 'Marge par Trade (% du capital total)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="100"
-                    value={allocationInput}
-                    onChange={(e) => setAllocationInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    {isArabic ? `يتم حساب النسبة من إجمالي رأس المال (${(Number(totalEquity) || 0).toFixed(2)}$) لضمان ثبات مبلغ الصفقات` : `Calculé sur le capital total (${(Number(totalEquity) || 0).toFixed(2)}$)`}
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    {isArabic ? 'أقصى نسبة مخاطرة مسموحة لكل صفقة (% Risk of Equity)' : 'Risque Maximal par Trade (% du Capital)'}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.5"
-                    max="10"
-                    value={riskPerTradeInput}
-                    onChange={(e) => setRiskPerTradeInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    {isArabic ? 'يتم احتساب حجم الصفقة تلقائياً بحيث لا تخسر المحفظة أكثر من هذه النسبة عند ضرب الوقف.' : 'La taille est ajustée dynamiquement pour ne jamais dépasser cette perte en cas de SL.'}
-                  </p>
-                </div>
-              )}
-
-              {/* Confidence Threshold & Max Trades */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    {isArabic ? 'حد الثقة الأدنى (%)' : 'Confiance Min (%)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="50"
-                    max="95"
-                    value={confidenceInput}
-                    onChange={(e) => setConfidenceInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    {isArabic ? 'أقصى صفقات متزامنة' : 'Slots Max Simultanés'}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={maxTradesInput}
-                    onChange={(e) => setMaxTradesInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* 2. Trailing Stop Loss System */}
-              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-400" />
-                    <span className="font-bold text-white">
-                      {isArabic ? '2. نظام الوقف المتحرك (Trailing Stop Loss)' : '2. Trailing Stop Loss Dynamique'}
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                      ${(Number(totalEquity) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setTrailingEnabled(!trailingEnabled)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                      trailingEnabled 
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
-                        : 'bg-slate-800 text-slate-500'
-                    }`}
-                  >
-                    {trailingEnabled ? (isArabic ? 'مفعل' : 'Activé') : (isArabic ? 'معطل' : 'Désactivé')}
-                  </button>
-                </div>
-
-                {trailingEnabled && (
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-slate-400 text-[11px] mb-1">
-                        {isArabic ? 'مسافة التتبع Trailing (%)' : 'Distance de Suivi (%)'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0.3"
-                        max="5.0"
-                        value={trailingPercentInput}
-                        onChange={(e) => setTrailingPercentInput(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-400 text-[11px] mb-1">
-                        {isArabic ? 'بدء التفعيل عند ربح (%)' : 'Déclenchement à partir de (%)'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0.5"
-                        max="10.0"
-                        value={trailingActivationInput}
-                        onChange={(e) => setTrailingActivationInput(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Institutional Circuit Breaker (Daily Drawdown Shield) */}
-              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold text-white">
-                    {isArabic ? '3. قاطع الحماية اليومي (Circuit Breaker)' : '3. Coupe-Circuit Journalier (Daily Max Drawdown)'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2/3">
-                    <label className="block text-slate-400 text-[11px] mb-1">
-                      {isArabic ? 'أقصى خسارة يومية مسموحة للمحفظة (%)' : 'Perte journalière max tolérée (%)'}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="1.0"
-                      max="25.0"
-                      value={circuitBreakerInput}
-                      onChange={(e) => setCircuitBreakerInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs"
-                    />
-                  </div>
-                  <div className="w-1/3 text-[10px] text-slate-500 leading-tight pt-3">
-                    {isArabic ? 'يوقف البوت تلقائياً عند ضرب الحد لمنع استنزاف المحفظة.' : 'Verrouille le bot pour protéger vos fonds.'}
-                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {isArabic 
+                      ? 'التحكم الشامل في استراتيجيات البوت الخوارزمي، الرافعة، الهامش، ونموذج المخاطر' 
+                      : isEn 
+                        ? 'Institutional Algorithmic Bot Engine Presets & Risk Parameters' 
+                        : 'Configuration Algorithmique Avancée & Paramètres de Risque'}
+                  </p>
                 </div>
               </div>
 
-              {/* 4. Anti-Chop Cooldown Timer */}
-              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-cyan-400" />
-                  <span className="font-bold text-white">
-                    {isArabic ? '4. فترة التهدئة بعد إغلاق الصفقة (Anti-Chop Cooldown)' : '4. Délai de Refroidissement (Cooldown)'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-1/2">
-                    <label className="block text-slate-400 text-[11px] mb-1">
-                      {isArabic ? 'المدة بالدقائق (Minutes)' : 'Durée (Minutes)'}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="60"
-                      value={cooldownInput}
-                      onChange={(e) => setCooldownInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs"
-                    />
-                  </div>
-                  <div className="w-1/2 text-[10px] text-slate-500 leading-tight pt-3">
-                    {isArabic ? 'يمنع الدخول الفوري المتكرر على نفس العملة لتفادي التذبذب الوهمي.' : 'Évite les faux départs et le sur-trading.'}
-                  </div>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
+                title={isArabic ? 'إغلاق' : 'Fermer'}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-                        {/* Coin Selection Whitelist (Allowed Symbols) */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-slate-300 text-xs font-bold flex items-center gap-1.5">
-                  <span>{isArabic ? 'العملات المسموح للبوت بتداولها' : 'Cryptos Autorisées pour le Bot'}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">({allowedSymbolsInput.length})</span>
-                </div>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'])}
-                    className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition"
-                  >
-                    {isArabic ? 'تحديد الكل' : 'Tout Sélectionner'}
-                  </button>
-                  <button
-                    onClick={() => setAllowedSymbolsInput([])}
-                    className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition"
-                  >
-                    {isArabic ? 'إلغاء الكل' : 'Tout effacer'}
-                  </button>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-500 mb-2 leading-tight">
-                {isArabic 
-                  ? 'اختر العملات التي ترغب أن يراقبها البوت لفتح صفقات تلقائية (حسب عدد الـ Slots المتاح).' 
-                  : 'Sélectionnez les cryptos que le bot doit surveiller pour ouvrir des trades (selon vos slots).'}
-              </p>
-              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                {['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'].map((sym) => {
-                  const isActive = allowedSymbolsInput.includes(sym);
+            {/* Segmented Internal Tabs */}
+            <div className="px-3 sm:px-5 py-2.5 border-b border-slate-800/80 bg-slate-950/50 overflow-x-auto no-scrollbar shrink-0">
+              <div className="flex items-center gap-1.5 min-w-max">
+                {[
+                  { 
+                    id: 'market' as const, 
+                    label: isArabic ? 'السوق والرافعة' : isEn ? 'Market & Lev' : 'Marché & Levier', 
+                    icon: Zap,
+                    badge: marketTypeInput === 'FUTURES' ? `${leverageInput}x` : '1x'
+                  },
+                  { 
+                    id: 'timeframe' as const, 
+                    label: isArabic ? 'الفريم والتكيف' : isEn ? 'Timeframe & AI' : 'Période & IA', 
+                    icon: Clock,
+                    badge: timeframeInput === 'AUTO' ? 'AUTO' : timeframeInput.toUpperCase()
+                  },
+                  { 
+                    id: 'sizing' as const, 
+                    label: isArabic ? 'رأس المال والحجم' : isEn ? 'Capital & Sizing' : 'Taille & Risque', 
+                    icon: DollarSign,
+                    badge: sizingModeInput === 'FIXED_PERCENT' ? `${allocationInput}%` : `Risk ${riskPerTradeInput}%`
+                  },
+                  { 
+                    id: 'safety' as const, 
+                    label: isArabic ? 'الحماية و SL' : isEn ? 'Defense & SL' : 'Protection & SL', 
+                    icon: ShieldCheck,
+                    badge: trailingEnabled ? 'TRAIL' : 'FIXED'
+                  },
+                  { 
+                    id: 'universe' as const, 
+                    label: isArabic ? 'العملات المصرحة' : isEn ? 'Allowed Assets' : 'Actifs Autorisés', 
+                    icon: Coins,
+                    badge: `${allowedSymbolsInput.length}`
+                  },
+                ].map((tab) => {
+                  const isActive = configModalTab === tab.id;
+                  const Icon = tab.icon;
                   return (
                     <button
-                      key={sym}
-                      onClick={() => {
-                        if (isActive) {
-                          setAllowedSymbolsInput(prev => prev.filter(s => s !== sym));
-                        } else {
-                          setAllowedSymbolsInput(prev => [...prev, sym]);
-                        }
-                      }}
-                      className={`px-2 py-1 rounded text-[10px] font-bold font-mono transition flex items-center gap-1 border ${
-                        isActive 
-                          ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm shadow-brand-500/10' 
-                          : 'bg-slate-900 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setConfigModalTab(tab.id)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold font-mono transition flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/50 shadow-md shadow-cyan-950/40'
+                          : 'bg-slate-900/60 text-slate-400 border border-transparent hover:text-slate-200 hover:bg-slate-900'
                       }`}
                     >
-                      <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-brand-400' : 'bg-slate-700'}`} />
-                      {sym}
+                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                      <span>{tab.label}</span>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                        isActive ? 'bg-cyan-400/20 text-cyan-300' : 'bg-slate-800 text-slate-500'
+                      }`}>
+                        {tab.badge}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              {allowedSymbolsInput.length === 0 && (
-                <div className="text-[10px] font-bold text-rose-400 mt-2 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-                  {isArabic ? 'تنبيه: يجب اختيار عملة واحدة على الأقل ليتمكن البوت من التداول' : 'Alerte: Sélectionnez au moins une crypto pour que le bot puisse trader'}
+            </div>
+
+            {/* Modal Body with Tab Views */}
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              
+              {/* TAB 1: MARKET & LEVERAGE */}
+              {configModalTab === 'market' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-2xl space-y-4">
+                    <div>
+                      <label className="block text-slate-200 font-bold text-xs mb-2">
+                        {isArabic ? 'اختيار بيئة التداول المعمارية (Execution Market Architecture)' : 'Architecture du Marché d\'Exécution'}
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setMarketTypeInput('FUTURES')}
+                          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                            marketTypeInput === 'FUTURES'
+                              ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-lg shadow-cyan-500/15 ring-2 ring-cyan-500/30'
+                              : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-white text-xs font-bold flex items-center justify-between mb-1.5">
+                              <span className="flex items-center gap-1.5">
+                                <Zap className="w-4 h-4 text-amber-400" />
+                                <span>{isArabic ? 'عقود الآجلة (USDT-M Futures)' : 'USDT-M Futures'}</span>
+                              </span>
+                              {marketTypeInput === 'FUTURES' && <Check className="w-4 h-4 text-cyan-400 stroke-[3]" />}
+                            </div>
+                            <div className="text-[11px] text-slate-300 leading-relaxed">
+                              {isArabic 
+                                ? '• رافعة مالية 1x حتى 50x (Isolated / Cross)\n• دعم صفقات الصعود LONG والهبوط SHORT\n• كفاءة رأس مال ومضاعفة قوة الشراء' 
+                                : '• Levier 1x à 50x (Isolé / Croisé)\n• Positions LONG & SHORT bidirectionnelles\n• Multiplicateur de puissance d\'achat'}
+                            </div>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-800/80 text-[10px] font-mono text-cyan-300 font-bold">
+                            {isArabic ? 'المفضل لخوارزميات التداول الكمي' : 'Recommandé pour Trading Quant'}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setMarketTypeInput('SPOT')}
+                          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                            marketTypeInput === 'SPOT'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-lg shadow-emerald-500/15 ring-2 ring-emerald-500/30'
+                              : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-white text-xs font-bold flex items-center justify-between mb-1.5">
+                              <span className="flex items-center gap-1.5">
+                                <Coins className="w-4 h-4 text-emerald-400" />
+                                <span>{isArabic ? 'تداول فوري (Spot 1x)' : 'Marché Spot (1x)'}</span>
+                              </span>
+                              {marketTypeInput === 'SPOT' && <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />}
+                            </div>
+                            <div className="text-[11px] text-slate-300 leading-relaxed">
+                              {isArabic 
+                                ? '• شراء وتملك العملات مباشرة في المحفظة\n• بدون أي رافعة مالية وبدون اقتراض\n• صفقة شراء LONG فقط، وبدون سعر تصفية' 
+                                : '• Achat direct au comptant\n• Sans effet de levier (1x strict)\n• LONG seul, aucun risque de liquidation'}
+                            </div>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-800/80 text-[10px] font-mono text-emerald-400 font-bold">
+                            {isArabic ? 'أمان استثماري 100% بدون تصفية' : 'Zéro risque de liquidation'}
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Futures Settings Sub-Section */}
+                    {marketTypeInput === 'FUTURES' && (
+                      <div className="space-y-4 pt-3 border-t border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{isArabic ? `الرافعة المالية للعقود: ${leverageInput}x` : `Effet de Levier: ${leverageInput}x`}</span>
+                          </label>
+
+                          {/* Margin Mode Selector */}
+                          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                            {(['ISOLATED', 'CROSS'] as const).map((mode) => {
+                              const isSel = marginModeInput === mode;
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => setMarginModeInput(mode)}
+                                  className={`px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer ${
+                                    isSel
+                                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
+                                      : 'text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  {mode === 'ISOLATED' 
+                                    ? (isArabic ? 'منعزل ISOLATED' : 'ISOLATED') 
+                                    : (isArabic ? 'مشترك CROSS' : 'CROSS')}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Leverage Preset Buttons */}
+                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 font-mono text-xs">
+                          {LEVERAGE_PRESETS.map((lev) => (
+                            <button
+                              key={lev}
+                              type="button"
+                              onClick={() => setLeverageInput(lev)}
+                              className={`py-2 rounded-xl text-xs font-bold transition text-center border cursor-pointer ${
+                                leverageInput === lev
+                                  ? 'bg-amber-500 text-slate-950 font-black border-amber-400 shadow-md shadow-amber-500/20'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                              }`}
+                            >
+                              {lev}x
+                            </button>
+                          ))}
+                        </div>
+
+                        <input
+                          type="range"
+                          min="1"
+                          max="50"
+                          value={leverageInput}
+                          onChange={(e) => setLeverageInput(Number(e.target.value))}
+                          className="w-full accent-amber-400 bg-slate-800 h-2.5 rounded-lg cursor-pointer"
+                        />
+
+                        {/* Leverage Safety Level Gauge */}
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className={`font-bold flex items-center gap-1.5 ${
+                            leverageInput <= 5 
+                              ? 'text-emerald-400' 
+                              : leverageInput <= 15 
+                                ? 'text-amber-400' 
+                                : 'text-rose-400'
+                          }`}>
+                            <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                            {leverageInput <= 5 
+                              ? (isArabic ? 'مستوى أمان مرتفع (1x-5x)' : 'Profil Défensif (1x-5x)') 
+                              : leverageInput <= 15 
+                                ? (isArabic ? 'مستوى متوازن قياسي (6x-15x)' : 'Profil Standard (6x-15x)') 
+                                : (isArabic ? 'مستوى عدواني عالي التقلب (16x-50x)' : 'Profil Agressif (16x-50x)')}
+                          </span>
+                          <span className="text-slate-400">
+                            {marginModeInput === 'ISOLATED' 
+                              ? (isArabic ? 'الهامش المنعزل يحمي باقي المحفظة' : 'Marge Isolée: risque limité au trade') 
+                              : (isArabic ? 'الهامش المشترك يشارك رصيد الفيوتشرز' : 'Marge Croisée')}
+                          </span>
+                        </div>
+
+                        {/* Interactive Purchasing Power Calculator */}
+                        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300/90 font-mono leading-relaxed flex items-start gap-2.5">
+                          <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="font-bold text-amber-200">
+                              {isArabic ? 'حاسبة القوة الشرائية المباشرة:' : 'Multiplicateur Notional :'}
+                            </div>
+                            <div className="text-[11px] text-slate-300 mt-0.5">
+                              {isArabic 
+                                ? `عند رافعة ${leverageInput}x: كل 100$ USDT هامش محجوز تمنح البوت قوة شرائية تعادل ${(100 * leverageInput).toLocaleString()}$ USDT في السوق الحقيقي.`
+                                : `À ${leverageInput}x: chaque 100$ USDT de marge donne au bot une exposition de ${(100 * leverageInput).toLocaleString()}$ USDT sur le marché.`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: TIMEFRAME & ADAPTIVE AI */}
+              {configModalTab === 'timeframe' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-cyan-400" />
+                        <span>{isArabic ? 'استراتيجية الإطار الزمني ومصفوفة التكيف الآلي' : 'Stratégie Temporelle & IA Adaptative'}</span>
+                      </label>
+                      {timeframeInput === 'AUTO' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse">
+                          {isArabic ? 'الذكاء التكيفي الآلي نشط' : 'Adaptive Regime Active'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Dynamic Auto Adaptive Option Card */}
+                    <button
+                      type="button"
+                      onClick={() => setTimeframeInput('AUTO')}
+                      className={`w-full p-4 rounded-2xl border text-left font-bold transition flex items-center justify-between cursor-pointer ${
+                        timeframeInput === 'AUTO'
+                          ? 'bg-cyan-950/70 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-950/50 ring-2 ring-cyan-500/30'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl ${timeframeInput === 'AUTO' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
+                          <Sparkles className="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <div>
+                          <div className="text-white text-xs font-bold flex items-center gap-2">
+                            <span>{isArabic ? 'الاختيار التلقائي الذكي (Dynamic AUTO Regime)' : 'Dynamic AUTO (Adaptive Regime)'}</span>
+                            <span className="text-[9.5px] px-2 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold border border-cyan-500/40">
+                              {isArabic ? 'الخيار الموصى به' : 'Recommandé'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                            {isArabic 
+                              ? 'يقرأ البوت مؤشرات التقلب والزخم ويتنقل تلقائياً بين 5m (للسكالبينج) و 15m (للزخم) و 1h (للاتجاهات المستقرة).'
+                              : 'Analyse la volatilité et le momentum en direct pour basculer automatiquement entre 5m, 15m, 1h et 4h.'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className={`text-xs font-mono font-black ${timeframeInput === 'AUTO' ? 'text-cyan-300' : 'text-slate-500'}`}>
+                          {timeframeInput === 'AUTO' ? `[${effectiveBotTimeframe.toUpperCase()}]` : 'AUTO'}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Fixed Timeframes Grid */}
+                    <div className="space-y-2 pt-1">
+                      <div className="text-xs font-bold text-slate-300">
+                        {isArabic ? 'أو اختر فريماً زمنياً ثابتاً للتداول:' : 'Ou sélectionnez une période temporelle fixe :'}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        {[
+                          { id: '5m', label: '5M', desc: isArabic ? 'سكالبينج' : 'Scalping' },
+                          { id: '15m', label: '15M', desc: isArabic ? 'زخم سريع' : 'Momentum' },
+                          { id: '30m', label: '30M', desc: isArabic ? 'مضاربة' : 'Short Swing' },
+                          { id: '1h', label: '1H', desc: isArabic ? 'مؤسساتي' : 'Standard 1H' },
+                          { id: '4h', label: '4H', desc: isArabic ? 'سوينغ كلي' : 'Swing Trend' },
+                          { id: '1d', label: '1D', desc: isArabic ? 'اتجاه يومي' : 'Daily Trend' },
+                        ].map((tf) => (
+                          <button
+                            key={tf.id}
+                            type="button"
+                            onClick={() => setTimeframeInput(tf.id as BotTimeframe)}
+                            className={`p-3 rounded-2xl text-center border transition cursor-pointer flex flex-col items-center justify-center ${
+                              timeframeInput === tf.id
+                                ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-black shadow-md shadow-cyan-500/20 ring-2 ring-cyan-400/40'
+                                : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800'
+                            }`}
+                          >
+                            <span className="font-mono font-bold text-xs">{tf.label}</span>
+                            <span className={`text-[9px] mt-0.5 ${timeframeInput === tf.id ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+                              {tf.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Behavior Rationale Pill */}
+                    <div className="text-xs bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 text-slate-300 leading-relaxed font-mono">
+                      <span className="text-cyan-400 font-bold">{isArabic ? 'تشخيص الإطار الحالي: ' : 'Comportement Actif : '}</span>
+                      {timeframeInput === 'AUTO' && (isArabic 
+                        ? `الوضع التلقائي يطبق حالياً [${effectiveBotTimeframe.toUpperCase()}] بناءً على: ${timeframeReason || 'توازن الزخم والسيولة المؤسسية'}`
+                        : `Le mode AUTO applique actuellement [${effectiveBotTimeframe.toUpperCase()}] : ${timeframeReason || 'Équilibre de volatilité et de momentum'}`)}
+                      {timeframeInput === '5m' && (isArabic ? 'حصد نقاط سريعة جداً عند انفجار السيولة.' : 'Scalping haute fréquence.')}
+                      {timeframeInput === '15m' && (isArabic ? 'اقتناص موجات الزخم الصاعدة والهابطة اليومية بأعلى دقة.' : 'Capture du momentum intrajournalier.')}
+                      {timeframeInput === '30m' && (isArabic ? 'توازن ممتاز بين سرعة الإشارة وتصفية الإشارات الوهمية.' : 'Équilibre optimal bruit/signal.')}
+                      {timeframeInput === '1h' && (isArabic ? 'المعيار المؤسساتي الذهبي لأعلى نسبة ربح ونمو تراكمي.' : 'Standard institutionnel avec ratio R/R optimisé.')}
+                      {timeframeInput === '4h' && (isArabic ? 'صفقات سوينغ طويلة وموجات اتجاهية ضخمة.' : 'Tendances swing solides.')}
+                      {timeframeInput === '1d' && (isArabic ? 'صفقات ماكرو استثمارية طويلة المدى.' : 'Positionnement macroéconomique.')}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: CAPITAL & SIZING */}
+              {configModalTab === 'sizing' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-2xl space-y-4">
+                    {/* Sizing Mode Selection */}
+                    <div>
+                      <label className="block text-slate-200 font-bold text-xs mb-2">
+                        {isArabic ? 'نموذج تحجيم الهامش وإدارة رأس المال' : 'Modèle de Dimensionnement du Capital'}
+                      </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSizingModeInput('FIXED_PERCENT')}
+                          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer ${
+                            sizingModeInput === 'FIXED_PERCENT'
+                              ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-md ring-2 ring-cyan-500/30'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="text-white text-xs font-bold flex items-center justify-between mb-1">
+                            <span>{isArabic ? 'حصة ثابتة (% من رأس المال)' : 'Allocation Fixe (% Equity)'}</span>
+                            {sizingModeInput === 'FIXED_PERCENT' && <Check className="w-3.5 h-3.5 text-cyan-400 stroke-[3]" />}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            {isArabic ? 'تخصيص نسبة مئوية محددة من رصيد المحفظة لكل صفقة جديدة' : 'Taille fixe calculée en pourcentage du capital disponible'}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSizingModeInput('RISK_BASED')}
+                          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer ${
+                            sizingModeInput === 'RISK_BASED'
+                              ? 'bg-amber-500/20 border-amber-400 text-white shadow-md ring-2 ring-amber-500/30'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="text-white text-xs font-bold flex items-center justify-between mb-1">
+                            <span>{isArabic ? 'تحجيم بالمخاطر (ATR Risk-Based)' : 'Volatilité / Risque Fixe'}</span>
+                            {sizingModeInput === 'RISK_BASED' && <Check className="w-3.5 h-3.5 text-amber-400 stroke-[3]" />}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            {isArabic ? 'حساب الحجم بناءً على مسافة وقف الخسارة بحيث لا يتجاوز الخطر النسبة المحددة' : 'Dimensionné dynamiquement selon la distance du Stop Loss'}
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Inputs based on mode */}
+                    {sizingModeInput === 'FIXED_PERCENT' ? (
+                      <div className="space-y-2 bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <label className="text-slate-300 font-bold text-xs">
+                            {isArabic ? 'هامش كل صفقة من إجمالي الرصيد (%)' : 'Marge par Trade (% du capital total)'}
+                          </label>
+                          <span className="font-mono text-cyan-400 font-black text-sm">{allocationInput}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="5"
+                          max="50"
+                          step="5"
+                          value={allocationInput}
+                          onChange={(e) => setAllocationInput(e.target.value)}
+                          className="w-full accent-cyan-400 bg-slate-800 h-2.5 rounded-lg cursor-pointer"
+                        />
+                        <div className="text-[11px] text-slate-300 font-mono pt-1">
+                          {isArabic 
+                            ? `💡 تقدير مالي: بناءً على رصيدك ($${(Number(totalEquity) || 0).toFixed(2)})، ستحجز كل صفقة حوالي $${((Number(totalEquity) || 0) * (Number(allocationInput) || 10) / 100).toFixed(2)} USDT كهامش.` 
+                            : `💡 Chaque position engagera environ $${((Number(totalEquity) || 0) * (Number(allocationInput) || 10) / 100).toFixed(2)} USDT de marge.`}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <label className="text-slate-300 font-bold text-xs">
+                            {isArabic ? 'أقصى نسبة مخاطرة مسموحة لكل صفقة (% Risk of Equity)' : 'Risque Maximal par Trade (% du Capital)'}
+                          </label>
+                          <span className="font-mono text-amber-400 font-black text-sm">{riskPerTradeInput}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="5.0"
+                          step="0.5"
+                          value={riskPerTradeInput}
+                          onChange={(e) => setRiskPerTradeInput(e.target.value)}
+                          className="w-full accent-amber-400 bg-slate-800 h-2.5 rounded-lg cursor-pointer"
+                        />
+                        <div className="text-[11px] text-slate-400 leading-relaxed pt-1">
+                          {isArabic ? 'يتم تعديل حجم العقد آلياً بحيث لا تخسر المحفظة أكثر من هذه النسبة عند ضرب الوقف.' : 'Ajusté dynamiquement pour ne jamais dépasser cette perte en cas de SL.'}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confidence Threshold & Max Trades */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div className="bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-slate-300 font-bold text-xs">
+                            {isArabic ? 'حد الثقة الأدنى للصفقة (%)' : 'Confiance Min (%)'}
+                          </label>
+                          <span className="font-mono text-cyan-400 font-bold text-xs">{confidenceInput}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="50"
+                          max="95"
+                          step="5"
+                          value={confidenceInput}
+                          onChange={(e) => setConfidenceInput(e.target.value)}
+                          className="w-full accent-cyan-400 bg-slate-800 h-2 rounded-lg cursor-pointer"
+                        />
+                        <div className="text-[10px] text-slate-500">
+                          {isArabic ? 'تصفية الإشارات الضعيفة تلقائياً' : 'Filtre les signaux faibles'}
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-slate-300 font-bold text-xs">
+                            {isArabic ? 'أقصى صفقات متزامنة (Slots)' : 'Slots Max Simultanés'}
+                          </label>
+                          <span className="font-mono text-emerald-400 font-bold text-xs">{maxTradesInput} SLOTS</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="1"
+                          value={maxTradesInput}
+                          onChange={(e) => setMaxTradesInput(e.target.value)}
+                          className="w-full accent-emerald-400 bg-slate-800 h-2 rounded-lg cursor-pointer"
+                        />
+                        <div className="text-[10px] text-slate-500">
+                          {isArabic ? 'يمنع فتح مراكز تفوق هذا العدد' : 'Limite l\'exposition globale'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: SAFETY & DEFENSE */}
+              {configModalTab === 'safety' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {/* Trailing Stop Loss System */}
+                  <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-white text-xs">
+                          {isArabic ? 'نظام الوقف المتحرك (Trailing Stop Loss)' : 'Trailing Stop Loss Dynamique'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTrailingEnabled(!trailingEnabled)}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          trailingEnabled 
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                            : 'bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        {trailingEnabled ? (isArabic ? 'مفعل ON' : 'Activé') : (isArabic ? 'معطل OFF' : 'Désactivé')}
+                      </button>
+                    </div>
+
+                    {trailingEnabled && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+                        <div>
+                          <label className="block text-slate-400 text-[11px] mb-1">
+                            {isArabic ? 'مسافة التتبع Trailing (%)' : 'Distance de Suivi (%)'}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.3"
+                            max="5.0"
+                            value={trailingPercentInput}
+                            onChange={(e) => setTrailingPercentInput(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 text-[11px] mb-1">
+                            {isArabic ? 'بدء التفعيل عند ربح (%)' : 'Déclenchement à partir de (%)'}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.5"
+                            max="10.0"
+                            value={trailingActivationInput}
+                            onChange={(e) => setTrailingActivationInput(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Institutional Circuit Breaker */}
+                  <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span className="font-bold text-white text-xs">
+                        {isArabic ? 'قاطع الحماية اليومي (Circuit Breaker Drawdown Shield)' : 'Coupe-Circuit Journalier (Max Drawdown)'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="sm:w-1/2">
+                        <label className="block text-slate-400 text-[11px] mb-1">
+                          {isArabic ? 'أقصى خسارة يومية مسموحة للمحفظة (%)' : 'Perte journalière max tolérée (%)'}
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="1.0"
+                          max="25.0"
+                          value={circuitBreakerInput}
+                          onChange={(e) => setCircuitBreakerInput(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs"
+                        />
+                      </div>
+                      <div className="sm:w-1/2 text-[10px] text-slate-400 leading-tight">
+                        {isArabic ? 'يوقف البوت تلقائياً عند ضرب هذا الحد اليومي لمنع استنزاف رأس المال.' : 'Verrouille le bot pour protéger vos fonds en cas de repli violent.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Anti-Chop Cooldown Timer */}
+                  <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-cyan-400" />
+                      <span className="font-bold text-white text-xs">
+                        {isArabic ? 'فترة التهدئة بعد إغلاق الصفقة (Anti-Chop Cooldown)' : 'Délai de Refroidissement (Anti-Chop)'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="sm:w-1/2">
+                        <label className="block text-slate-400 text-[11px] mb-1">
+                          {isArabic ? 'المدة بالدقائق (Minutes)' : 'Durée (Minutes)'}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="60"
+                          value={cooldownInput}
+                          onChange={(e) => setCooldownInput(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs"
+                        />
+                      </div>
+                      <div className="sm:w-1/2 text-[10px] text-slate-400 leading-tight">
+                        {isArabic ? 'يمنع الدخول الفوري المتكرر على نفس العملة لتفادي التذبذب الوهمي.' : 'Évite les faux départs et le sur-trading sur la même paire.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Multi-Target Scale-Out TP Architecture Callout */}
+                  <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5 font-mono">
+                    <div className="text-cyan-400 font-bold flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>{isArabic ? 'نظام جني الأرباح المجزأ (Multi-Target TP):' : 'Architecture Scale-Out TP :'}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 leading-relaxed">
+                      {isArabic
+                        ? '• TP1: إغلاق 40% من العقد وتأمين الوقف إلى نقطة الدخول (Risk-Free Breakeven).\n• TP2: إغلاق 30% وتفعيل الوقف المتحرك.\n• TP3: إبقاء 30% مع الاتجاه لأقصى ربح ممكن.'
+                        : '• TP1: Sortie 40% + Stop Loss déplacé au Breakeven (Trade sans risque).\n• TP2: Sortie 30% + Trailing SL activé.\n• TP3: 30% conservé pour maximiser le runner.'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: ASSET UNIVERSE / WHITELIST */}
+              {configModalTab === 'universe' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-slate-200 text-xs font-bold flex items-center gap-1.5">
+                        <Coins className="w-4 h-4 text-amber-400" />
+                        <span>{isArabic ? 'العملات المصرح للبوت بتداولها' : 'Cryptos Autorisées pour le Bot'}</span>
+                        <span className="text-[10px] text-cyan-400 font-mono">({allowedSymbolsInput.length})</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP'])}
+                          className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                        >
+                          Top 5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'])}
+                          className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                        >
+                          {isArabic ? 'تحديد الكل (20)' : 'Tout (20)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAllowedSymbolsInput([])}
+                          className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                        >
+                          {isArabic ? 'مسح' : 'Vider'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      {isArabic 
+                        ? 'انقر على العملة لتفعيل أو تعطيل مراقبتها وفتح صفقات تلقائية عليها.' 
+                        : 'Cliquez sur une crypto pour l\'activer ou la désactiver dans l\'univers de trading du bot.'}
+                    </p>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                      {['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'].map((sym) => {
+                        const isActive = allowedSymbolsInput.includes(sym);
+                        return (
+                          <button
+                            key={sym}
+                            type="button"
+                            onClick={() => {
+                              if (isActive) {
+                                setAllowedSymbolsInput(prev => prev.filter(s => s !== sym));
+                              } else {
+                                setAllowedSymbolsInput(prev => [...prev, sym]);
+                              }
+                            }}
+                            className={`p-2.5 rounded-xl text-xs font-bold font-mono transition flex items-center justify-between border cursor-pointer ${
+                              isActive 
+                                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm ring-1 ring-cyan-500/30' 
+                                : 'bg-slate-900/60 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                            }`}
+                          >
+                            <span>{sym}</span>
+                            <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,1)]' : 'bg-slate-700'}`} />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {allowedSymbolsInput.length === 0 && (
+                      <div className="text-xs font-bold text-rose-400 mt-2 flex items-center gap-1.5 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/30">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{isArabic ? 'تنبيه: يجب اختيار عملة واحدة على الأقل ليتمكن البوت من مراقبة السوق' : 'Alerte: Sélectionnez au moins un actif pour que le bot puisse analyser le marché'}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="flex gap-2 justify-end pt-3 border-t border-slate-800">
+            {/* Modal Sticky Footer Actions */}
+            <div className="p-4 sm:p-5 border-t border-slate-800/80 bg-slate-950/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              {/* Reset to Safe Defaults */}
               <button
-                onClick={() => setShowConfigModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+                type="button"
+                onClick={() => {
+                  setMarketTypeInput('FUTURES');
+                  setMarginModeInput('ISOLATED');
+                  setLeverageInput(3);
+                  setTimeframeInput('AUTO');
+                  setSizingModeInput('FIXED_PERCENT');
+                  setAllocationInput('10');
+                  setRiskPerTradeInput('2.0');
+                  setConfidenceInput('70');
+                  setMaxTradesInput('3');
+                  setTrailingEnabled(true);
+                  setTrailingPercentInput('1.2');
+                  setTrailingActivationInput('1.5');
+                  setCircuitBreakerInput('5.0');
+                  setCooldownInput('10');
+                  setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'LINK', 'DOGE']);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                title="Restaurer paramètres standards sécurisés"
               >
-                {isArabic ? 'إلغاء' : 'Annuler'}
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'الافتراضي الآمن' : 'Défauts Sécurisés'}</span>
               </button>
-              <button
-                onClick={handleSaveConfig}
-                className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 text-xs font-bold"
-              >
-                {botConfig.marketType === 'FUTURES'
-                  ? (isArabic ? 'حفظ وتفعيل معايير العقود الآجلة' : (isEn ? 'Save & Apply Futures Settings' : 'Sauvegarder les Paramètres Futures'))
-                  : (isArabic ? 'حفظ وتفعيل إعدادات التداول الفوري (Spot)' : (isEn ? 'Save & Apply Spot Settings' : 'Sauvegarder les Paramètres Spot'))}
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition cursor-pointer active:scale-95"
+                >
+                  {isArabic ? 'إلغاء' : 'Annuler'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveConfig}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer"
+                >
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>
+                    {marketTypeInput === 'FUTURES'
+                      ? (isArabic ? 'حفظ وتطبيق إعدادات العقود الآجلة' : isEn ? 'Save & Apply Futures Settings' : 'Sauvegarder les Paramètres Futures')
+                      : (isArabic ? 'حفظ وتطبيق إعدادات التداول الفوري' : isEn ? 'Save & Apply Spot Settings' : 'Sauvegarder les Paramètres Spot')}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

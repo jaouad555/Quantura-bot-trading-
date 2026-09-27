@@ -32,6 +32,7 @@ interface SettingsModalProps {
   onTelegramConfigChange?: (token: string, chatId: string) => void;
   onLogout?: () => void;
   onFullReset?: () => void | Promise<void>;
+  onNavigateToSettingsPage?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -61,6 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onTelegramConfigChange,
   onLogout,
   onFullReset,
+  onNavigateToSettingsPage,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -177,12 +179,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800/80 hover:bg-slate-800 transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onNavigateToSettingsPage && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onNavigateToSettingsPage();
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold font-mono transition flex items-center gap-1 cursor-pointer"
+                title={isArabic ? 'فتح صفحة الإعدادات الكاملة' : 'Ouvrir en pleine page'}
+              >
+                <Cpu className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{isArabic ? 'الصفحة الكاملة' : 'Pleine Page'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800/80 hover:bg-slate-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

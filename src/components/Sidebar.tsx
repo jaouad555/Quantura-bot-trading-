@@ -25,6 +25,7 @@ import {
   Copy,
   BookOpen,
   HelpCircle,
+  Settings,
 } from 'lucide-react';
 import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG, BinanceApiConfig } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
@@ -231,6 +232,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'history', 
       label: t.tabs?.history || 'Trade History', 
       icon: History,
+      badge: null
+    },
+    { 
+      id: 'settings', 
+      label: t.tabs?.settings || (isArabic ? 'الإعدادات والنظام' : 'Paramètres Système'), 
+      icon: Settings,
       badge: null
     },
   ];

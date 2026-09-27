@@ -54,6 +54,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { GeminiLogo, QwenLogo, DeepSeekLogo, QuantMathCoreLogo } from './AiLogos';
 
 interface HeaderProps {
   onOpenMenu?: () => void;
@@ -945,29 +946,23 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="flex items-center gap-1.5 font-mono text-[10px]">
               {/* Gemini Logo */}
-              <div className={`flex items-center transition ${aiStatus.geminiConfigured ? 'text-purple-400 font-bold drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="Google Gemini">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z" />
-                </svg>
+              <div title="Google Gemini" className="flex items-center">
+                <GeminiLogo active={aiStatus.geminiConfigured} className="w-4 h-4" />
               </div>
-              <span className="text-slate-600 font-bold">+</span>
+              <span className="text-slate-600 font-bold select-none">+</span>
               {/* Qwen Logo */}
-              <div className={`flex items-center transition ${aiStatus.qwenConfigured ? 'text-indigo-400 font-bold drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="Qwen 2.5">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L15 8L21 9L16.5 13.5L18 20L12 16.5L6 20L7.5 13.5L3 9L9 8L12 2Z" />
-                </svg>
+              <div title="Qwen 2.5" className="flex items-center">
+                <QwenLogo active={aiStatus.qwenConfigured} className="w-4 h-4" />
               </div>
-              <span className="text-slate-600 font-bold">+</span>
+              <span className="text-slate-600 font-bold select-none">+</span>
               {/* DeepSeek Logo */}
-              <div className={`flex items-center transition ${aiStatus.deepseekConfigured ? 'text-purple-300 font-bold drop-shadow-[0_0_8px_rgba(216,180,254,0.5)]' : 'text-slate-500 grayscale opacity-40'}`} title="DeepSeek V3 / R1">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M21.5 11.5C21.5 11.5 18.5 7 12 7C5.5 7 3 10 3 13.5C3 17 6 18.5 9 18.5C12 18.5 13.5 17 15.5 17C17.5 17 19 19 21 18C23 17 21.5 11.5 21.5 11.5ZM13.5 14C12.67 14 12 13.33 12 12.5C12 11.67 12.67 11 13.5 11C14.33 11 15 11.67 15 12.5C15 13.33 14.33 14 13.5 14Z" />
-                </svg>
+              <div title="DeepSeek V3 / R1" className="flex items-center">
+                <DeepSeekLogo active={aiStatus.deepseekConfigured} className="w-4 h-4" />
               </div>
-              <span className="text-slate-600 font-bold">+</span>
-              {/* Quant Core Logo (Processor / CPU icon) */}
-              <div className="flex items-center text-cyan-400 font-bold drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" title="Quant Math Core">
-                <Cpu className="w-4 h-4" />
+              <span className="text-slate-600 font-bold select-none">+</span>
+              {/* Quant Math Core (Processor / CPU icon) */}
+              <div title="Quant Math Core" className="flex items-center">
+                <QuantMathCoreLogo active={true} className="w-4 h-4" />
               </div>
             </div>
           </button>
@@ -1432,8 +1427,8 @@ export const Header: React.FC<HeaderProps> = ({
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs font-mono">
-                      G
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-purple-500/30 flex items-center justify-center p-1 shrink-0">
+                      <GeminiLogo active={aiStatus.geminiConfigured} className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-white text-sm font-mono">Google Gemini</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-mono font-medium">
@@ -1468,8 +1463,8 @@ export const Header: React.FC<HeaderProps> = ({
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs font-mono">
-                      Q
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-indigo-500/30 flex items-center justify-center p-1 shrink-0">
+                      <QwenLogo active={aiStatus.qwenConfigured} className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-white text-sm font-mono">Qwen 2.5 (32B)</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-mono font-medium">
@@ -1499,16 +1494,16 @@ export const Header: React.FC<HeaderProps> = ({
               {/* 3. DeepSeek V3 / R1 Card */}
               <div className={`p-3.5 rounded-xl border transition ${
                 aiStatus.deepseekConfigured
-                  ? 'bg-purple-950/20 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
+                  ? 'bg-blue-950/20 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
                   : 'bg-slate-950/60 border-slate-800'
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs font-mono">
-                      DS
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-blue-500/30 flex items-center justify-center p-1 shrink-0">
+                      <DeepSeekLogo active={aiStatus.deepseekConfigured} className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-white text-sm font-mono">DeepSeek V3 / R1</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-mono font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-mono font-medium">
                       Advanced
                     </span>
                   </div>
@@ -1527,17 +1522,17 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'Advanced reasoning and institutional trade analysis via DeepSeek API.'}
                 </p>
                 <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
-                  <span>Model: <strong className="text-purple-300">deepseek-chat / reasoner</strong></span>
+                  <span>Model: <strong className="text-blue-300">deepseek-chat / reasoner</strong></span>
                   <span>Status: <strong className={aiStatus.deepseekConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.deepseekConfigured ? 'Configured' : 'Optional'}</strong></span>
                 </div>
               </div>
 
-              {/* 3. High-Frequency Quant Deterministic Core */}
+              {/* 4. High-Frequency Quant Deterministic Core */}
               <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs font-mono">
-                      ∑
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-cyan-500/30 flex items-center justify-center p-1 shrink-0">
+                      <QuantMathCoreLogo active={true} className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-white text-sm font-mono">Quant Math Core</span>
                   </div>
