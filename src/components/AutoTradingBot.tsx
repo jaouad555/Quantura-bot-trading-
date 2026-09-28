@@ -1775,57 +1775,157 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         </div>
 
-        {/* Quantitative Features Status Badges */}
-        <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center gap-2 text-xs">
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-cyan-800/40 flex items-center gap-1.5 text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isArabic ? 'فريم البوت:' : 'Bot Timeframe:'}</span>
-            <span className="font-bold text-cyan-300 font-mono">
-              {botConfig.timeframe === 'AUTO' 
-                ? `AUTO (${effectiveBotTimeframe.toUpperCase()})` 
-                : (botConfig.timeframe?.toUpperCase() || '1H')}
-            </span>
-            {botConfig.timeframe === 'AUTO' && (
-              <span className="px-1.5 py-0.5 text-[9px] bg-cyan-900/60 text-cyan-200 rounded font-sans border border-cyan-700/50">
-                {isArabic ? 'متكيف ذكياً' : 'Adaptive'}
+        {/* Quantitative Features & Live Indicators Status Badges (Compact & Perfectly Aligned) */}
+        <div className="mt-4 pt-4 border-t border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2 text-xs">
+            {/* 1. Timeframe */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-cyan-800/40 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'فريم البوت:' : 'Bot Timeframe:'}</span>
+              </div>
+              <span className="font-bold text-cyan-300 font-mono shrink-0">
+                {botConfig.timeframe === 'AUTO' 
+                  ? `AUTO (${effectiveBotTimeframe.toUpperCase()})` 
+                  : (botConfig.timeframe?.toUpperCase() || '15M')}
               </span>
-            )}
-          </div>
+            </div>
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5 text-slate-300">
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isArabic ? 'الرافعة المالية:' : 'Leverage:'}</span>
-            <span className="font-bold text-amber-300 font-mono">{botConfig.marketType === 'SPOT' ? '1x Spot' : `${botConfig.leverage || 10}x (${botConfig.marginMode || 'ISOLATED'})`}</span>
-          </div>
+            {/* 2. Leverage & Margin Mode */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'الرافعة المالية:' : 'Leverage:'}</span>
+              </div>
+              <span className="font-bold text-amber-300 font-mono shrink-0">
+                {botConfig.marketType === 'SPOT' ? '1x Spot' : `${botConfig.leverage || 3}x (${botConfig.marginMode || 'ISOLATED'})`}
+              </span>
+            </div>
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5 text-slate-300">
-            <Zap className={`w-3.5 h-3.5 ${botConfig.trailingStopEnabled ? 'text-amber-400' : 'text-slate-500'}`} />
-            <span>{isArabic ? 'الوقف المتحرك:' : 'Trailing SL:'}</span>
-            <span className="font-bold text-white font-mono">{botConfig.trailingStopEnabled ? `${botConfig.trailingStopPercent || 1.2}%` : (isArabic ? 'معطل' : 'Off')}</span>
-          </div>
+            {/* 3. Trailing Stop Loss */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Zap className={`w-3.5 h-3.5 shrink-0 ${botConfig.trailingStopEnabled ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span className="truncate">{isArabic ? 'الوقف المتحرك:' : 'Trailing SL:'}</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${botConfig.trailingStopEnabled ? 'text-white' : 'text-slate-500'}`}>
+                {botConfig.trailingStopEnabled ? `${botConfig.trailingStopPercent || 1.2}%` : (isArabic ? 'معطل' : 'Off')}
+              </span>
+            </div>
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5 text-slate-300">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isArabic ? 'قاطع الحماية:' : 'Circuit Breaker:'}</span>
-            <span className="font-bold text-white font-mono">-{botConfig.dailyDrawdownLimitPercent || 5.0}% Max</span>
-          </div>
+            {/* 4. Circuit Breaker */}
+            <div className={`px-2.5 py-1 rounded-lg bg-slate-950 border flex items-center justify-between gap-1.5 text-slate-300 ${
+              botConfig.circuitBreakerTripped ? 'border-rose-700/60 bg-rose-950/20' : 'border-slate-800'
+            }`}>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${botConfig.circuitBreakerTripped ? 'text-rose-400' : 'text-emerald-400'}`} />
+                <span className="truncate">{isArabic ? 'قاطع الحماية:' : 'Circuit Breaker:'}</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${botConfig.circuitBreakerTripped ? 'text-rose-400' : 'text-white'}`}>
+                {botConfig.circuitBreakerTripped ? (isArabic ? 'مُفعّل' : 'Tripped') : `-${botConfig.dailyDrawdownLimitPercent || 5.0}% Max`}
+              </span>
+            </div>
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5 text-slate-300">
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isArabic ? 'الهامش المخصص:' : 'Margin:'}</span>
-            <span className="font-bold text-white font-mono">
-              {botConfig.sizingMode === 'RISK_BASED' 
-                ? (isArabic ? `مخاطرة ${botConfig.riskPerTradePercent || 2}%` : `Risk ${botConfig.riskPerTradePercent || 2}%`) 
-                : `${botConfig.tradeAllocationPercent}% Eq`}
-            </span>
-          </div>
+            {/* 5. Margin / Sizing */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'الهامش المخصص:' : 'Margin:'}</span>
+              </div>
+              <span className="font-bold text-white font-mono shrink-0">
+                {botConfig.sizingMode === 'RISK_BASED' 
+                  ? (isArabic ? `مخاطرة ${botConfig.riskPerTradePercent || 2}%` : `Risk ${botConfig.riskPerTradePercent || 2}%`) 
+                  : `${botConfig.tradeAllocationPercent}% Eq`}
+              </span>
+            </div>
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5 text-slate-300">
-            <Target className="w-3.5 h-3.5 text-brand-400" />
-            <span>{isArabic ? 'الصفقات المتزامنة:' : 'Max Slots:'}</span>
-            <span className={`font-bold font-mono ${isOverMaxTrades ? 'text-rose-400' : 'text-white'}`}>
-              {displayPositions.length}/{maxTradesLimit}
-            </span>
+            {/* 6. Max Slots */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Target className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'الصفقات المتزامنة:' : 'Max Slots:'}</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${isOverMaxTrades ? 'text-rose-400' : 'text-white'}`}>
+                {displayPositions.length}/{maxTradesLimit}
+              </span>
+            </div>
+
+            {/* 7. RSI (14) Indicator */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Activity className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="truncate">RSI (14):</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${marketAnalysisData.rsi >= 70 ? 'text-rose-400' : marketAnalysisData.rsi <= 30 ? 'text-emerald-400' : 'text-cyan-300'}`}>
+                {(Number(marketAnalysisData?.rsi) || 50).toFixed(1)}
+              </span>
+            </div>
+
+            {/* 8. ADX Trend Strength */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'قوة الاتجاه ADX:' : 'ADX Trend:'}</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${marketAnalysisData.adx >= 25 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                {(Number(marketAnalysisData?.adx) || 25).toFixed(1)}
+              </span>
+            </div>
+
+            {/* 9. Market Regime */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'بيئة السوق:' : 'Regime:'}</span>
+              </div>
+              <span className={`font-bold font-mono shrink-0 ${
+                marketAnalysisData?.regime === 'TRENDING_BULLISH' ? 'text-emerald-400' :
+                marketAnalysisData?.regime === 'TRENDING_BEARISH' ? 'text-rose-400' :
+                marketAnalysisData?.regime === 'HIGH_VOLATILITY' ? 'text-amber-400' :
+                'text-indigo-300'
+              }`}>
+                {marketAnalysisData?.regime === 'TRENDING_BULLISH' ? (isArabic ? 'صاعد' : 'Bullish') :
+                 marketAnalysisData?.regime === 'TRENDING_BEARISH' ? (isArabic ? 'هابط' : 'Bearish') :
+                 marketAnalysisData?.regime === 'HIGH_VOLATILITY' ? (isArabic ? 'متقلب' : 'High Vol') :
+                 marketAnalysisData?.regime === 'RANGING' ? (isArabic ? 'عرضي' : 'Range') :
+                 (isArabic ? 'مستقر' : 'Stable')}
+              </span>
+            </div>
+
+            {/* 10. Min Confidence Filter */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Gauge className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'حد الثقة:' : 'Min Conf:'}</span>
+              </div>
+              <span className="font-bold text-teal-300 font-mono shrink-0">
+                ≥{botConfig.minConfidence || 75}%
+              </span>
+            </div>
+
+            {/* 11. Slippage & Spread Guard */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Shield className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'الانزلاق:' : 'Slippage:'}</span>
+              </div>
+              <span className="font-bold text-sky-300 font-mono shrink-0">
+                ≤{botConfig.maxSlippageSpreadPercent || 0.15}%
+              </span>
+            </div>
+
+            {/* 12. Strategy Engine */}
+            <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-1.5 text-slate-300">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Cpu className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                <span className="truncate">{isArabic ? 'الاستراتيجية:' : 'Engine:'}</span>
+              </div>
+              <span className="font-bold text-violet-300 font-mono shrink-0">
+                {botConfig.autoAdaptiveStrategy 
+                  ? (isArabic ? `تكيفي (${botConfig.activePresets?.length || 9})` : `Adaptive (${botConfig.activePresets?.length || 9})`)
+                  : (isArabic ? `محدد (${botConfig.activePresets?.length || 1})` : `Fixed (${botConfig.activePresets?.length || 1})`)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
