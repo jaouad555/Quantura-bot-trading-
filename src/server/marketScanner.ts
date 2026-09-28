@@ -8,6 +8,10 @@ import { EntryQualityEngine } from '../utils/entryQualityEngine.js';
 import { calculateQuantitativeScore, detectMarketRegime } from '../utils/quantEngine.js';
 import { isSignalThrottled, recordSignalRejection, resetSignalRejection } from './rejectionThrottler.js';
 
+// In-Flight execution locks & per-symbol cooldowns to prevent parallel duplicate orders and cascade entries
+export const inFlightExecutionLocks = new Set<string>();
+export const symbolCooldownMap = new Map<string, number>();
+
 // Interfaces
 export type MarketDataProvider = (symbol: string, timeframe: any, marketType: any, isDevMode?: boolean) => Promise<any>;
 let directMarketDataProvider: MarketDataProvider | null = null;
@@ -340,18 +344,36 @@ async function processTradingSignal(
   orderBook?: any,
   ticker?: any
 ) {
+  const symUpper = (symbol || '').toUpperCase().trim();
+  if (!symUpper) return;
+
+  // CRITICAL GATE 0: In-Flight Lock & Strict Cooldown Gate
+  if (inFlightExecutionLocks.has(symUpper)) {
+    console.log(`[TRADE BLOCKED] ${symUpper} - Execution lock currently active.`);
+    return;
+  }
+
+  const nextAllowedTime = symbolCooldownMap.get(symUpper) || 0;
+  if (Date.now() < nextAllowedTime) {
+    const waitSec = Math.ceil((nextAllowedTime - Date.now()) / 1000);
+    console.log(`[COOLDOWN] ${symUpper} in strict cooldown (${waitSec}s remaining)`);
+    return;
+  }
+
+  inFlightExecutionLocks.add(symUpper);
+
   try {
-    // CRITICAL GATE 0: Re-check latest authoritative botConfig from KV
+    // CRITICAL GATE 0.5: Re-check latest authoritative botConfig from KV
     // Prevents entering trades if user disabled the bot or presets in UI while scan loop was running
     const latestConfigStr = await kv.get('btc_bot_config');
     const latestConfig = latestConfigStr ? JSON.parse(latestConfigStr) : config;
     if (!latestConfig || !latestConfig.enabled) {
-      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Bot is disabled (enabled: false)`);
+      console.log(`[TRADE BLOCKED] ${symUpper} ${signal.decision} - Bot is disabled (enabled: false)`);
       return;
     }
 
     if (latestConfig.circuitBreakerTripped) {
-      console.log(`[TRADE BLOCKED] ${symbol} - Circuit Breaker Tripped`);
+      console.log(`[TRADE BLOCKED] ${symUpper} - Circuit Breaker Tripped`);
       return;
     }
 
@@ -359,25 +381,25 @@ async function processTradingSignal(
       ? latestConfig.activePresets
       : strategyManager.getActiveStrategies().map(s => s.id);
     if (!activePresets.includes(signal.strategyId)) {
-      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} - Strategy ${signal.strategyId} not in activePresets (total active: ${activePresets.length})`);
+      console.log(`[TRADE BLOCKED] ${symUpper} ${signal.decision} - Strategy ${signal.strategyId} not in activePresets (total active: ${activePresets.length})`);
       return;
     }
 
     // CRITICAL GATE 1: Authorization with StrategyManager
     const isSpotMode = (latestConfig.marketType || config.marketType) === 'SPOT';
     if (isSpotMode && signal.decision === 'SHORT') {
-      console.log(`[SPOT BLOCKED] ${symbol} SHORT - Short selling is not allowed in Spot trading mode (Long/Buy only).`);
+      console.log(`[SPOT BLOCKED] ${symUpper} SHORT - Short selling is not allowed in Spot trading mode (Long/Buy only).`);
       return;
     }
 
     const auth = await strategyManager.authorizeTrade({
       strategyId: signal.strategyId,
-      symbol: symbol,
+      symbol: symUpper,
       side: signal.decision === 'LONG' ? 'LONG' : 'SHORT',
     });
 
     if (!auth.authorized) {
-      console.log(`[TRADE BLOCKED] ${symbol} ${signal.decision} Strategy: ${signal.strategyName} Reason: ${auth.reason}`);
+      console.log(`[TRADE BLOCKED] ${symUpper} ${signal.decision} Strategy: ${signal.strategyName} Reason: ${auth.reason}`);
       return;
     }
 
@@ -391,25 +413,30 @@ async function processTradingSignal(
     // Max Trades limit
     const maxTrades = Math.max(1, config.maxOpenTrades || 3);
     if (currentModePositions.length >= maxTrades) {
-      console.log(`[RISK BLOCKED] ${symbol} max trades reached (${currentModePositions.length}/${maxTrades})`);
+      console.log(`[RISK BLOCKED] ${symUpper} max trades reached (${currentModePositions.length}/${maxTrades})`);
       return;
     }
     
-    // Duplicate position check
-    const existing = currentModePositions.find((p: any) => p.symbol.toUpperCase() === symbol.toUpperCase());
-    if (existing) return; // Reject duplicate
+    // Strict Duplicate position check: Only 1 position per asset allowed
+    const existing = currentModePositions.find((p: any) => p.symbol.toUpperCase() === symUpper);
+    if (existing) {
+      console.log(`[DEDUPLICATION] ${symUpper} already has an active position.`);
+      symbolCooldownMap.set(symUpper, Date.now() + 60000);
+      return;
+    }
 
-    // Cooldown check
+    // Cooldown check from trade history
     const histStr = await kv.get('btc_trade_history');
     const history = histStr ? JSON.parse(histStr) : [];
-    const symbolHistory = history.filter((h: any) => h.symbol && h.symbol.toUpperCase() === symbol.toUpperCase());
+    const symbolHistory = history.filter((h: any) => h.symbol && h.symbol.toUpperCase() === symUpper);
     if (symbolHistory.length > 0) {
-      const timestamps = symbolHistory.map((h: any) => h.timestamp || h.closedAt || 0).filter((t: number) => t > 0);
+      const timestamps = symbolHistory.map((h: any) => h.closedAt || h.timestamp || 0).filter((t: number) => t > 0);
       const lastClosed = timestamps.length > 0 ? Math.max(...timestamps) : 0;
-      const cooldownMs = (config.cooldownMinutes || 10) * 60 * 1000;
+      const cooldownMs = Math.max(15, config.cooldownMinutes || 20) * 60 * 1000;
       if (lastClosed > 0 && Date.now() - lastClosed < cooldownMs) {
-        console.log(`[COOLDOWN] ${symbol} in cooldown (${Math.ceil((cooldownMs - (Date.now() - lastClosed)) / 60000)}m remaining)`);
-        return; // Reject cooldown
+        console.log(`[COOLDOWN] ${symUpper} in cooldown (${Math.ceil((cooldownMs - (Date.now() - lastClosed)) / 60000)}m remaining)`);
+        symbolCooldownMap.set(symUpper, lastClosed + cooldownMs);
+        return;
       }
     }
 
@@ -422,7 +449,7 @@ async function processTradingSignal(
     if (isLive) {
       const realAcc = await fetchRealBinanceAccountDirect();
       if (!realAcc.success || !realAcc.canTrade || realAcc.freeUsdt <= 0 || realAcc.totalUsdtEquity <= 0) {
-        console.log(`[TRADE BLOCKED] ${symbol} LIVE Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
+        console.log(`[TRADE BLOCKED] ${symUpper} LIVE Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
         return;
       }
       totalEquity = realAcc.totalUsdtEquity;
@@ -438,6 +465,11 @@ async function processTradingSignal(
         totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
       });
       availableBalance = wallet.balance;
+    }
+
+    if (availableBalance < 10 || totalEquity < 10) {
+      console.log(`[TRADE BLOCKED] ${symUpper} Insufficient balance ($${availableBalance.toFixed(2)} available).`);
+      return;
     }
     
     const isLong = signal.decision === 'LONG';
@@ -647,11 +679,26 @@ async function processTradingSignal(
     
     const freshPosStr = await kv.get('btc_active_bot_positions');
     const freshPositions = freshPosStr ? JSON.parse(freshPosStr) : [];
+    
+    // Final duplicate and capacity guard right before writing
+    if (freshPositions.some((p: any) => p.symbol && p.symbol.toUpperCase() === symUpper)) {
+      console.log(`[DEDUPLICATION ABORT] ${symUpper} already inserted by another worker.`);
+      return;
+    }
+    if (freshPositions.length >= maxTrades) {
+      console.log(`[CAPACITY ABORT] Portfolio max trades reached (${freshPositions.length}/${maxTrades}).`);
+      return;
+    }
+
     freshPositions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
     
+    // Activate strict 20-minute cooldown on symbol after opening trade
+    const cooldownMs = Math.max(15, config.cooldownMinutes || 20) * 60 * 1000;
+    symbolCooldownMap.set(symUpper, Date.now() + cooldownMs);
+
     // Reset rejection counter on successful position creation
-    resetSignalRejection(symbol, signal.strategyId);
+    resetSignalRejection(symUpper, signal.strategyId);
     
     if (!isLive) {
       await reconcilePaperWalletDirect();
@@ -661,7 +708,7 @@ async function processTradingSignal(
     const sideEmoji = signal.decision === 'LONG' ? '🟢' : '🔴';
     sendServerTelegramNotification(
       `🤖 <b>New Position Opened (${isLive ? 'LIVE' : 'PAPER'})</b>\n\n` +
-      `${sideEmoji} Pair: <b>${symbol}</b> (${signal.decision})\n` +
+      `${sideEmoji} Pair: <b>${symUpper}</b> (${signal.decision})\n` +
       `⚡ Strategy: <b>${signal.strategyName}</b> (${signal.confidence}% Confidence)\n` +
       `💵 Entry Price: $${currentPrice.toLocaleString()}\n` +
       `💰 Margin: $${margin.toFixed(2)} (x${lev})\n` +
@@ -670,16 +717,18 @@ async function processTradingSignal(
     );
 
     recordPushAlertDirect({
-      title: `[${symbol}] ${signal.decision} Position Opened ${sideEmoji}`,
+      title: `[${symUpper}] ${signal.decision} Position Opened ${sideEmoji}`,
       body: `Strategy: ${signal.strategyName} (${signal.confidence}%) | Entry: $${currentPrice.toLocaleString()} | Margin: $${margin.toFixed(2)} (${lev}x)`,
       type: 'TRADE',
       decision: signal.decision,
-      symbol: symbol,
+      symbol: symUpper,
     }).catch(() => {});
 
-    console.log(`[POSITION] ${symbol} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
+    console.log(`[POSITION] ${symUpper} -> POSITION OPENED. Strategy: ${signal.strategyName}`);
 
   } catch (err) {
-    console.error(`[ERROR] Processing trading signal for ${symbol}:`, err);
+    console.error(`[ERROR] Processing trading signal for ${symUpper}:`, err);
+  } finally {
+    inFlightExecutionLocks.delete(symUpper);
   }
 }

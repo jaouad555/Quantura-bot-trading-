@@ -1,6 +1,7 @@
 import { kv } from './db';
 import { RiskEngine } from './riskEngine/RiskEngine';
 import { RoeEngine, DEFAULT_ROE_CONFIG } from './roeEngine';
+import { symbolCooldownMap } from './marketScanner.js';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -660,6 +661,42 @@ export const startBotEngine = () => {
       const botConfigStr = await kv.get('btc_bot_config');
       const botConfig = botConfigStr ? JSON.parse(botConfigStr) : { enabled: false };
 
+      // DAILY DRAWDOWN & CIRCUIT BREAKER EVALUATION (Server-Side Automated Protection)
+      if (botConfig.enabled && botConfig.dailyDrawdownLimitPercent && botConfig.dailyDrawdownLimitPercent > 0 && !botConfig.circuitBreakerTripped) {
+        const startOfTodayUtc = new Date().setUTCHours(0, 0, 0, 0);
+        const baselineTime = Math.max(startOfTodayUtc, botConfig.circuitBreakerResetAt || 0);
+        const logsStr = await kv.get('btc_bot_logs');
+        const logs = logsStr ? JSON.parse(logsStr) : [];
+        const todayLogs = logs.filter((l: any) => l.timestamp >= baselineTime);
+        const todayRealizedLoss = todayLogs.reduce((acc: number, l: any) => acc + (l.pnlUsdt || 0), 0);
+
+        const walletStr = await kv.get('btc_paper_wallet');
+        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000 };
+        const totalEquity = Math.max(10, wallet.balance || 1000);
+        const maxDailyLossAllowedUsdt = totalEquity * (botConfig.dailyDrawdownLimitPercent / 100);
+
+        if (todayRealizedLoss <= -maxDailyLossAllowedUsdt) {
+          console.log(`[SERVER CIRCUIT BREAKER ACTIVATED] Daily loss reached -$${Math.abs(todayRealizedLoss).toFixed(2)}. Tripping circuit breaker and pausing bot.`);
+          botConfig.enabled = false;
+          botConfig.circuitBreakerTripped = true;
+          botConfig.circuitBreakerTrippedAt = Date.now();
+          await kv.set('btc_bot_config', JSON.stringify(botConfig));
+
+          sendServerTelegramNotification(
+            `⛔ <b>CIRCUIT BREAKER ACTIVATED (SAFETY LOCK)</b>\n\n` +
+            `🚨 Max daily loss limit (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) was reached.\n` +
+            `🛑 Trading Bot was automatically PAUSED to preserve remaining capital.`
+          );
+
+          recordPushAlertDirect({
+            title: `⛔ Circuit Breaker Activated!`,
+            body: `Max daily loss limit reached (-$${Math.abs(todayRealizedLoss).toFixed(2)}). Bot paused automatically to protect capital.`,
+            type: 'SYSTEM',
+            symbol: 'PORTFOLIO',
+          }).catch(() => {});
+        }
+      }
+
       const positionsStr = await kv.get('btc_active_bot_positions');
       if (!positionsStr) return;
       
@@ -1088,6 +1125,7 @@ export const startBotEngine = () => {
           historyToAdd.push({
             id: `history-server-${Date.now()}-${i}`,
             timestamp: Date.now(),
+            closedAt: Date.now(),
             symbol: pos.symbol,
             decision: pos.decision,
             timeframe: '1h',
@@ -1105,6 +1143,9 @@ export const startBotEngine = () => {
             pnlHistory: pos.pnlHistory,
             mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
           });
+
+          // Enforce 20 minutes cooldown on this symbol to prevent repeated immediate re-entry
+          symbolCooldownMap.set(pos.symbol.toUpperCase().trim(), Date.now() + 20 * 60 * 1000);
 
           try {
             const riskEngine = RiskEngine.getInstance();
@@ -1258,6 +1299,9 @@ export const closePositionDirect = async (
 
     permanentlyClosedPositionIds.add(posId);
 
+    // Enforce cooldown on manual or api position closure
+    symbolCooldownMap.set(pos.symbol.toUpperCase().trim(), Date.now() + 20 * 60 * 1000);
+
     // Immediately remove from active positions
     const remainingPositions = positions.filter((p: any) => p.id !== posId);
     await kv.set('btc_active_bot_positions', JSON.stringify(remainingPositions));
@@ -1270,6 +1314,7 @@ export const closePositionDirect = async (
       id: `history-manual-${Date.now()}`,
       posId: posId,
       timestamp: Date.now(),
+      closedAt: Date.now(),
       symbol: pos.symbol,
       decision: pos.decision,
       timeframe: '1h',
