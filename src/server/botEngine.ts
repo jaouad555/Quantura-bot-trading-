@@ -2,6 +2,8 @@ import { kv } from './db';
 import { RiskEngine } from './riskEngine/RiskEngine';
 import { RoeEngine, DEFAULT_ROE_CONFIG } from './roeEngine';
 import { symbolCooldownMap } from './marketScanner.js';
+import { binanceWs } from './binanceWebSocket.js';
+import { binanceRestCache } from './binanceRestCache.js';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -50,33 +52,41 @@ const HTTP_HEADERS = {
 };
 
 /**
- * Resilient live price fetcher with multi-endpoint failover and in-memory cache
+ * Resilient live price fetcher powered by Binance WebSocket Live Stream (Zero REST Rate Limits)
  */
 export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | 'FUTURES' = 'FUTURES'): Promise<number> => {
   const symbol = (rawSymbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
   const now = Date.now();
   const cacheKey = `${marketType}_${symbol}`;
+
+  // 1. PRIMARY: Instant WebSocket stream price (0ms latency, 0 HTTP weight, immune to IP bans)
+  const wsPrice = binanceWs.getPrice(symbol);
+  if (wsPrice && wsPrice > 0) {
+    priceCache.set(cacheKey, { price: wsPrice, timestamp: now });
+    return wsPrice;
+  }
+
+  // 2. Check local memory cache (valid up to 10 seconds)
   const cached = priceCache.get(cacheKey);
-  
-  // Return cached price if fresh (less than 3 seconds old)
-  if (cached && now - cached.timestamp < 3000) {
+  if (cached && now - cached.timestamp < 10000) {
     return cached.price;
+  }
+
+  // 3. If IP is currently banned by Binance, NEVER hammer REST API
+  if (binanceRestCache.isIpBanned()) {
+    if (cached && cached.price > 0) return cached.price;
+    const fallback = FALLBACK_PRICES[symbol] || 25.0;
+    return fallback;
   }
 
   const futuresEndpoints = [
     `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
     `https://fapi1.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
-    `https://fapi2.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
-    `https://fapi3.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
-    `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`,
   ];
 
   const spotEndpoints = [
     `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-    `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
     `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
-    `https://api2.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-    `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
   ];
 
   const endpoints = marketType === 'FUTURES' ? [...futuresEndpoints, ...spotEndpoints] : spotEndpoints;
@@ -87,6 +97,20 @@ export const fetchSymbolPrice = async (rawSymbol: string, marketType: 'SPOT' | '
     try {
       const res = await fetch(url, { headers: HTTP_HEADERS, signal: controller.signal });
       clearTimeout(timeout);
+      
+      if (res.status === 418 || res.status === 429) {
+        // IP ban or rate limit hit!
+        try {
+          const errData: any = await res.json();
+          const match = (errData?.msg || '').match(/banned until (\d+)/i);
+          const banUntil = match ? parseInt(match[1], 10) : undefined;
+          binanceRestCache.recordIpBan(banUntil);
+        } catch (_) {
+          binanceRestCache.recordIpBan();
+        }
+        break; // Stop querying REST endpoints immediately
+      }
+
       if (res.ok) {
         const data: any = await res.json();
         const priceStr = data?.price || data?.lastPrice;
@@ -650,6 +674,9 @@ export const reconcilePaperWalletDirect = async () => {
 
 export const startBotEngine = () => {
   console.log("🤖 Initializing Server-Side Bot Execution Engine...");
+
+  // Start Binance WebSocket live price stream (0 rate limit overhead)
+  binanceWs.start();
 
   // Run initial sanity reconciliation on startup
   reconcilePaperWalletDirect().catch(() => {});

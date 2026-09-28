@@ -7,6 +7,8 @@ import { strategyManager, StrategySignal, StrategyDefinition } from './strategyM
 import { EntryQualityEngine } from '../utils/entryQualityEngine.js';
 import { calculateQuantitativeScore, detectMarketRegime } from '../utils/quantEngine.js';
 import { isSignalThrottled, recordSignalRejection, resetSignalRejection } from './rejectionThrottler.js';
+import { binanceWs } from './binanceWebSocket.js';
+import { binanceRestCache } from './binanceRestCache.js';
 
 // In-Flight execution locks & per-symbol cooldowns to prevent parallel duplicate orders and cascade entries
 export const inFlightExecutionLocks = new Set<string>();
@@ -69,9 +71,9 @@ export async function startMarketScanner() {
   console.log('[SCANNER] Starting Multi-Pair Market Scanner with Strategy Activation Gate...');
   scannerState.status = 'RUNNING';
   
-  // Start polling loop as fallback and primary driver
+  // Start polling loop as fallback and primary driver (calm 35s cadence)
   if (scanningInterval) clearInterval(scanningInterval);
-  scanningInterval = setInterval(scanAllPairs, 15000); // Scan every 15s
+  scanningInterval = setInterval(scanAllPairs, 35000); // Scan every 35s
   
   // Initially run once
   setTimeout(scanAllPairs, 1000);
@@ -128,11 +130,11 @@ export async function scanAllPairs() {
 
     scannerState.lastGlobalScan = Date.now();
 
-    // Concurrency control: scan sequentially with slight delay to respect Binance API limits
+    // Concurrency control: scan sequentially with 2.5s delay to respect Binance API limits
     for (const symbol of enabledPairs) {
       if (scannerState.status !== 'RUNNING') break;
       await analyzeSymbol(symbol, config, isLive, marketType, allowedToExecute, activeStrategies);
-      await new Promise(r => setTimeout(r, 1500)); // 1.5s stagger
+      await new Promise(r => setTimeout(r, 2500)); // 2.5s safe stagger
     }
 
   } catch (error) {
@@ -152,6 +154,25 @@ async function analyzeSymbol(
     const normSymbol = symbol.toUpperCase();
     if (!scannerState.symbolStates[normSymbol]) {
       scannerState.symbolStates[normSymbol] = { symbol: normSymbol, lastAnalyzed: 0 };
+    }
+
+    // 0. Update price from WebSocket stream immediately (0 REST cost)
+    const wsTicker = binanceWs.getTicker(normSymbol);
+    if (wsTicker && wsTicker.price > 0) {
+      scannerState.symbolStates[normSymbol] = {
+        ...scannerState.symbolStates[normSymbol],
+        price: wsTicker.price,
+        change24h: wsTicker.changePercent24h,
+        high24h: wsTicker.high,
+        low24h: wsTicker.low,
+        volume24h: wsTicker.volume,
+        lastAnalyzed: Date.now(),
+      };
+    }
+
+    // If IP is banned by Binance, rely on WebSocket ticker updates and existing indicators until unbanned
+    if (binanceRestCache.isIpBanned()) {
+      return;
     }
 
     // 1. Fetch Market Data via direct provider or internal API fallback

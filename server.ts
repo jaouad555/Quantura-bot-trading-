@@ -43,6 +43,8 @@ import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantE
 import { initDb, kv } from './src/server/db';
 import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect } from './src/server/botEngine';
 import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider } from './src/server/marketScanner';
+import { binanceWs } from './src/server/binanceWebSocket';
+import { binanceRestCache } from './src/server/binanceRestCache';
 import { strategyManager } from './src/server/strategyManager';
 import { RiskEngine } from './src/server/riskEngine/RiskEngine';
 import { AuditTrail } from './src/server/riskEngine/AuditTrail';
@@ -585,9 +587,9 @@ const cachedMtfConfluence: Map<string, { data: { allTimeframes: any; mtfConfluen
 const cachedDerivatives: Map<string, { data: DerivativesData; timestamp: number }> = new Map();
 const cachedAIAnalysis: Map<string, { analysis: { fr: string; ar: string; en: string }; timestamp: number; price: number }> = new Map();
 
-const CACHE_TTL_MS = 3000; // 3 seconds fast cache for tickers and active klines
-const MTF_CACHE_TTL_MS = 15000; // 15 seconds cache for multi-timeframe confluence calculations
-const AI_CACHE_TTL_MS = 90000; // 90 seconds AI analysis cache
+const CACHE_TTL_MS = 15000; // 15 seconds cache for active klines
+const MTF_CACHE_TTL_MS = 90000; // 90 seconds cache for multi-timeframe confluence calculations
+const AI_CACHE_TTL_MS = 120000; // 120 seconds AI analysis cache
 
 // Periodically clean up expired cache entries to prevent memory leaks
 setInterval(() => {
@@ -611,32 +613,61 @@ const HTTP_HEADERS = {
 };
 
 /**
- * Fetch 24h Ticker from Binance Spot or Futures REST API with multi-mirror resilience and automatic live failover
+ * Fetch 24h Ticker from Binance WebSocket Live Stream (Zero REST Rate Limits) with REST Fallback
  */
 async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTURES' = 'SPOT'): Promise<BinanceTicker> {
   const normSymbol = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
   const cacheKey = `ticker_${marketType}_${normSymbol}`;
   const now = Date.now();
+
+  // 1. PRIMARY: Instant WebSocket stream ticker (0ms latency, zero HTTP requests, immune to IP bans)
+  const wsData = binanceWs.getTicker(normSymbol);
+  if (wsData && wsData.price > 0) {
+    const ticker: BinanceTicker = {
+      symbol: normSymbol,
+      price: wsData.price,
+      priceChange24h: wsData.change24h,
+      priceChangePercent24h: wsData.changePercent24h,
+      high24h: wsData.high || wsData.price,
+      low24h: wsData.low || wsData.price,
+      volume24h: wsData.volume || 1000,
+      quoteVolume24h: wsData.quoteVolume || 500000,
+      updatedAt: wsData.timestamp,
+    };
+    cachedTickers.set(cacheKey, { data: ticker, timestamp: now });
+    return ticker;
+  }
+
   const cached = cachedTickers.get(cacheKey);
   if (cached && now - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
+  }
+
+  // 2. If IP is banned by Binance, never hammer REST endpoints
+  if (binanceRestCache.isIpBanned()) {
+    if (cached) return cached.data;
+    const baseP = getBasePriceForSymbol(normSymbol);
+    return {
+      symbol: normSymbol,
+      price: baseP,
+      priceChange24h: 0,
+      priceChangePercent24h: 0,
+      high24h: baseP * 1.02,
+      low24h: baseP * 0.98,
+      volume24h: 1000,
+      quoteVolume24h: 500000,
+      updatedAt: now,
+    };
   }
 
   // Multi-mirror endpoints: primary + backups
   const futuresUrls = [
     `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
     `https://fapi1.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-    `https://fapi2.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-    `https://fapi3.binance.com/fapi/v1/ticker/24hr?symbol=${normSymbol}`,
-    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${normSymbol}`,
-    `https://dapi.binance.com/dapi/v1/ticker/24hr?symbol=${normSymbol}`,
   ];
 
   const spotUrls = [
     `https://api.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-    `https://api1.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-    `https://api2.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
-    `https://api3.binance.com/api/v3/ticker/24hr?symbol=${normSymbol}`,
     `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${normSymbol}`,
   ];
 
@@ -652,6 +683,18 @@ async function fetchBinanceTicker(symbol = 'BTCUSDT', marketType: 'SPOT' | 'FUTU
         signal: controller.signal,
       });
       clearTimeout(timeout);
+
+      if (res.status === 418 || res.status === 429) {
+        try {
+          const errData: any = await res.json();
+          const match = (errData?.msg || '').match(/banned until (\d+)/i);
+          const banUntil = match ? parseInt(match[1], 10) : undefined;
+          binanceRestCache.recordIpBan(banUntil);
+        } catch (_) {
+          binanceRestCache.recordIpBan();
+        }
+        break;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -713,53 +756,70 @@ async function fetchBinanceKlines(
   const now = Date.now();
   const cached = cachedKlines.get(cacheKey);
 
-  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+  // Extend cache TTL to 30 seconds for klines
+  if (cached && now - cached.timestamp < 30000) {
     return cached.data;
+  }
+
+  // If IP is banned by Binance, never hammer REST endpoints
+  if (binanceRestCache.isIpBanned()) {
+    if (cached && cached.data && cached.data.length > 0) {
+      return cached.data;
+    }
   }
 
   const futuresUrls = [
     `https://fapi.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
     `https://fapi1.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-    `https://fapi2.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-    `https://fapi3.binance.com/fapi/v1/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
   ];
 
   const spotUrls = [
     `https://api.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-    `https://api1.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-    `https://api2.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
-    `https://api3.binance.com/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
     `https://data-api.binance.vision/api/v3/klines?symbol=${normSymbol}&interval=${interval}&limit=${limit}`,
   ];
 
   const urls = marketType === 'FUTURES' ? [...futuresUrls, ...spotUrls] : spotUrls;
 
-  for (const url of urls) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+  if (!binanceRestCache.isIpBanned()) {
+    for (const url of urls) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
 
-    try {
-      const res = await fetch(url, { headers: HTTP_HEADERS, signal: controller.signal });
-      clearTimeout(timeout);
+      try {
+        const res = await fetch(url, { headers: HTTP_HEADERS, signal: controller.signal });
+        clearTimeout(timeout);
 
-      if (res.ok) {
-        const rawData = await res.json();
-        if (Array.isArray(rawData) && rawData.length > 0) {
-          const klines: KlineCandle[] = rawData.map((item: any) => ({
-            time: Math.floor(item[0] / 1000),
-            open: parseFloat(item[1]),
-            high: parseFloat(item[2]),
-            low: parseFloat(item[3]),
-            close: parseFloat(item[4]),
-            volume: parseFloat(item[5]),
-          }));
-
-          cachedKlines.set(cacheKey, { data: klines, timestamp: now });
-          return klines;
+        if (res.status === 418 || res.status === 429) {
+          try {
+            const errData: any = await res.json();
+            const match = (errData?.msg || '').match(/banned until (\d+)/i);
+            const banUntil = match ? parseInt(match[1], 10) : undefined;
+            binanceRestCache.recordIpBan(banUntil);
+          } catch (_) {
+            binanceRestCache.recordIpBan();
+          }
+          break;
         }
+
+        if (res.ok) {
+          const rawData = await res.json();
+          if (Array.isArray(rawData) && rawData.length > 0) {
+            const klines: KlineCandle[] = rawData.map((item: any) => ({
+              time: Math.floor(item[0] / 1000),
+              open: parseFloat(item[1]),
+              high: parseFloat(item[2]),
+              low: parseFloat(item[3]),
+              close: parseFloat(item[4]),
+              volume: parseFloat(item[5]),
+            }));
+
+            cachedKlines.set(cacheKey, { data: klines, timestamp: now });
+            return klines;
+          }
+        }
+      } catch {
+        clearTimeout(timeout);
       }
-    } catch {
-      clearTimeout(timeout);
     }
   }
 
@@ -1130,8 +1190,21 @@ async function fetchBinanceDerivatives(symbol = 'BTCUSDT'): Promise<DerivativesD
   const normSymbol = symbol.toUpperCase();
   const now = Date.now();
   const cached = cachedDerivatives.get(normSymbol);
-  if (cached && now - cached.timestamp < 10000) {
+  if (cached && now - cached.timestamp < 60000) {
     return cached.data;
+  }
+
+  if (binanceRestCache.isIpBanned()) {
+    if (cached) return cached.data;
+    return {
+      openInterest: null,
+      fundingRate: 0.01,
+      takerLongShortRatio: 1.05,
+      futuresVolume24h: null,
+      isAvailable: false,
+      source: 'Binance Safe Backoff (IP Rate Limit Protected)',
+      lastUpdated: now,
+    };
   }
 
   try {
@@ -1145,6 +1218,14 @@ async function fetchBinanceDerivatives(symbol = 'BTCUSDT'): Promise<DerivativesD
     ]);
 
     clearTimeout(timeout);
+
+    // Detect IP Ban on any endpoint
+    for (const r of [oiRes, fundingRes, ratioRes]) {
+      if (r.status === 'fulfilled' && (r.value.status === 418 || r.value.status === 429)) {
+        binanceRestCache.recordIpBan();
+        break;
+      }
+    }
 
     let openInterest: number | null = null;
     let fundingRate: number | null = null;
@@ -1209,6 +1290,10 @@ async function fetchMultiTimeframeConfluence(symbol = 'BTCUSDT', marketType: 'SP
   const cached = cachedMtfConfluence.get(cacheKey);
 
   if (cached && now - cached.timestamp < MTF_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  if (binanceRestCache.isIpBanned() && cached) {
     return cached.data;
   }
 
@@ -1331,7 +1416,7 @@ export async function getMarketDataDirect(
     else if (timeframe === '1d') tfSeconds = 24 * 3600;
     else if (timeframe === '1w') tfSeconds = 7 * 24 * 3600;
 
-    let currentPrice = getBasePriceForSymbol(normSymbol);
+    let currentPrice = binanceWs.getPrice(normSymbol) || getBasePriceForSymbol(normSymbol);
     for (let i = numCandles - 1; i >= 0; i--) {
       const time = nowTs - (i * tfSeconds);
       const open = currentPrice;
@@ -1352,19 +1437,20 @@ export async function getMarketDataDirect(
       currentPrice = close;
     }
     
-    const latestClose = syntheticKlines[syntheticKlines.length - 1].close;
+    const wsTick = binanceWs.getTicker(normSymbol);
+    const latestClose = wsTick?.price || syntheticKlines[syntheticKlines.length - 1].close;
     const firstClose = syntheticKlines[0].close;
-    const change = latestClose - firstClose;
-    const changePct = (change / firstClose) * 100;
+    const change = wsTick ? wsTick.change24h : (latestClose - firstClose);
+    const changePct = wsTick ? wsTick.changePercent24h : ((change / firstClose) * 100);
     const syntheticTicker: BinanceTicker = {
       symbol: normSymbol,
       price: latestClose,
       priceChange24h: change,
       priceChangePercent24h: changePct,
-      volume24h: Math.random() * 50000 + 10000,
-      quoteVolume24h: Math.random() * 50000000 + 10000000,
-      high24h: Math.max(...syntheticKlines.map((k) => k.high)),
-      low24h: Math.min(...syntheticKlines.map((k) => k.low)),
+      volume24h: wsTick?.volume || (Math.random() * 50000 + 10000),
+      quoteVolume24h: wsTick?.quoteVolume || (Math.random() * 50000000 + 10000000),
+      high24h: wsTick?.high || Math.max(...syntheticKlines.map((k) => k.high)),
+      low24h: wsTick?.low || Math.min(...syntheticKlines.map((k) => k.low)),
       updatedAt: Date.now(),
     };
 
@@ -2802,6 +2888,7 @@ async function initFrontendAndServices() {
   // Initialize SQLite Database, Strategy Manager & background engines safely
   try {
     initDb();
+    binanceWs.start();
     await strategyManager.init();
     setMarketDataProvider(getMarketDataDirect);
     startBotEngine();
