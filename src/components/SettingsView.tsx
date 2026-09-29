@@ -43,6 +43,8 @@ import {
   QrCode,
   Copy,
   ChevronRight,
+  Eye,
+  EyeOff,
   Monitor,
   AlertTriangle,
   Sparkles,
@@ -118,7 +120,7 @@ const AVAILABLE_PAIRS = [
   { symbol: 'DOTUSDT', name: 'Polkadot', tag: 'Interoperable' }
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({
+const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   language,
   timezone,
   isDeveloperMode,
@@ -161,6 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isResetting, setIsResetting] = useState(false);
   const [localTgToken, setLocalTgToken] = useState(telegramBotToken);
   const [localTgChatId, setLocalTgChatId] = useState(telegramChatId);
+  const [showTgToken, setShowTgToken] = useState(false);
   const [isTestingTg, setIsTestingTg] = useState(false);
   const [tgFeedback, setTgFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -225,10 +228,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  // Sync prop changes
+  // Sync prop changes safely without triggering unnecessary re-renders
   useEffect(() => {
-    setLocalTgToken(telegramBotToken);
-    setLocalTgChatId(telegramChatId);
+    setLocalTgToken(telegramBotToken || '');
+    setLocalTgChatId(telegramChatId || '');
   }, [telegramBotToken, telegramChatId]);
 
   useEffect(() => {
@@ -237,13 +240,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [paperWallet?.balance]);
 
-  // Live TOTP countdown
+  // Live TOTP countdown (Only active when inside the Security & 2FA section to prevent background re-render loops)
   useEffect(() => {
+    if (activeSection !== 'security') return;
     const interval = setInterval(() => {
       setTotpCountdown(getTOTPTimeRemaining());
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeSection]);
 
   const handleCopyKey = () => {
     if (!setupKey2FA) return;
@@ -436,14 +440,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleSaveTelegram = () => {
+    const cleanToken = (localTgToken || '').trim();
+    const cleanChatId = (localTgChatId || '').trim();
     if (onTelegramConfigChange) {
-      onTelegramConfigChange(localTgToken, localTgChatId);
-      setTgFeedback({
-        success: true,
-        message: isArabic ? 'تم حفظ إعدادات تليجرام بنجاح!' : 'Telegram settings saved successfully!',
-      });
-      setTimeout(() => setTgFeedback(null), 3000);
+      onTelegramConfigChange(cleanToken, cleanChatId);
     }
+    try {
+      apiStorage.setItem('app_telegram_bot_token', cleanToken);
+      apiStorage.setItem('app_telegram_chat_id', cleanChatId);
+      fetch('/api/config/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: cleanToken, chatId: cleanChatId }),
+      }).catch(console.error);
+    } catch {}
+    setTgFeedback({
+      success: true,
+      message: isArabic ? 'تم حفظ إعدادات تليجرام بنجاح!' : 'Telegram settings saved successfully!',
+    });
+    setTimeout(() => setTgFeedback(null), 3000);
   };
 
   const sections = [
@@ -707,7 +722,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             
             {/* SECTION 1: GENERAL & LOCALIZATION */}
             {activeSection === 'general' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-general" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                     <Globe className="w-5 h-5" />
@@ -917,7 +932,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 2: BINANCE API & LIVE TRADING */}
             {activeSection === 'binance' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-binance" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
                     <Key className="w-5 h-5" />
@@ -1040,7 +1055,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 3: PAPER WALLET & CAPITAL */}
             {activeSection === 'wallet' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-wallet" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     <Wallet className="w-5 h-5" />
@@ -1155,7 +1170,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 4: BOT ENGINE PRESETS (COMPREHENSIVE INSTITUTIONAL CONTROLS) */}
             {activeSection === 'bot' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-bot" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-2xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
@@ -1509,7 +1524,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 5: SECURITY & 2FA */}
             {activeSection === 'security' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-security" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     <ShieldCheck className="w-5 h-5" />
@@ -1682,7 +1697,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 6: NOTIFICATIONS & TELEGRAM */}
             {activeSection === 'notifications' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-notifications" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30">
                     <Send className="w-5 h-5" />
@@ -1766,32 +1781,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <p className="text-xs text-slate-400">
                     {isArabic 
                       ? 'أنشئ بوتاً عبر @BotFather واحصل على Token، ثم أرسل رسالة للبوت واستخرج Chat ID الخاص بك.'
-                      : 'Create a bot with @BotFather to get your token, and enter your Chat ID.'}
+                      : 'Créez un bot avec @BotFather pour obtenir le Token, puis entrez votre Chat ID pour recevoir les alertes.'}
                   </p>
 
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        Telegram Bot Token
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
-                        value={localTgToken}
-                        onChange={(e) => setLocalTgToken(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="telegram_bot_token_input" className="block text-xs font-bold text-slate-300">
+                          Telegram Bot Token
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowTgToken(!showTgToken)}
+                          className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer transition select-none"
+                        >
+                          {showTgToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <span>{showTgToken ? (isArabic ? 'إخفاء' : 'Masquer') : (isArabic ? 'إظهار' : 'Afficher')}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          id="telegram_bot_token_input"
+                          name="telegram_bot_token_input"
+                          type={showTgToken ? 'text' : 'password'}
+                          placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                          value={localTgToken || ''}
+                          onChange={(e) => setLocalTgToken(e.target.value)}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                        />
+                      </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                      <label htmlFor="telegram_chat_id_input" className="block text-xs font-bold text-slate-300 mb-1">
                         Telegram Chat ID
                       </label>
                       <input
+                        id="telegram_chat_id_input"
+                        name="telegram_chat_id_input"
                         type="text"
                         placeholder="123456789 ou -100123456789"
-                        value={localTgChatId}
+                        value={localTgChatId || ''}
                         onChange={(e) => setLocalTgChatId(e.target.value)}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
                       />
                     </div>
@@ -1837,7 +1880,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* SECTION 7: BACKUP, EXPORT & MAINTENANCE */}
             {activeSection === 'backup' && (
-              <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+              <div key="section-backup" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
                     <Download className="w-5 h-5" />
@@ -2077,3 +2120,5 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   );
 };
+
+export const SettingsView = React.memo(SettingsViewComponent);

@@ -121,6 +121,9 @@ export const kv = {
           localMemoryCache[key] = val;
           persistLocalCache();
           return val;
+        } else {
+          localMemoryCache[key] = '';
+          return null;
         }
       } catch (e: any) {
         if (e?.code === 'resource-exhausted' || e?.message?.includes('RESOURCE_EXHAUSTED') || String(e).includes('RESOURCE_EXHAUSTED')) {

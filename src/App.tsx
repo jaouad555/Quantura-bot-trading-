@@ -3693,45 +3693,56 @@ export const App: React.FC = () => {
 
           {/* Tab 9: Comprehensive Engineered Settings View */}
           {activeTab === 'settings' && (
-            <SettingsView
-              language={language}
-              timezone={timezone}
-              isDeveloperMode={isDeveloperMode}
-              soundEnabled={soundEnabled}
-              notificationsEnabled={notificationsEnabled}
-              minConfidenceThreshold={minConfidenceThreshold}
-              telegramBotToken={telegramBotToken}
-              telegramChatId={telegramChatId}
-              binanceConfig={binanceConfig}
-              executionMode={executionMode}
-              paperWallet={paperWallet}
-              displayMode={displayMode}
-              botConfig={botConfig}
-              activeBotPositions={activeBotPositions}
-              username={username || 'JAOUAD'}
-              onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
-              onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
-              onOpenHelp={() => setIsHelpModalOpen(true)}
-              onRefreshBinancePermissions={fetchLiveBinanceBalance}
-              onLanguageChange={setLanguage}
-              onTimezoneChange={setTimezone}
-              onToggleDeveloperMode={setIsDeveloperMode}
-              onToggleSound={toggleSound}
-              onToggleNotifications={toggleNotifications}
-              onConfidenceChange={setMinConfidenceThreshold}
-              onTelegramConfigChange={(token, chatId) => {
-                setTelegramBotToken(token);
-                setTelegramChatId(chatId);
-              }}
-              onChangeDisplayMode={setDisplayMode}
-              onUpdatePaperWallet={(newWallet) => {
-                updatePaperWalletSync(() => newWallet);
-              }}
-              onUpdateBotConfig={handleUpdateBotConfig}
-              onNavigateTab={setActiveTab}
-              onLogout={handleLogout}
-              onFullReset={handleFullReset}
-            />
+            <ErrorBoundary fallbackTitle={language === 'ar' ? 'حماية إعدادات النظام' : 'Protection des Paramètres'}>
+              <SettingsView
+                language={language}
+                timezone={timezone}
+                isDeveloperMode={isDeveloperMode}
+                soundEnabled={soundEnabled}
+                notificationsEnabled={notificationsEnabled}
+                minConfidenceThreshold={minConfidenceThreshold}
+                telegramBotToken={telegramBotToken}
+                telegramChatId={telegramChatId}
+                binanceConfig={binanceConfig}
+                executionMode={executionMode}
+                paperWallet={paperWallet}
+                displayMode={displayMode}
+                botConfig={botConfig}
+                activeBotPositions={activeBotPositions}
+                username={username || 'JAOUAD'}
+                onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
+                onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+                onOpenHelp={() => setIsHelpModalOpen(true)}
+                onRefreshBinancePermissions={fetchLiveBinanceBalance}
+                onLanguageChange={setLanguage}
+                onTimezoneChange={setTimezone}
+                onToggleDeveloperMode={setIsDeveloperMode}
+                onToggleSound={toggleSound}
+                onToggleNotifications={toggleNotifications}
+                onConfidenceChange={setMinConfidenceThreshold}
+                onTelegramConfigChange={(token, chatId) => {
+                  setTelegramBotToken(token);
+                  setTelegramChatId(chatId);
+                  try {
+                    apiStorage.setItem('app_telegram_bot_token', token);
+                    apiStorage.setItem('app_telegram_chat_id', chatId);
+                    fetch('/api/config/telegram', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ token, chatId }),
+                    }).catch(console.error);
+                  } catch {}
+                }}
+                onChangeDisplayMode={setDisplayMode}
+                onUpdatePaperWallet={(newWallet) => {
+                  updatePaperWalletSync(() => newWallet);
+                }}
+                onUpdateBotConfig={handleUpdateBotConfig}
+                onNavigateTab={setActiveTab}
+                onLogout={handleLogout}
+                onFullReset={handleFullReset}
+              />
+            </ErrorBoundary>
           )}
         </main>
 

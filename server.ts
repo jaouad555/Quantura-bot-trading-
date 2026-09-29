@@ -2888,6 +2888,8 @@ async function initFrontendAndServices() {
               '**/*.sqlite-wal',
               '**/*.sqlite-shm',
               '**/data/bot_database*',
+              '**/local_kv_cache.json',
+              '**/*.json',
             ],
           },
         },

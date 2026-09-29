@@ -195,7 +195,6 @@ export const getTelegramCredentials = async () => {
   const kvChatId = await kv.get('app_telegram_chat_id');
   const token = (kvToken || process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '').trim();
   const chatId = (kvChatId || process.env.TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || '').trim();
-  console.log(`[TELEGRAM] Credentials resolved: token_exists=${!!token}, chatId=${chatId}`);
   return { token, chatId };
 };
 
@@ -498,7 +497,6 @@ export const startTelegramCommandListener = () => {
 
         if (res && res.ok) {
           const data = await res.json().catch(() => ({}));
-          console.log(`[TELEGRAM] Update received:`, data);
           if (data.ok && Array.isArray(data.result)) {
             for (const update of data.result) {
               lastTelegramUpdateOffset = update.update_id + 1;
@@ -507,7 +505,6 @@ export const startTelegramCommandListener = () => {
 
               // Security gate: only accept commands from authorized chatId
               if (String(msg.chat?.id) !== String(chatId)) {
-                console.log(`[TELEGRAM] Ignoring message from unauthorized chat: ${msg.chat?.id}`);
                 continue;
               }
 
@@ -522,14 +519,14 @@ export const startTelegramCommandListener = () => {
               await handleTelegramCommand(cmd, arg, chatId);
             }
           }
-        } else {
-          console.log(`[TELEGRAM] Polling failed: ${res?.status} ${res?.statusText}`);
         }
       } else {
-        console.log('[TELEGRAM] Polling skipped: Missing credentials.');
+        // Missing credentials - check periodically without log spam or CPU waste
+        setTimeout(pollLoop, 15000);
+        return;
       }
     } catch (e: any) {
-      console.log('[TELEGRAM] Error in pollLoop:', e.message);
+      // Non-fatal network error
     }
 
     setTimeout(pollLoop, 3500);
