@@ -2046,6 +2046,13 @@ app.delete('/api/config/binance', async (req, res) => {
   res.json({ success: true, message: 'Binance credentials and network configuration reset.' });
 });
 
+app.post('/api/config/telegram', async (req, res) => {
+  const { token, chatId } = req.body;
+  if (token) await kv.set('app_telegram_bot_token', token);
+  if (chatId) await kv.set('app_telegram_chat_id', chatId);
+  res.json({ success: true });
+});
+
 // -------------------------------------------------------------
 // BINANCE LIVE TRADING & ACCOUNT API INTEGRATION
 // -------------------------------------------------------------

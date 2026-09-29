@@ -3804,6 +3804,16 @@ export const App: React.FC = () => {
           onTelegramConfigChange={(token, chatId) => {
             setTelegramBotToken(token);
             setTelegramChatId(chatId);
+            try {
+              apiStorage.setItem('app_telegram_bot_token', token);
+              apiStorage.setItem('app_telegram_chat_id', chatId);
+              // Sync to server immediately to ensure listener picks it up
+              fetch('/api/config/telegram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, chatId })
+              }).catch(console.error);
+            } catch {}
           }}
           onLogout={handleLogout}
           onFullReset={handleFullReset}

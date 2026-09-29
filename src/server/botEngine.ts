@@ -1,7 +1,7 @@
 import { kv } from './db';
 import { RiskEngine } from './riskEngine/RiskEngine';
 import { RoeEngine, DEFAULT_ROE_CONFIG } from './roeEngine';
-import { symbolCooldownMap } from './marketScanner.js';
+import { symbolCooldownMap, scannerState } from './marketScanner.js';
 import { binanceWs } from './binanceWebSocket.js';
 import { binanceRestCache } from './binanceRestCache.js';
 
@@ -269,6 +269,7 @@ export const startTelegramSync = () => {
   }, 60000); // Check loop runs every minute, throttled to 30 mins to avoid rate limits
 
   console.log('📢 Telegram Periodic Smart Sync Started!');
+  startTelegramCommandListener();
 };
 
 /**
@@ -313,6 +314,220 @@ export const sendServerTelegramNotification = async (text: string) => {
   } catch (err: any) {
     console.warn('[TELEGRAM EXCEPTION]', err?.message);
   }
+};
+
+/**
+ * Interactive Telegram Inbound Command Processor
+ */
+let telegramCommandPollingActive = false;
+let lastTelegramUpdateOffset = 0;
+
+async function handleTelegramCommand(command: string, argument: string, chatId: string) {
+  try {
+    switch (command) {
+      case '/start':
+      case '/help': {
+        const helpText = `🤖 <b>Quantura AI Bot - قائمة الأوامر التفاعلية</b>\n\n` +
+          `يمكنك إرسال هذه الأوامر للتحكم ومتابعة التداول مباشرة من تيليجرام:\n\n` +
+          `• <code>/status</code> - فحص حالة الروبوت ووضع التداول وأداء المحفظة\n` +
+          `• <code>/positions</code> أو <code>/pos</code> - عرض جميع الصفقات المفتوحة مع أرباحها\n` +
+          `• <code>/balance</code> - رصيد المحفظة والأرباح المحققة الإجمالية\n` +
+          `• <code>/price [العملة]</code> - السعر اللحظي (مثال: <code>/price btc</code> أو <code>/price eth</code>)\n` +
+          `• <code>/scan</code> - فحص رادار السوق وعرض أفضل الإشارات الحالية\n` +
+          `• <code>/panic</code> - 🚨 إغلاق طوارئ فوري لجميع الصفقات المفتوحة\n` +
+          `• <code>/help</code> - إعادة عرض هذه القائمة الإرشادية`;
+        await sendServerTelegramNotification(helpText);
+        break;
+      }
+
+      case '/status': {
+        const configStr = await kv.get('btc_bot_config');
+        const config = configStr ? JSON.parse(configStr) : {};
+        const isBotEnabled = !!config.enabled;
+        const mode = (await kv.get('app_execution_mode')) || 'PAPER';
+        const isLive = mode === 'BINANCE_LIVE';
+
+        const positionsStr = await kv.get('btc_active_bot_positions');
+        const positions = positionsStr ? JSON.parse(positionsStr) : [];
+
+        const walletStr = await kv.get('btc_paper_wallet');
+        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+
+        let unrealizedPnl = 0;
+        for (const pos of positions) {
+          const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
+          if (currentP) {
+            unrealizedPnl += calculatePnl(pos, currentP);
+          }
+        }
+
+        const totalPnl = wallet.realizedPnl + unrealizedPnl;
+        const totalEquity = wallet.balance + unrealizedPnl;
+
+        const statusText = `📊 <b>Quantura Trading Bot - الحالة العامة</b>\n\n` +
+          `• <b>تشغيل الروبوت:</b> ${isBotEnabled ? '🟢 مفعل (ON)' : '🔴 متوقف (OFF)'}\n` +
+          `• <b>وضع التنفيذ:</b> ${isLive ? '⚡ Binance Live Real' : '📝 Paper Sandbox'}\n` +
+          `• <b>السوق المستهدف:</b> ${config.marketType || 'FUTURES'}\n` +
+          `• <b>الصفقات النشطة:</b> ${positions.length} صفقة\n` +
+          `• <b>الربح العائم (Unrealized PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)}\n` +
+          `• <b>الربح المحقق (Realized PnL):</b> ${wallet.realizedPnl >= 0 ? '+' : ''}$${wallet.realizedPnl.toFixed(2)}\n` +
+          `• <b>صافي الربح الكلي:</b> ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}\n` +
+          `• <b>القيمة الإجمالية للمحفظة:</b> $${totalEquity.toFixed(2)} USDT`;
+
+        await sendServerTelegramNotification(statusText);
+        break;
+      }
+
+      case '/positions':
+      case '/pos': {
+        const positionsStr = await kv.get('btc_active_bot_positions');
+        const positions = positionsStr ? JSON.parse(positionsStr) : [];
+
+        if (!Array.isArray(positions) || positions.length === 0) {
+          await sendServerTelegramNotification(`ℹ️ <b>لا توجد صفقات مفتوحة حالياً.</b>\nالروبوت ورادار السوق في وضع المراقبة والرصد بانتظار فرصة مناسبة.`);
+          break;
+        }
+
+        let msg = `📋 <b>الصفقات المفتوحة حالياً (${positions.length}):</b>\n\n`;
+        for (let i = 0; i < positions.length; i++) {
+          const pos = positions[i];
+          const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
+          const pnl = currentP ? calculatePnl(pos, currentP) : 0;
+          const pnlPct = pos.entryPrice && currentP ? (((currentP - pos.entryPrice) / pos.entryPrice) * (pos.side === 'BUY' ? 1 : -1) * (pos.leverage || 1) * 100) : 0;
+          const sign = pnl >= 0 ? '+' : '';
+
+          msg += `<b>${i + 1}. ${pos.symbol}</b> [${pos.side === 'BUY' ? '🟢 LONG' : '🔴 SHORT'} ${pos.leverage || 1}x]\n` +
+            `• الدخول: $${pos.entryPrice}\n` +
+            `• الحالي: $${currentP ? currentP.toFixed(currentP < 10 ? 4 : 2) : 'N/A'}\n` +
+            `• الربح: ${sign}$${pnl.toFixed(2)} (${sign}${pnlPct.toFixed(2)}%)\n` +
+            `• الهدف TP1: $${pos.tp1 || '-'}\n` +
+            `• وقف الخسارة SL: $${pos.stopLoss || '-'}\n\n`;
+        }
+
+        await sendServerTelegramNotification(msg.trim());
+        break;
+      }
+
+      case '/balance':
+      case '/wallet': {
+        const walletStr = await kv.get('btc_paper_wallet');
+        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+        const mode = (await kv.get('app_execution_mode')) || 'PAPER';
+
+        const balText = `💼 <b>تقرير رصيد المحفظة</b>\n\n` +
+          `• <b>الوضع الحالي:</b> ${mode === 'BINANCE_LIVE' ? 'حساب حقيقي (Binance Live)' : 'محفظة وهمية (Paper Trading)'}\n` +
+          `• <b>الرصيد المتاح:</b> $${wallet.balance.toFixed(2)} USDT\n` +
+          `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n` +
+          `• <b>تاريخ التحديث:</b> ${new Date().toLocaleTimeString()}`;
+        await sendServerTelegramNotification(balText);
+        break;
+      }
+
+      case '/price': {
+        let sym = (argument || 'BTC').toUpperCase().trim();
+        if (!sym.endsWith('USDT')) sym += 'USDT';
+        const price = await fetchSymbolPrice(sym, 'FUTURES');
+        if (price && price > 0) {
+          await sendServerTelegramNotification(`🪙 <b>السعر المباشر: ${sym}</b>\n\n💰 <b>السعر:</b> $${price.toFixed(price < 10 ? 4 : 2)} USDT\n⏱️ <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`);
+        } else {
+          await sendServerTelegramNotification(`⚠️ لم يتم العثور على سعر للرمز: <b>${sym}</b>`);
+        }
+        break;
+      }
+
+      case '/scan': {
+        const states = (scannerState as any)?.symbolStates || {};
+        const entries = Object.values(states).filter((s: any) => s.price && s.price > 0);
+        if (entries.length === 0) {
+          await sendServerTelegramNotification(`⚡ <b>رادار السوق الشامل (Scanner):</b>\nجاري مسح الأزواج وتحديث المؤشرات، حاول بعد قليل.`);
+          break;
+        }
+
+        const signalEntries = entries.filter((s: any) => s.signalDirection && s.signalDirection !== 'WAIT');
+        let scanText = `⚡ <b>نتائج مسح رادار السوق (Global Scanner)</b>\n\n` +
+          `عدد الأزواج المراقبة: ${entries.length}\n`;
+
+        if (signalEntries.length > 0) {
+          scanText += `\n🎯 <b>الإشارات النشطة المرصودة:</b>\n`;
+          signalEntries.slice(0, 5).forEach((s: any) => {
+            scanText += `• <b>${s.symbol}</b>: ${s.signalDirection} (ثقة: ${s.confidence || 75}%) | السعر: $${s.price}\n`;
+          });
+        } else {
+          scanText += `\nالسوق حالياً في مرحلة توازن وترقب (لا توجد إشارات اختراق عالية الخطورة).`;
+        }
+
+        await sendServerTelegramNotification(scanText);
+        break;
+      }
+
+      case '/panic': {
+        const res = await panicCloseAllDirect();
+        if (res.success) {
+          await sendServerTelegramNotification(`🚨 <b>تم تنفيذ أمر إغلاق الطوارئ (PANIC CLOSE)!</b>\n\nتم إغلاق جميع الصفقات (${res.closedCount} صفقة) وتسييل المراكز للحفاظ على رأس المال.`);
+        } else {
+          await sendServerTelegramNotification(`⚠️ فشل تنفيذ أمر الإغلاق الطارئ: ${res.error || 'خطأ غير معروف'}`);
+        }
+        break;
+      }
+
+      default:
+        await sendServerTelegramNotification(`❓ أمر غير معروف: <code>${command}</code>\nأرسل <code>/help</code> لعرض قائمة الأوامر.`);
+        break;
+    }
+  } catch (err: any) {
+    console.error('Error handling Telegram command:', err);
+  }
+}
+
+export const startTelegramCommandListener = () => {
+  if (telegramCommandPollingActive) return;
+  telegramCommandPollingActive = true;
+
+  const pollLoop = async () => {
+    try {
+      const { token, chatId } = await getTelegramCredentials();
+      if (token && chatId) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${lastTelegramUpdateOffset}&timeout=5`;
+        const res = await fetch(url, { signal: controller.signal }).catch(() => null);
+        clearTimeout(timeout);
+
+        if (res && res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.ok && Array.isArray(data.result)) {
+            for (const update of data.result) {
+              lastTelegramUpdateOffset = update.update_id + 1;
+              const msg = update.message;
+              if (!msg || !msg.text) continue;
+
+              // Security gate: only accept commands from authorized chatId
+              if (String(msg.chat?.id) !== String(chatId)) {
+                continue;
+              }
+
+              const rawText = msg.text.trim();
+              if (!rawText.startsWith('/')) continue;
+
+              const parts = rawText.split(/\s+/);
+              const cmd = parts[0].toLowerCase().split('@')[0];
+              const arg = parts.slice(1).join(' ').trim();
+
+              await handleTelegramCommand(cmd, arg, chatId);
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      // Quiet background fallback
+    }
+
+    setTimeout(pollLoop, 3500);
+  };
+
+  pollLoop();
+  console.log('🤖 Interactive Telegram Command Listener Started!');
 };
 
 
