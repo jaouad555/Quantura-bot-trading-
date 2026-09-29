@@ -718,7 +718,24 @@ export const App: React.FC = () => {
 
   // Save bot state, history and wallet changes to localStorage
   useEffect(() => {
-    
+    // SECURITY: We never save the API Secret to localStorage for client-side persistence
+    // However, we MUST sync the full config to the server so the botEngine can use it
+    const syncBinanceConfig = async () => {
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'binance_api_config', value: JSON.stringify(binanceConfig) }),
+        });
+      } catch (e) {
+        console.warn('Failed to sync Binance API config to server:', e);
+      }
+    };
+
+    if (binanceConfig.apiKey && binanceConfig.apiSecret) {
+      syncBinanceConfig();
+    }
+
     const safeConfig = { ...binanceConfig, apiSecret: '' };
     apiStorage.setItem('binance_api_config', JSON.stringify(safeConfig));
   
@@ -2935,14 +2952,35 @@ export const App: React.FC = () => {
   };
 
   const handleClearTradeHistory = () => {
-    activeBotPositionsRef.current = [];
-    tradeHistoryRef.current = [];
-    setActiveBotPositions([]);
-    setTradeHistory([]);
-    try {
-      apiStorage.removeItem('btc_active_bot_positions');
-      apiStorage.removeItem('btc_trade_history');
-    } catch (e) {}
+    const isLiveMode = executionMode === 'BINANCE_LIVE';
+    
+    setActiveBotPositions(prev => {
+      const filtered = prev.filter(p => isLiveMode ? p.mode !== 'BINANCE_LIVE' : (p.mode && p.mode !== 'PAPER'));
+      activeBotPositionsRef.current = filtered;
+      try {
+        apiStorage.setItem('btc_active_bot_positions', JSON.stringify(filtered));
+        fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'btc_active_bot_positions', value: JSON.stringify(filtered) }),
+        });
+      } catch {}
+      return filtered;
+    });
+
+    setTradeHistory(prev => {
+      const filtered = prev.filter(t => isLiveMode ? t.mode !== 'BINANCE_LIVE' : (t.mode && t.mode !== 'PAPER'));
+      tradeHistoryRef.current = filtered;
+      try {
+        apiStorage.setItem('btc_trade_history', JSON.stringify(filtered));
+        fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'btc_trade_history', value: JSON.stringify(filtered) }),
+        });
+      } catch {}
+      return filtered;
+    });
   };
 
   const handleDeleteTrade = (id: string) => {
@@ -3459,9 +3497,9 @@ export const App: React.FC = () => {
               <AutoTradingBot
                 language={language}
                 botConfig={botConfig}
-                activePositions={activeBotPositions}
+                activePositions={(activeBotPositions || []).filter(p => executionMode === 'BINANCE_LIVE' ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'))}
                 selectedSymbol={selectedSymbol}
-                logs={botLogs}
+                logs={(botLogs || []).filter(l => executionMode === 'BINANCE_LIVE' ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'))}
                 walletBalance={paperWallet.balance}
                 paperWallet={paperWallet}
                 currentPrice={ticker?.price || 0}
@@ -3557,7 +3595,22 @@ export const App: React.FC = () => {
                     executeAutoTradeAction('OPEN', ticker.price, `Manual ${direction} triggered`, undefined, direction);
                   }
                 }}
-                onClearLogs={() => setBotLogs([])}
+                onClearLogs={() => {
+                  const isLiveMode = executionMode === 'BINANCE_LIVE';
+                  setBotLogs(prev => {
+                    const filtered = (prev || []).filter(l => isLiveMode ? l.mode !== 'BINANCE_LIVE' : (l.mode && l.mode !== 'PAPER'));
+                    botLogsRef.current = filtered;
+                    try {
+                      apiStorage.setItem('btc_bot_logs', JSON.stringify(filtered));
+                      fetch('/api/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: 'btc_bot_logs', value: JSON.stringify(filtered) }),
+                      });
+                    } catch {}
+                    return filtered;
+                  });
+                }}
                 onPanicCloseAll={handlePanicCloseAll}
                 onResetCircuitBreaker={handleResetCircuitBreaker}
                 onTrimExcessPositions={handleTrimExcessPositions}
@@ -3674,28 +3727,33 @@ export const App: React.FC = () => {
           {activeTab === 'history' && (
             <TradeHistory
               history={[
-                ...activeBotPositions.map(pos => ({
-                  id: pos.id,
-                  timestamp: pos.openedAt,
-                  symbol: pos.symbol,
-                  decision: pos.decision,
-                  timeframe: timeframe,
-                  entryPrice: pos.entryPrice,
-                  currentPrice: (pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice),
-                  tp1: pos.tp1,
-                  tp2: pos.tp2,
-                  tp3: pos.tp3,
-                  stopLoss: pos.stopLoss,
-                  status: 'ACTIVE' as const,
-                  profitPercent: 0,
-                  confidence: activeSignal?.confidence || 75,
-                  pnlHistory: pos.pnlHistory,
-                })),
-                ...tradeHistory.filter(t => t.status !== 'ACTIVE')
+                ...(activeBotPositions || [])
+                  .filter(p => executionMode === 'BINANCE_LIVE' ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'))
+                  .map(pos => ({
+                    id: pos.id,
+                    timestamp: pos.openedAt,
+                    symbol: pos.symbol,
+                    decision: pos.decision,
+                    timeframe: timeframe,
+                    entryPrice: pos.entryPrice,
+                    currentPrice: (pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice),
+                    tp1: pos.tp1,
+                    tp2: pos.tp2,
+                    tp3: pos.tp3,
+                    stopLoss: pos.stopLoss,
+                    status: 'ACTIVE' as const,
+                    profitPercent: 0,
+                    confidence: activeSignal?.confidence || 75,
+                    pnlHistory: pos.pnlHistory,
+                  })),
+                ...(tradeHistory || [])
+                  .filter(t => executionMode === 'BINANCE_LIVE' ? t.mode === 'BINANCE_LIVE' : (!t.mode || t.mode === 'PAPER'))
+                  .filter(t => t.status !== 'ACTIVE')
               ]}
               paperWallet={paperWallet}
               language={language}
               currentPrice={ticker?.price}
+              executionMode={executionMode}
               onClearHistory={handleClearTradeHistory}
               onDeleteTrade={handleDeleteTrade}
               onCloseActivePosition={(id) => {

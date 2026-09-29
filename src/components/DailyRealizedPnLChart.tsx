@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TradeHistoryItem, PaperWallet, Language } from '../types';
+import { TradeHistoryItem, PaperWallet, Language, TradingExecutionMode } from '../types';
 import { translations } from '../utils/translations';
 import {
   BarChart,
@@ -37,6 +37,7 @@ interface DailyRealizedPnLChartProps {
   paperWallet?: PaperWallet;
   language: Language;
   onSeedSampleData?: () => void;
+  executionMode?: TradingExecutionMode;
 }
 
 interface DailyPnLItem {
@@ -63,10 +64,12 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
   paperWallet,
   language,
   onSeedSampleData,
+  executionMode,
 }) => {
   const t = translations[language] || translations.fr;
   const perf = t.performanceSummary || translations.fr.performanceSummary;
   const isArabic = language === 'ar';
+  const isLiveMode = executionMode === 'BINANCE_LIVE';
 
   // Toggle state
   const [metricType, setMetricType] = useState<'USD' | 'PERCENT'>('USD');
@@ -84,8 +87,8 @@ export const DailyRealizedPnLChart: React.FC<DailyRealizedPnLChartProps> = ({
       decision?: string;
     }> = [];
 
-    // 1. Incorporate Paper Wallet Closed Records if available
-    if (paperWallet?.history && paperWallet.history.length > 0) {
+    // 1. Incorporate Paper Wallet Closed Records if available AND not in LIVE mode
+    if (!isLiveMode && paperWallet?.history && paperWallet.history.length > 0) {
       paperWallet.history.forEach((rec) => {
         list.push({
           id: rec.id,

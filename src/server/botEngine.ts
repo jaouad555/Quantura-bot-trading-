@@ -208,9 +208,15 @@ export const startTelegramSync = () => {
       const { token, chatId } = await getTelegramCredentials();
       if (!token || !chatId) return;
 
+      const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+      const isLiveMode = mode === 'BINANCE_LIVE';
+
       const positionsStr = await kv.get('btc_active_bot_positions');
-      const positions = positionsStr ? JSON.parse(positionsStr) : [];
+      const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
       
+      // --- STRICT MODE SEPARATION ---
+      const positions = allPositions.filter((p: any) => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+
       const now = Date.now();
       const countChanged = positions.length !== lastSyncPositionsCount;
       const isIntervalElapsed = now - lastSyncTimestamp >= 30 * 60 * 1000; // 30 minutes periodic health sync to prevent Telegram 429 rate limits
@@ -225,6 +231,17 @@ export const startTelegramSync = () => {
       const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
       let unrealizedPnl = 0;
+      let realizedPnl = wallet.realizedPnl || 0;
+      let availableBalance = wallet.balance || 0;
+
+      if (isLiveMode) {
+        const realAcc = await fetchRealBinanceAccountDirect();
+        if (realAcc.success) {
+          availableBalance = realAcc.freeUsdt || 0;
+          // Note: for real account, realizedPnl might be complex to track historically via health sync, 
+          // we'll focus on account equity
+        }
+      }
 
       if (positions.length > 0) {
         const uniqueKeys: string[] = Array.from(new Set(positions.map((p: any) => `${(p.marketType || 'FUTURES')}_${String(p.symbol || 'BTCUSDT')}`)));
@@ -253,15 +270,15 @@ export const startTelegramSync = () => {
         }
       }
 
-      const totalPnl = wallet.realizedPnl + unrealizedPnl;
-      const balance = wallet.balance + unrealizedPnl;
+      const totalPnl = isLiveMode ? unrealizedPnl : (wallet.realizedPnl + unrealizedPnl);
+      const estTotalValue = isLiveMode ? (availableBalance + unrealizedPnl) : (wallet.balance + unrealizedPnl);
 
-      const message = `🤖 <b>Quantura Bot Health Sync</b>\n\n` +
+      const message = `🤖 <b>Quantura Bot Health Sync (${isLiveMode ? 'LIVE' : 'PAPER'})</b>\n\n` +
                       `📊 <b>Active Positions:</b> ${positions.length}\n` +
-                      `💵 <b>Realized PnL:</b> $${wallet.realizedPnl.toFixed(2)}\n` +
+                      (isLiveMode ? '' : `💵 <b>Realized PnL:</b> $${wallet.realizedPnl.toFixed(2)}\n`) +
                       `📈 <b>Unrealized PnL:</b> $${unrealizedPnl.toFixed(2)}\n` +
-                      `💰 <b>Total PnL:</b> $${totalPnl.toFixed(2)}\n` +
-                      `🏦 <b>Est. Portfolio Value:</b> $${balance.toFixed(2)}`;
+                      `💰 <b>Current Mode PnL:</b> $${totalPnl.toFixed(2)}\n` +
+                      `🏦 <b>Est. Mode Value:</b> $${estTotalValue.toFixed(2)}`;
 
       await sendServerTelegramNotification(message);
 
@@ -409,7 +426,8 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         const isLive = mode === 'BINANCE_LIVE';
 
         const positionsStr = await kv.get('btc_active_bot_positions');
-        const positions = positionsStr ? JSON.parse(positionsStr) : [];
+        const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
+        const positions = allPositions.filter((p: any) => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
 
         let unrealizedPnl = 0;
         for (const pos of positions) {
@@ -454,15 +472,18 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
       case '/positions':
       case '/pos': {
+        const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+        const isLive = mode === 'BINANCE_LIVE';
         const positionsStr = await kv.get('btc_active_bot_positions');
-        const positions = positionsStr ? JSON.parse(positionsStr) : [];
+        const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
+        const positions = allPositions.filter((p: any) => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
 
         if (!Array.isArray(positions) || positions.length === 0) {
-          await sendServerTelegramNotification(`ℹ️ <b>لا توجد صفقات مفتوحة حالياً.</b>\nالروبوت ورادار السوق في وضع المراقبة والرصد بانتظار فرصة مناسبة.`);
+          await sendServerTelegramNotification(`ℹ️ <b>لا توجد صفقات مفتوحة حالياً في وضع ${isLive ? 'LIVE' : 'PAPER'}.</b>\nالروبوت ورادار السوق في وضع المراقبة والرصد بانتظار فرصة مناسبة.`);
           break;
         }
 
-        let msg = `📋 <b>الصفقات المفتوحة حالياً (${positions.length}):</b>\n\n`;
+        let msg = `📋 <b>الصفقات المفتوحة حالياً (${isLive ? 'LIVE' : 'PAPER'}):</b>\n\n`;
         for (let i = 0; i < positions.length; i++) {
           const pos = positions[i];
           const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
@@ -486,26 +507,29 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
       case '/wallet': {
         const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
         const isLive = mode === 'BINANCE_LIVE';
-        const realAcc = await fetchRealBinanceAccountDirect();
-        const walletStr = await kv.get('btc_paper_wallet');
-        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+        
+        let balText = `💼 <b>تقرير رصيد المحفظة (${isLive ? 'LIVE' : 'PAPER'})</b>\n\n`;
 
-        let balText = `💼 <b>تقرير أرصدة المحفظة (Wallet Report)</b>\n\n`;
-
-        if (realAcc.success) {
-          balText += `⚡ <b>حساب Binance (${isLive ? 'نشط للتداول 🟢' : 'متصل ⚪'}):</b>\n` +
-            `• <b>إجمالي الرصيد (Total Equity):</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
-            `• <b>الرصيد المتاح (Free Margin):</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
-            `• <b>السوق:</b> ${realAcc.marketType}\n` +
-            `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة (Can Trade)' : '🔴 مقيدة (ReadOnly)'}\n\n`;
+        if (isLive) {
+          const realAcc = await fetchRealBinanceAccountDirect();
+          if (realAcc.success) {
+            balText += `⚡ <b>حساب Binance (نشط للتداول 🟢):</b>\n` +
+              `• <b>إجمالي الرصيد (Total Equity):</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
+              `• <b>الرصيد المتاح (Free Margin):</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
+              `• <b>السوق:</b> ${realAcc.marketType}\n` +
+              `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n`;
+          } else {
+            balText += `⚠️ <b>خطأ في الاتصال ببايننس:</b> ${realAcc.error || 'يرجى مراجعة المفاتيح'}\n`;
+          }
+        } else {
+          const walletStr = await kv.get('btc_paper_wallet');
+          const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+          balText += `📝 <b>محفظة المحاكاة (Paper Trading):</b>\n` +
+            `• <b>الرصيد المتاح:</b> $${wallet.balance.toFixed(2)} USDT\n` +
+            `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n`;
         }
 
-        balText += `📝 <b>محفظة المحاكاة (Paper Trading):</b>\n` +
-          `• <b>الرصيد المتاح:</b> $${wallet.balance.toFixed(2)} USDT\n` +
-          `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n\n` +
-          `• <b>وضع التنفيذ الفعلي:</b> ${isLive ? '⚡ Binance Live Real' : '📝 Paper Sandbox'}\n` +
-          `• <b>للتبديل أرسل:</b> <code>/live</code> أو <code>/paper</code>\n` +
-          `• <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
+        balText += `\n• <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
 
         await sendServerTelegramNotification(balText);
         break;
@@ -1112,6 +1136,12 @@ export const startBotEngine = () => {
 
       for (let i = 0; i < positions.length; i++) {
         const pos = positions[i];
+        
+        // --- STRICT MODE SEPARATION ---
+        // Skip positions that don't match the current execution mode to ensure Live/Paper separation
+        const posMode = pos.mode || 'PAPER';
+        if (posMode !== mode) continue; 
+
         const pKey = `${pos.marketType || 'FUTURES'}_${pos.symbol}`;
         const currentP = prices[pKey];
         

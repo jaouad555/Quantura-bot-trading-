@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TradeHistoryItem, PaperWallet, Language } from '../types';
+import { TradeHistoryItem, PaperWallet, Language, TradingExecutionMode } from '../types';
 import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { TradingPerformanceSummary } from './TradingPerformanceSummary';
@@ -32,6 +32,7 @@ interface TradeHistoryProps {
   onCloseActivePosition?: (posId: string) => void;
   onSeedSampleData?: () => void;
   onFullReset?: () => void;
+  executionMode?: TradingExecutionMode;
 }
 
 export const TradeHistory: React.FC<TradeHistoryProps> = ({
@@ -44,9 +45,11 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
   onCloseActivePosition,
   onSeedSampleData,
   onFullReset,
+  executionMode,
 }) => {
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
+  const isLiveMode = executionMode === 'BINANCE_LIVE';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDecision, setFilterDecision] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
@@ -83,9 +86,10 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
       {/* 2. REALIZED PNL OVER TIME (DAILY PROFIT/LOSS PERFORMANCE) BAR CHART */}
       <DailyRealizedPnLChart
         history={history}
-        paperWallet={paperWallet}
+        paperWallet={!isLiveMode ? paperWallet : undefined}
         language={language}
         onSeedSampleData={onSeedSampleData}
+        executionMode={executionMode}
       />
 
       <TradeMetricsDashboard history={history} language={language} />
