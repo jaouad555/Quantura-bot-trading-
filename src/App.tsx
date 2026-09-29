@@ -724,6 +724,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     apiStorage.setItem('trading_execution_mode', executionMode);
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'trading_execution_mode', value: executionMode }),
+    }).catch(() => {});
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'app_execution_mode', value: executionMode }),
+    }).catch(() => {});
   }, [executionMode]);
 
   useEffect(() => {
@@ -2687,6 +2697,11 @@ export const App: React.FC = () => {
                              botConfigRef.current = { ...botConfigRef.current, ...remoteConfig };
                          } catch (e) {}
                      }
+                 }
+
+                 const remoteMode = serverData.trading_execution_mode || serverData.app_execution_mode;
+                 if (remoteMode && (remoteMode === 'PAPER' || remoteMode === 'BINANCE_LIVE')) {
+                     setExecutionMode(remoteMode);
                  }
              }
          } catch(e) {}

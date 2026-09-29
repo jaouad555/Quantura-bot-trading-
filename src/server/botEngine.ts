@@ -321,6 +321,7 @@ export const sendServerTelegramNotification = async (text: string) => {
  */
 let telegramCommandPollingActive = false;
 let lastTelegramUpdateOffset = 0;
+const processedUpdateIds = new Set<number>();
 
 async function handleTelegramCommand(command: string, argument: string, chatId: string) {
   try {
@@ -329,9 +330,11 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
       case '/help': {
         const helpText = `🤖 <b>Quantura AI Bot - قائمة الأوامر التفاعلية</b>\n\n` +
           `يمكنك إرسال هذه الأوامر للتحكم ومتابعة التداول مباشرة من تيليجرام:\n\n` +
+          `• <code>/balance</code> - عرض رصيد محفظة Binance (Live/Testnet) والمحفظة الوهمية\n` +
           `• <code>/status</code> - فحص حالة الروبوت ووضع التداول وأداء المحفظة\n` +
+          `• <code>/live</code> أو <code>/mode live</code> - ⚡ التحويل الفوري للتداول الحقيقي على Binance\n` +
+          `• <code>/paper</code> أو <code>/mode paper</code> - 📝 التحويل لوضع المحفظة الوهمية (Paper Sandbox)\n` +
           `• <code>/positions</code> أو <code>/pos</code> - عرض جميع الصفقات المفتوحة مع أرباحها\n` +
-          `• <code>/balance</code> - رصيد المحفظة والأرباح المحققة الإجمالية\n` +
           `• <code>/price [العملة]</code> - السعر اللحظي (مثال: <code>/price btc</code> أو <code>/price eth</code>)\n` +
           `• <code>/scan</code> - فحص رادار السوق وعرض أفضل الإشارات الحالية\n` +
           `• <code>/panic</code> - 🚨 إغلاق طوارئ فوري لجميع الصفقات المفتوحة\n` +
@@ -340,18 +343,71 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         break;
       }
 
+      case '/live':
+      case '/real': {
+        await kv.set('trading_execution_mode', 'BINANCE_LIVE');
+        await kv.set('app_execution_mode', 'BINANCE_LIVE');
+        const realAcc = await fetchRealBinanceAccountDirect();
+        let reply = `⚡ <b>تم تفعيل وضع التداول الحقيقي (Binance Live)!</b>\n\n` +
+          `سيقوم الروبوت الآن بتنفيذ الصفقات المعتمدة مباشرة على حساب Binance الخاص بك.\n\n`;
+        if (realAcc.success) {
+          reply += `💰 <b>رصيد Binance المتاح:</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
+            `📊 <b>إجمالي قيمة المحفظة:</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
+            `🎯 <b>السوق:</b> ${realAcc.marketType} (${realAcc.canTrade ? '🟢 مفعّل' : '🔴 صلاحية التداول مقيدة'})\n`;
+        } else {
+          reply += `⚠️ <b>تنبيه الاتصال:</b> ${realAcc.error || 'يرجى مراجعة مفاتيح API'}\n`;
+        }
+        reply += `\nلإعادة التحويل للوضع التجريبي أرسل: <code>/paper</code>`;
+        await sendServerTelegramNotification(reply);
+        break;
+      }
+
+      case '/paper':
+      case '/sandbox': {
+        await kv.set('trading_execution_mode', 'PAPER');
+        await kv.set('app_execution_mode', 'PAPER');
+        const walletStr = await kv.get('btc_paper_wallet');
+        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+        const reply = `📝 <b>تم التحويل إلى وضع المحفظة الوهمية (Paper Sandbox)!</b>\n\n` +
+          `• الرصيد التجريبي المتاح: $${wallet.balance.toFixed(2)} USDT\n` +
+          `• الأرباح المحققة: $${wallet.realizedPnl.toFixed(2)} USDT\n\n` +
+          `للتحويل للتداول الحقيقي على Binance أرسل: <code>/live</code>`;
+        await sendServerTelegramNotification(reply);
+        break;
+      }
+
+      case '/mode': {
+        const target = (argument || '').toLowerCase().trim();
+        if (target === 'live' || target === 'real') {
+          await kv.set('trading_execution_mode', 'BINANCE_LIVE');
+          await kv.set('app_execution_mode', 'BINANCE_LIVE');
+          const realAcc = await fetchRealBinanceAccountDirect();
+          let reply = `⚡ <b>تم تفعيل وضع التداول الحقيقي (Binance Live)!</b>\n\n`;
+          if (realAcc.success) {
+            reply += `💰 <b>رصيد Binance المتاح:</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
+              `📊 <b>إجمالي قيمة المحفظة:</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n`;
+          }
+          await sendServerTelegramNotification(reply);
+        } else if (target === 'paper' || target === 'sandbox') {
+          await kv.set('trading_execution_mode', 'PAPER');
+          await kv.set('app_execution_mode', 'PAPER');
+          await sendServerTelegramNotification(`📝 <b>تم التحويل إلى وضع المحفظة الوهمية (Paper Sandbox).</b>`);
+        } else {
+          const currentMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+          await sendServerTelegramNotification(`⚙️ <b>وضع التنفيذ الحالي:</b> ${currentMode === 'BINANCE_LIVE' ? '⚡ Binance Live (حقيقي)' : '📝 Paper Sandbox (وهمي)'}\n\nللتبديل أرسل:\n• <code>/mode live</code> أو <code>/live</code>\n• <code>/mode paper</code> أو <code>/paper</code>`);
+        }
+        break;
+      }
+
       case '/status': {
         const configStr = await kv.get('btc_bot_config');
         const config = configStr ? JSON.parse(configStr) : {};
         const isBotEnabled = !!config.enabled;
-        const mode = (await kv.get('app_execution_mode')) || 'PAPER';
+        const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
         const isLive = mode === 'BINANCE_LIVE';
 
         const positionsStr = await kv.get('btc_active_bot_positions');
         const positions = positionsStr ? JSON.parse(positionsStr) : [];
-
-        const walletStr = await kv.get('btc_paper_wallet');
-        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
         let unrealizedPnl = 0;
         for (const pos of positions) {
@@ -361,17 +417,33 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           }
         }
 
-        const totalPnl = wallet.realizedPnl + unrealizedPnl;
-        const totalEquity = wallet.balance + unrealizedPnl;
+        const realAccount = await fetchRealBinanceAccountDirect();
+        const walletStr = await kv.get('btc_paper_wallet');
+        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
-        const statusText = `📊 <b>Quantura Trading Bot - الحالة العامة</b>\n\n` +
+        let totalEquity = wallet.balance + unrealizedPnl;
+        let realizedPnl = wallet.realizedPnl || 0;
+
+        if (isLive && realAccount.success) {
+          totalEquity = realAccount.totalUsdtEquity || realAccount.freeUsdt || 0;
+        }
+
+        const totalPnl = realizedPnl + unrealizedPnl;
+
+        let statusText = `📊 <b>Quantura Trading Bot - الحالة العامة</b>\n\n` +
           `• <b>تشغيل الروبوت:</b> ${isBotEnabled ? '🟢 مفعل (ON)' : '🔴 متوقف (OFF)'}\n` +
-          `• <b>وضع التنفيذ:</b> ${isLive ? '⚡ Binance Live Real' : '📝 Paper Sandbox'}\n` +
+          `• <b>وضع التنفيذ النشط:</b> ${isLive ? '⚡ Binance Live Real' : '📝 Paper Sandbox'}\n` +
           `• <b>السوق المستهدف:</b> ${config.marketType || 'FUTURES'}\n` +
           `• <b>الصفقات النشطة:</b> ${positions.length} صفقة\n` +
-          `• <b>الربح العائم (Unrealized PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)}\n` +
-          `• <b>الربح المحقق (Realized PnL):</b> ${wallet.realizedPnl >= 0 ? '+' : ''}$${wallet.realizedPnl.toFixed(2)}\n` +
-          `• <b>صافي الربح الكلي:</b> ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}\n` +
+          `• <b>الربح العائم (Unrealized PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)}\n`;
+
+        if (realAccount.success) {
+          statusText += `• <b>رصيد Binance الحقيقي:</b> $${realAccount.totalUsdtEquity.toFixed(2)} USDT (متاح: $${realAccount.freeUsdt.toFixed(2)})\n`;
+        } else {
+          statusText += `• <b>رصيد المحفظة الوهمية:</b> $${wallet.balance.toFixed(2)} USDT\n`;
+        }
+
+        statusText += `• <b>صافي الربح الكلي:</b> ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}\n` +
           `• <b>القيمة الإجمالية للمحفظة:</b> $${totalEquity.toFixed(2)} USDT`;
 
         await sendServerTelegramNotification(statusText);
@@ -410,15 +482,29 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
       case '/balance':
       case '/wallet': {
+        const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+        const isLive = mode === 'BINANCE_LIVE';
+        const realAcc = await fetchRealBinanceAccountDirect();
         const walletStr = await kv.get('btc_paper_wallet');
         const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
-        const mode = (await kv.get('app_execution_mode')) || 'PAPER';
 
-        const balText = `💼 <b>تقرير رصيد المحفظة</b>\n\n` +
-          `• <b>الوضع الحالي:</b> ${mode === 'BINANCE_LIVE' ? 'حساب حقيقي (Binance Live)' : 'محفظة وهمية (Paper Trading)'}\n` +
+        let balText = `💼 <b>تقرير أرصدة المحفظة (Wallet Report)</b>\n\n`;
+
+        if (realAcc.success) {
+          balText += `⚡ <b>حساب Binance (${isLive ? 'نشط للتداول 🟢' : 'متصل ⚪'}):</b>\n` +
+            `• <b>إجمالي الرصيد (Total Equity):</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
+            `• <b>الرصيد المتاح (Free Margin):</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
+            `• <b>السوق:</b> ${realAcc.marketType}\n` +
+            `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة (Can Trade)' : '🔴 مقيدة (ReadOnly)'}\n\n`;
+        }
+
+        balText += `📝 <b>محفظة المحاكاة (Paper Trading):</b>\n` +
           `• <b>الرصيد المتاح:</b> $${wallet.balance.toFixed(2)} USDT\n` +
-          `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n` +
-          `• <b>تاريخ التحديث:</b> ${new Date().toLocaleTimeString()}`;
+          `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n\n` +
+          `• <b>وضع التنفيذ الفعلي:</b> ${isLive ? '⚡ Binance Live Real' : '📝 Paper Sandbox'}\n` +
+          `• <b>للتبديل أرسل:</b> <code>/live</code> أو <code>/paper</code>\n` +
+          `• <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
+
         await sendServerTelegramNotification(balText);
         break;
       }
@@ -499,7 +585,14 @@ export const startTelegramCommandListener = () => {
           const data = await res.json().catch(() => ({}));
           if (data.ok && Array.isArray(data.result)) {
             for (const update of data.result) {
-              lastTelegramUpdateOffset = update.update_id + 1;
+              if (processedUpdateIds.has(update.update_id)) continue;
+              processedUpdateIds.add(update.update_id);
+              if (processedUpdateIds.size > 1000) {
+                const first = processedUpdateIds.values().next().value;
+                if (first !== undefined) processedUpdateIds.delete(first);
+              }
+
+              lastTelegramUpdateOffset = Math.max(lastTelegramUpdateOffset, update.update_id + 1);
               const msg = update.message;
               if (!msg || !msg.text) continue;
 
@@ -558,8 +651,22 @@ function decryptSecret(text: string): string {
   }
 }
 
+function isValidBinanceKey(key: string): boolean {
+  if (!key) return false;
+  const trimmed = key.trim();
+  if (trimmed.includes('...') || trimmed.includes('*') || trimmed.length < 15) return false;
+  return true;
+}
+
+function isValidBinanceSecret(secret: string): boolean {
+  if (!secret) return false;
+  const trimmed = secret.trim();
+  if (trimmed.includes('...') || trimmed.includes('*') || trimmed.length < 15) return false;
+  return true;
+}
+
 function getEnvBinanceCredentials() {
-  const apiKey = (
+  const rawKey = (
     process.env.BINANCE_API_KEY ||
     process.env.BINANCE_KEY ||
     process.env.BINANCE_APIKEY ||
@@ -571,7 +678,7 @@ function getEnvBinanceCredentials() {
     ''
   ).trim();
 
-  const apiSecret = (
+  const rawSecret = (
     process.env.BINANCE_SECRET_KEY ||
     process.env.BINANCE_API_SECRET ||
     process.env.BINANCE_SECRET ||
@@ -584,6 +691,9 @@ function getEnvBinanceCredentials() {
     process.env.VITE_BINANCE_SECRET ||
     ''
   ).trim();
+
+  const apiKey = isValidBinanceKey(rawKey) ? rawKey : '';
+  const apiSecret = isValidBinanceSecret(rawSecret) ? rawSecret : '';
 
   const useTestnet =
     process.env.BINANCE_USE_TESTNET === 'true' ||
@@ -605,43 +715,55 @@ const getBinanceConfig = async () => {
   const kvTestnet = await kv.get('app_binance_use_testnet');
   const kvMarketType = await kv.get('app_binance_market_type');
 
+  let dbKey = '';
+  let dbSecret = '';
+  let dbTestnet: boolean | null = null;
+  let dbMarketType: 'SPOT' | 'FUTURES' | null = null;
+
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      const effectiveKey = (parsed.apiKey || envCreds.apiKey || '').trim();
-      const effectiveSecret = (decryptSecret(parsed.apiSecret) || envCreds.apiSecret || '').trim();
-      if (effectiveKey && effectiveSecret) {
-        return {
-          apiKey: effectiveKey,
-          apiSecret: effectiveSecret,
-          useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : (parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet),
-          marketType: ((kvMarketType as any) || parsed.marketType || envCreds.marketType) as 'SPOT' | 'FUTURES',
-          isConnected: true,
-        };
+      const parsedKey = (parsed.apiKey || '').trim();
+      const parsedSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+      if (isValidBinanceKey(parsedKey)) {
+        dbKey = parsedKey;
+      }
+      if (isValidBinanceSecret(parsedSecret)) {
+        dbSecret = parsedSecret;
+      }
+      if (parsed.useTestnet !== undefined) {
+        dbTestnet = Boolean(parsed.useTestnet);
+      }
+      if (parsed.marketType) {
+        dbMarketType = parsed.marketType;
       }
     } catch(e) {}
   }
 
-  const legacyApiKey = (await kv.get('app_binance_api_key') || '').trim();
-  const legacyApiSecret = (await kv.get('app_binance_api_secret') || '').trim();
-  if (legacyApiKey && legacyApiSecret) {
-    const useTestnet = kvTestnet !== null ? (kvTestnet === 'true') : ((await kv.get('app_binance_use_testnet')) === 'true');
-    const marketType = ((kvMarketType as any) || (await kv.get('app_binance_market_type')) || 'SPOT') as 'SPOT' | 'FUTURES';
-    return { apiKey: legacyApiKey, apiSecret: legacyApiSecret, useTestnet, marketType, isConnected: true };
-  }
+  const legacyKey = (await kv.get('app_binance_api_key') || '').trim();
+  const legacySecret = (await kv.get('app_binance_api_secret') || '').trim();
+  if (isValidBinanceKey(legacyKey) && !dbKey) dbKey = legacyKey;
+  if (isValidBinanceSecret(legacySecret) && !dbSecret) dbSecret = legacySecret;
 
-  if (envCreds.apiKey && envCreds.apiSecret) {
-    return {
-      apiKey: envCreds.apiKey,
-      apiSecret: envCreds.apiSecret,
-      useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : envCreds.useTestnet,
-      marketType: ((kvMarketType as any) || envCreds.marketType) as 'SPOT' | 'FUTURES',
-      isConnected: true,
-    };
-  }
+  const effectiveKey = dbKey || envCreds.apiKey;
+  const effectiveSecret = dbSecret || envCreds.apiSecret;
 
-  return { apiKey: '', apiSecret: '', useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : false, marketType: 'SPOT', isConnected: false };
+  const useTestnet = kvTestnet !== null
+    ? (kvTestnet === 'true')
+    : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet);
+
+  const marketType = ((kvMarketType as any) || dbMarketType || envCreds.marketType || 'FUTURES') as 'SPOT' | 'FUTURES';
+
+  const isConnected = isValidBinanceKey(effectiveKey) && isValidBinanceSecret(effectiveSecret);
+
+  return {
+    apiKey: effectiveKey,
+    apiSecret: effectiveSecret,
+    useTestnet,
+    marketType,
+    isConnected,
+  };
 };
 
 
@@ -723,12 +845,13 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
     if (isFutures) {
       const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
       const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
-      const totalMargin = parseFloat(data.totalMarginBalance || data.totalWalletBalance || '0') || 0;
+      const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
+      const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
       const availMargin = parseFloat(data.availableBalance || '0') || 0;
       const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
       const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
       freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      totalUsdtEquity = totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt);
+      totalUsdtEquity = totalWallet > 0 ? totalWallet : (totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt));
     } else {
       const balances = data.balances || [];
       const usdt = balances.find((b: any) => b.asset === 'USDT');
