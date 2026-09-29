@@ -41,8 +41,5 @@ export const sendTelegramMessage = (token: string, chatId: string, message: stri
           clearTimeout(timeout);
           resolve(false);
         });
-    } catch {
-      resolve(false);
-    }
   });
 };
