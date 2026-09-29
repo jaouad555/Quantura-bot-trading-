@@ -2193,6 +2193,7 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
 
         const data = await response.json();
         if (response.ok) {
+          console.log('[DEBUG] Binance Account API Response:', JSON.stringify(data).substring(0, 500));
           successfulData = data;
           actualMarketType = currentType;
           break;
@@ -2239,13 +2240,15 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
 
       const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
       const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
-      const totalMargin = parseFloat(data.totalMarginBalance || data.totalWalletBalance || '0') || 0;
+      const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
+      const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
       const availMargin = parseFloat(data.availableBalance || '0') || 0;
       const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
       const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
 
       freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      totalUsdtEquity = totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt);
+      // Prefer totalWalletBalance as it represents the total equity in USDT-margined futures
+      totalUsdtEquity = totalWallet > 0 ? totalWallet : (totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt));
     } else {
       // SPOT Account
       nonZeroBalances = (data.balances || [])
