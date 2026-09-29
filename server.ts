@@ -174,6 +174,7 @@ app.post('/api/config', async (req, res) => {
         }
       }
 
+      console.log(`[CONFIG API] Setting ${key} = ${finalValue.substring(0, 100)}${finalValue.length > 100 ? '...' : ''}`);
       await kv.set(key, finalValue);
 
       // Auto-synchronize strategyManager if botConfig or active_strategies changed

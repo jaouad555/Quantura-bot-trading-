@@ -464,7 +464,7 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <button
-                  onClick={() => onSelectTab('settings')}
+                  onClick={onOpenSettingsModal}
                   className={`w-full flex items-center justify-between transition-colors group cursor-pointer ${
                     activeTab === 'settings' ? 'text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
                   }`}

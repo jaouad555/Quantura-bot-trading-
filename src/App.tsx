@@ -156,7 +156,7 @@ export const App: React.FC = () => {
   }, []);
 
   const [activeTab, setActiveTab] = useState<
-    'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet' | 'settings'
+    'signal' | 'autoBot' | 'globalScanner' | 'mtf' | 'market' | 'chart' | 'backtest' | 'analysis' | 'history' | 'riskWallet'
   >('signal');
   const [language, setLanguage] = useState<Language>(() => {
     try {
@@ -271,14 +271,16 @@ export const App: React.FC = () => {
 
   const [telegramBotToken, setTelegramBotToken] = useState<string>(() => {
     try {
-      return apiStorage.getItem('app_telegram_bot_token') || '';
+      const saved = apiStorage.getItem('app_telegram_bot_token');
+      return (saved && saved !== 'null') ? saved : '';
     } catch {}
     return '';
   });
 
   const [telegramChatId, setTelegramChatId] = useState<string>(() => {
     try {
-      return apiStorage.getItem('app_telegram_chat_id') || '';
+      const saved = apiStorage.getItem('app_telegram_chat_id');
+      return (saved && saved !== 'null') ? saved : '';
     } catch {}
     return '';
   });
@@ -3216,6 +3218,7 @@ export const App: React.FC = () => {
             isDesktopOpen={isDesktopSidebarOpen}
             isAndroidView={isAndroidView}
             onOpenHelp={() => setIsHelpModalOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
 
           {/* Main Workspace */}
@@ -3257,7 +3260,7 @@ export const App: React.FC = () => {
               displayMode={displayMode}
               onChangeDisplayMode={setDisplayMode}
               onOpenNotifications={() => setIsNotificationsOpen(true)}
-              onOpenSettings={() => setActiveTab('settings')}
+              onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenRiskModal={() => setIsRiskModalOpen(true)}
               onOpenHelp={() => setIsHelpModalOpen(true)}
               onPanicCloseAll={handlePanicCloseAll}
@@ -3705,60 +3708,6 @@ export const App: React.FC = () => {
               onFullReset={handleFullReset}
             />
           )}
-
-          {/* Tab 9: Comprehensive Engineered Settings View */}
-          {activeTab === 'settings' && (
-            <ErrorBoundary fallbackTitle={language === 'ar' ? 'حماية إعدادات النظام' : 'Protection des Paramètres'}>
-              <SettingsView
-                language={language}
-                timezone={timezone}
-                isDeveloperMode={isDeveloperMode}
-                soundEnabled={soundEnabled}
-                notificationsEnabled={notificationsEnabled}
-                minConfidenceThreshold={minConfidenceThreshold}
-                telegramBotToken={telegramBotToken}
-                telegramChatId={telegramChatId}
-                binanceConfig={binanceConfig}
-                executionMode={executionMode}
-                paperWallet={paperWallet}
-                displayMode={displayMode}
-                botConfig={botConfig}
-                activeBotPositions={activeBotPositions}
-                username={username || 'JAOUAD'}
-                onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
-                onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
-                onOpenHelp={() => setIsHelpModalOpen(true)}
-                onRefreshBinancePermissions={fetchLiveBinanceBalance}
-                onLanguageChange={setLanguage}
-                onTimezoneChange={setTimezone}
-                onToggleDeveloperMode={setIsDeveloperMode}
-                onToggleSound={toggleSound}
-                onToggleNotifications={toggleNotifications}
-                onConfidenceChange={setMinConfidenceThreshold}
-                onTelegramConfigChange={(token, chatId) => {
-                  setTelegramBotToken(token);
-                  setTelegramChatId(chatId);
-                  try {
-                    apiStorage.setItem('app_telegram_bot_token', token);
-                    apiStorage.setItem('app_telegram_chat_id', chatId);
-                    fetch('/api/config/telegram', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ token, chatId }),
-                    }).catch(console.error);
-                  } catch {}
-                }}
-                onChangeDisplayMode={setDisplayMode}
-                onUpdatePaperWallet={(newWallet) => {
-                  updatePaperWalletSync(() => newWallet);
-                }}
-                onUpdateBotConfig={handleUpdateBotConfig}
-                onNavigateTab={setActiveTab}
-                onLogout={handleLogout}
-                onFullReset={handleFullReset}
-              />
-            </ErrorBoundary>
-          )}
         </main>
 
         {/* Global Institutional Platform Footer */}
@@ -3770,7 +3719,7 @@ export const App: React.FC = () => {
           binanceConfig={binanceConfig}
           onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
           onOpenRiskModal={() => setIsRiskModalOpen(true)}
-          onOpenSettingsModal={() => setActiveTab('settings')}
+          onOpenSettingsModal={() => setIsSettingsOpen(true)}
           onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
           onOpenHelpModal={() => setIsHelpModalOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
@@ -3808,6 +3757,10 @@ export const App: React.FC = () => {
           binanceConfig={binanceConfig}
           executionMode={executionMode}
           paperWallet={paperWallet}
+          displayMode={displayMode}
+          botConfig={botConfig}
+          activeBotPositions={activeBotPositions}
+          username={username || 'JAOUAD'}
           onOpenBinanceModal={() => {
             setIsSettingsOpen(false);
             setIsBinanceModalOpen(true);
@@ -3841,12 +3794,13 @@ export const App: React.FC = () => {
               }).catch(console.error);
             } catch {}
           }}
+          onChangeDisplayMode={setDisplayMode}
+          onUpdatePaperWallet={(newWallet) => {
+            updatePaperWalletSync(() => newWallet);
+          }}
+          onUpdateBotConfig={handleUpdateBotConfig}
           onLogout={handleLogout}
           onFullReset={handleFullReset}
-          onNavigateToSettingsPage={() => {
-            setIsSettingsOpen(false);
-            setActiveTab('settings');
-          }}
         />
 
         {/* Custom Paper Balance Management Modal */}

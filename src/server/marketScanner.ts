@@ -124,7 +124,7 @@ export async function scanAllPairs() {
       }
     });
 
-    const mode = await kv.get('app_execution_mode') || 'PAPER';
+    const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const isLive = mode === 'BINANCE_LIVE';
     const marketType = config.marketType || 'FUTURES';
 

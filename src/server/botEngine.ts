@@ -193,8 +193,10 @@ export const recordPushAlertDirect = async (alert: {
 export const getTelegramCredentials = async () => {
   const kvToken = await kv.get('app_telegram_bot_token');
   const kvChatId = await kv.get('app_telegram_chat_id');
-  const token = (kvToken || process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '').trim();
-  const chatId = (kvChatId || process.env.TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || '').trim();
+  
+  const token = (kvToken && kvToken !== 'null' ? kvToken : (process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '')).trim();
+  const chatId = (kvChatId && kvChatId !== 'null' ? kvChatId : (process.env.TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || '')).trim();
+  
   return { token, chatId };
 };
 
@@ -1104,7 +1106,8 @@ export const startBotEngine = () => {
       });
 
       const binanceConfig = await getBinanceConfig();
-      const isLiveMode = await kv.get('app_execution_mode') === 'BINANCE_LIVE';
+      const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+      const isLiveMode = mode === 'BINANCE_LIVE';
       const roeEngineInstance = RoeEngine.getInstance(botConfig.roeEngine);
 
       for (let i = 0; i < positions.length; i++) {

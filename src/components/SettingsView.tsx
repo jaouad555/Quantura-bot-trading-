@@ -522,92 +522,13 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   const currentAllowedPairs = botConfig?.allowedSymbols || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'];
 
   return (
-    <div className={`w-full h-full min-h-[calc(100vh-120px)] bg-[#070b14] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950 ${isArabic ? 'rtl text-right' : 'ltr'}`}>
+    <div className={`w-full h-full bg-[#070b14] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950 ${isArabic ? 'rtl text-right' : 'ltr'}`}>
       
-      {/* Top Ambient Glow */}
-      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-cyan-500/10 via-amber-500/5 to-transparent blur-3xl pointer-events-none -z-10" />
-
       {/* Main Container */}
-      <div className="max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6 space-y-5">
+      <div className="max-w-full w-full mx-auto p-3 sm:p-5 lg:p-6 space-y-5 relative">
+        {/* Ambient Glow */}
+        <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-cyan-500/10 via-amber-500/5 to-transparent blur-3xl pointer-events-none -z-10" />
         
-        {/* Top Header Card */}
-        <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-            {/* Left: Branding & Page Title */}
-            <div className="flex items-center gap-4">
-              <div className="relative group shrink-0">
-                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/40 via-cyan-500/40 to-emerald-500/40 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-300" />
-                <img
-                  src="/logo.png"
-                  alt="Quantura"
-                  referrerPolicy="no-referrer"
-                  className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-amber-500/60 shadow-xl shadow-cyan-950/40"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="font-['Syncopate',sans-serif] font-bold text-white tracking-widest text-lg sm:text-xl uppercase text-sweep-shine">
-                    QUANTURA
-                  </h1>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 font-mono font-bold border border-cyan-500/30">
-                    {APP_VERSION_TAG}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-mono font-bold border border-amber-500/30">
-                    {executionMode === 'BINANCE_LIVE' ? 'LIVE TRADING' : 'SIMULATION MODE'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="text-cyan-400 font-mono font-bold uppercase tracking-wider">
-                    {isArabic ? 'هندسة الإعدادات والتحكم في النظام' : isEn ? 'Institutional Settings Engine' : 'Panneau de Configuration Institutionnel'}
-                  </span>
-                  <span className="text-slate-600">·</span>
-                  <span className="font-mono text-slate-300">{username || 'JAOUAD'}</span>
-                  <span className="text-slate-600">·</span>
-                  <span className="text-slate-400 font-mono">jawman27227@gmail.com</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Quick Actions (Guide, Reset, Logout) */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0">
-              {onOpenHelp && (
-                <button
-                  type="button"
-                  onClick={onOpenHelp}
-                  className="px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 hover:border-cyan-500/60 text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{isArabic ? 'دليل البدء السريع' : isEn ? 'Quick Guide' : 'Guide Rapide'}</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setShowResetConfirm(true)}
-                className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
-                <span>{isArabic ? 'إعادة ضبط' : isEn ? 'Reset All' : 'Réinitialiser'}</span>
-              </button>
-
-              {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                >
-                  <LogOut className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{isArabic ? 'خروج' : isEn ? 'Logout' : 'Déconnexion'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Mobile-Friendly Horizontal Category Tab Bar */}
         <div className="lg:hidden overflow-x-auto no-scrollbar pb-1">
           <div className="flex items-center gap-1.5 min-w-max bg-[#090e1c] p-1.5 rounded-2xl border border-slate-800/80 shadow-md">
@@ -2013,7 +1934,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
 
       {/* QR Code Modal for 2FA */}
       {showQRModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#090e1c] border border-cyan-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-center">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2059,7 +1980,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
 
       {/* Factory Reset Double Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#090e1c] border border-rose-500/40 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/40 shrink-0">

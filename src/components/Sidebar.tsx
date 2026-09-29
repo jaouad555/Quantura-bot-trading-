@@ -60,6 +60,7 @@ interface SidebarProps {
   isDesktopOpen?: boolean;
   isAndroidView?: boolean;
   onOpenHelp?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -79,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isDesktopOpen = true,
   isAndroidView = false,
   onOpenHelp,
+  onOpenSettings,
 }) => {
   const t = translations[language] || translations.en;
   const isArabic = language === 'ar';
@@ -243,7 +245,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleSelectTab = (tabId: string) => {
-    setActiveTab(tabId);
+    if (tabId === 'settings' && onOpenSettings) {
+      onOpenSettings();
+    } else {
+      setActiveTab(tabId);
+    }
     if (onClose) {
       onClose();
     }
