@@ -1019,7 +1019,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                   </button>
 
                   {testResult && (
-                    <div className={`p-4 rounded-xl border text-xs font-mono transition-all animate-in fade-in duration-200 ${
+                    <div className={`p-4 rounded-xl border text-xs font-mono transition-all ${
                       testResult.success && testResult.canTrade
                         ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
                         : testResult.success && !testResult.canTrade
