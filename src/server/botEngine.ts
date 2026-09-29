@@ -381,6 +381,8 @@ function getEnvBinanceCredentials() {
 // Add helper to fetch binance config from KV or process.env
 const getBinanceConfig = async () => {
   const envCreds = getEnvBinanceCredentials();
+  const kvTestnet = await kv.get('app_binance_use_testnet');
+  const kvMarketType = await kv.get('app_binance_market_type');
 
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
@@ -392,8 +394,8 @@ const getBinanceConfig = async () => {
         return {
           apiKey: effectiveKey,
           apiSecret: effectiveSecret,
-          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet,
-          marketType: (parsed.marketType || envCreds.marketType) as 'SPOT' | 'FUTURES',
+          useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : (parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet),
+          marketType: ((kvMarketType as any) || parsed.marketType || envCreds.marketType) as 'SPOT' | 'FUTURES',
           isConnected: true,
         };
       }
@@ -403,8 +405,8 @@ const getBinanceConfig = async () => {
   const legacyApiKey = (await kv.get('app_binance_api_key') || '').trim();
   const legacyApiSecret = (await kv.get('app_binance_api_secret') || '').trim();
   if (legacyApiKey && legacyApiSecret) {
-    const useTestnet = (await kv.get('app_binance_use_testnet')) === 'true';
-    const marketType = ((await kv.get('app_binance_market_type')) || 'SPOT') as 'SPOT' | 'FUTURES';
+    const useTestnet = kvTestnet !== null ? (kvTestnet === 'true') : ((await kv.get('app_binance_use_testnet')) === 'true');
+    const marketType = ((kvMarketType as any) || (await kv.get('app_binance_market_type')) || 'SPOT') as 'SPOT' | 'FUTURES';
     return { apiKey: legacyApiKey, apiSecret: legacyApiSecret, useTestnet, marketType, isConnected: true };
   }
 
@@ -412,13 +414,13 @@ const getBinanceConfig = async () => {
     return {
       apiKey: envCreds.apiKey,
       apiSecret: envCreds.apiSecret,
-      useTestnet: envCreds.useTestnet,
-      marketType: envCreds.marketType,
+      useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : envCreds.useTestnet,
+      marketType: ((kvMarketType as any) || envCreds.marketType) as 'SPOT' | 'FUTURES',
       isConnected: true,
     };
   }
 
-  return { apiKey: '', apiSecret: '', useTestnet: false, marketType: 'SPOT', isConnected: false };
+  return { apiKey: '', apiSecret: '', useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : false, marketType: 'SPOT', isConnected: false };
 };
 
 

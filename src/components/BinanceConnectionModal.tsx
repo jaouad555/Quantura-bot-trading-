@@ -105,6 +105,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
   const [manualOrderAmount, setManualOrderAmount] = useState('15');
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderFeedback, setOrderFeedback] = useState<{ success: boolean; text: string } | null>(null);
+  const [isUpdatingNetwork, setIsUpdatingNetwork] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -143,9 +144,13 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               accountInfo,
               latencyMs: data.latencyMs,
             });
+            if (data.useTestnet !== undefined) {
+              setUseTestnet(data.useTestnet);
+            }
             onSaveConfig({
               ...activeBinanceConfig,
               isConnected: true,
+              useTestnet: data.useTestnet !== undefined ? data.useTestnet : activeBinanceConfig.useTestnet,
               accountInfo,
               marketType: data.marketType || activeBinanceConfig.marketType,
             });
@@ -153,7 +158,47 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
         })
         .catch(() => {});
     }
-  }, [isOpen, activeBinanceConfig.isConnected]);
+  }, [isOpen]);
+
+  const handleToggleTestnet = async (newVal: boolean) => {
+    setUseTestnet(newVal);
+    setIsUpdatingNetwork(true);
+    onSaveConfig({
+      ...activeBinanceConfig,
+      useTestnet: newVal,
+    });
+    try {
+      await fetch('/api/config/binance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: apiKey.trim() || undefined,
+          apiSecret: apiSecret.trim() || undefined,
+          useTestnet: newVal,
+          marketType,
+        }),
+      });
+      // Verify account on the new network
+      const res = await fetch(`/api/binance/account?marketType=${marketType}&useTestnet=${newVal}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: isArabic
+            ? `تم تحويل الشبكة بنجاح إلى: ${newVal ? 'Binance Testnet Sandbox' : 'Binance Mainnet'}! (الرصيد: $${(data.freeUsdt || 0).toFixed(2)} USDT)`
+            : isEn
+            ? `Network switched to: ${newVal ? 'Binance Testnet Sandbox' : 'Binance Mainnet'}! (Free: $${(data.freeUsdt || 0).toFixed(2)} USDT)`
+            : `Réseau basculé vers : ${newVal ? 'Binance Testnet' : 'Binance Mainnet'} ! (Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT)`,
+          accountInfo: data,
+          latencyMs: data.latencyMs,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to toggle testnet:', e);
+    } finally {
+      setIsUpdatingNetwork(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -231,14 +276,14 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           latencyMs: data.latencyMs,
         });
 
-        if (autoSave && hasInputKeys) {
-          // Securely save credentials on the backend
+        if (autoSave) {
+          // Securely save credentials and network preference on the backend
           fetch('/api/config/binance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              apiKey: apiKey.trim(),
-              apiSecret: apiSecret.trim(),
+              apiKey: hasInputKeys ? apiKey.trim() : undefined,
+              apiSecret: hasInputKeys ? apiSecret.trim() : undefined,
               useTestnet,
               marketType: data.marketType || marketType,
             })
@@ -623,17 +668,32 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
             {/* Network mode toggle (Testnet vs Mainnet) */}
             <div className="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
-              <div className="flex items-center gap-2">
-                <Server className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-300 font-bold">
-                  {isArabic ? 'شبكة الاختبار (Testnet Sandbox)' : isEn ? 'Use Binance Testnet Sandbox' : 'Utiliser Binance Testnet'}
-                </span>
+              <div className="flex items-center gap-2.5">
+                <Server className={`w-4 h-4 ${useTestnet ? 'text-amber-400' : 'text-slate-400'}`} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-200 font-bold text-sm">
+                      {isArabic ? 'شبكة الاختبار (Testnet Sandbox)' : isEn ? 'Use Binance Testnet Sandbox' : 'Utiliser Binance Testnet'}
+                    </span>
+                    {isUpdatingNetwork && (
+                      <span className="text-[10px] text-amber-400 animate-pulse font-mono">
+                        {isArabic ? 'جاري الحفظ...' : 'Saving...'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">
+                    {useTestnet 
+                      ? (isArabic ? 'الروبوت متصل بـ Testnet (بيئة تجريبية بدون أموال حقيقية)' : isEn ? 'Connected to Binance Testnet (Virtual funds)' : 'Connecté au Testnet Binance (Fonds virtuels)')
+                      : (isArabic ? 'الروبوت متصل بـ Mainnet (تداول حقيقي بأموال حقيقية)' : isEn ? 'Connected to Binance Mainnet (Live Real Money)' : 'Connecté au Mainnet Binance (Argent Réel)')}
+                  </span>
+                </div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
                 <input
                   type="checkbox"
                   checked={useTestnet}
-                  onChange={(e) => setUseTestnet(e.target.checked)}
+                  disabled={isUpdatingNetwork}
+                  onChange={(e) => handleToggleTestnet(e.target.checked)}
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>

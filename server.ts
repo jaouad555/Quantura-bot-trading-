@@ -1933,6 +1933,8 @@ function getEnvBinanceCredentials() {
 
 app.get('/api/config/binance', async (req, res) => {
   const envCreds = getEnvBinanceCredentials();
+  const kvTestnet = await kv.get('app_binance_use_testnet');
+  const kvMarketType = await kv.get('app_binance_market_type');
 
   const storedStr = await kv.get('binance_api_config');
   if (storedStr) {
@@ -1953,8 +1955,8 @@ app.get('/api/config/binance', async (req, res) => {
         return res.json({
           configured: true,
           apiKeyPrefix: effectiveKey.length > 8 ? effectiveKey.substring(0, 6) + '...' + effectiveKey.slice(-4) : effectiveKey.substring(0, 4) + '...',
-          useTestnet: parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet,
-          marketType: parsed.marketType || envCreds.marketType
+          useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : (parsed.useTestnet !== undefined ? parsed.useTestnet : envCreds.useTestnet),
+          marketType: (kvMarketType as any) || parsed.marketType || envCreds.marketType
         });
       }
     } catch(e) {}
@@ -1964,12 +1966,16 @@ app.get('/api/config/binance', async (req, res) => {
     return res.json({
       configured: true,
       apiKeyPrefix: envCreds.apiKey.length > 8 ? envCreds.apiKey.substring(0, 6) + '...' + envCreds.apiKey.slice(-4) : envCreds.apiKey.substring(0, 4) + '...',
-      useTestnet: envCreds.useTestnet,
-      marketType: envCreds.marketType
+      useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : envCreds.useTestnet,
+      marketType: (kvMarketType as any) || envCreds.marketType
     });
   }
 
-  return res.json({ configured: false, useTestnet: false, marketType: 'SPOT' });
+  return res.json({ 
+    configured: false, 
+    useTestnet: kvTestnet !== null ? (kvTestnet === 'true') : false, 
+    marketType: (kvMarketType as any) || 'SPOT' 
+  });
 });
 
 app.post('/api/config/binance', async (req, res) => {
@@ -1980,13 +1986,23 @@ app.post('/api/config/binance', async (req, res) => {
   
   const envCreds = getEnvBinanceCredentials();
   
+  // Persist network preference in dedicated KV keys so toggling Testnet never gets wiped
+  if (useTestnet !== undefined) {
+    await kv.set('app_binance_use_testnet', Boolean(useTestnet) ? 'true' : 'false');
+  }
+  if (marketType) {
+    await kv.set('app_binance_market_type', marketType);
+  }
+
   // If user provided a mask or empty string, retrieve existing valid key
   const storedStr = await kv.get('binance_api_config');
+  let existingStoredKey = '';
+  let existingStoredSecret = '';
   if (storedStr) {
     try {
       const parsed = JSON.parse(storedStr);
-      const existingStoredKey = (parsed.apiKey || '').trim();
-      const existingStoredSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+      existingStoredKey = (parsed.apiKey || '').trim();
+      existingStoredSecret = (decryptSecret(parsed.apiSecret) || '').trim();
 
       if (!isValidBinanceKey(finalKey)) {
         finalKey = isValidBinanceKey(existingStoredKey) ? existingStoredKey : envCreds.apiKey;
@@ -2000,23 +2016,34 @@ app.post('/api/config/binance', async (req, res) => {
     if (!isValidBinanceSecret(finalSecret)) finalSecret = envCreds.apiSecret;
   }
 
-  if (!isValidBinanceKey(finalKey) || !isValidBinanceSecret(finalSecret)) {
-    return res.status(400).json({ error: 'Valid unmasked API Key and Secret are required' });
+  if (isValidBinanceKey(finalKey) && isValidBinanceSecret(finalSecret)) {
+    const secureConfig = {
+      apiKey: finalKey,
+      apiSecret: encryptSecret(finalSecret),
+      useTestnet: Boolean(useTestnet),
+      marketType: marketType || 'SPOT'
+    };
+    await kv.set('binance_api_config', JSON.stringify(secureConfig));
+  } else if (storedStr) {
+    try {
+      const parsed = JSON.parse(storedStr);
+      if (useTestnet !== undefined) parsed.useTestnet = Boolean(useTestnet);
+      if (marketType) parsed.marketType = marketType;
+      await kv.set('binance_api_config', JSON.stringify(parsed));
+    } catch(e) {}
   }
 
-  const secureConfig = {
-    apiKey: finalKey,
-    apiSecret: encryptSecret(finalSecret),
-    useTestnet: Boolean(useTestnet),
-    marketType: marketType || 'SPOT'
-  };
-  await kv.set('binance_api_config', JSON.stringify(secureConfig));
-  res.json({ success: true, message: 'Binance credentials saved securely in backend.' });
+  res.json({ 
+    success: true, 
+    useTestnet: Boolean(useTestnet), 
+    message: 'Binance configuration and network preference saved successfully.' 
+  });
 });
 
 app.delete('/api/config/binance', async (req, res) => {
   await kv.delete('binance_api_config');
-  res.json({ success: true, message: 'Binance credentials deleted.' });
+  await kv.delete('app_binance_use_testnet');
+  res.json({ success: true, message: 'Binance credentials and network configuration reset.' });
 });
 
 // -------------------------------------------------------------
@@ -2090,8 +2117,10 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
     apiSecret = envCreds.apiSecret;
   }
 
-  const useTestnet = headerTestnet || bodyTestnet || (dbTestnet !== null ? dbTestnet : envCreds.useTestnet);
-  const marketType = headerMarketType || bodyMarketType || dbMarketType || envCreds.marketType || 'SPOT';
+  const kvTestnet = await kv.get('app_binance_use_testnet');
+  const kvMarketType = await kv.get('app_binance_market_type');
+  const useTestnet = headerTestnet || bodyTestnet || (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet));
+  const marketType = headerMarketType || bodyMarketType || (kvMarketType as any) || dbMarketType || envCreds.marketType || 'SPOT';
 
   return { apiKey, apiSecret, useTestnet, marketType: marketType as any };
 }
