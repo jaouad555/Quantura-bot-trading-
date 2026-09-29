@@ -52,6 +52,7 @@ import { calculateTechnicalIndicators } from './utils/indicators';
 import { TradingPair, RESPECTED_TRADING_PAIRS } from './utils/tradingPairs';
 import { LiquidityMonitor } from './utils/liquidityMonitor';
 import { sendTelegramMessage } from './utils/telegram';
+import { calculatePositionUnrealizedPnl } from './utils/portfolioCalc';
 import {
   LayoutDashboard,
   Bot,
@@ -2211,18 +2212,23 @@ export const App: React.FC = () => {
 
           const isLong = pos.decision === 'LONG';
           const lev = pos.leverage || 1;
-          const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
-          const currentRoePercent = priceDiffPct * lev;
           const remainingMargin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
             ? pos.remainingAmountUsdt
             : (pos.marginUsdt || pos.initialAmountUsdt || 0);
-          const unrealizedPnlUsdt = remainingMargin * (currentRoePercent / 100);
+
+          // Authoritative PnL calculation using consistent fee model
+          const unrealizedPnlUsdt = calculatePositionUnrealizedPnl({ ...pos, currentPrice: p }, p);
+          const currentRoePercent = remainingMargin > 0 ? (unrealizedPnlUsdt / remainingMargin) * 100 : 0;
+          const priceDiffPct = ((p - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * 100;
+          const grossROE = priceDiffPct * lev;
 
           changed = true;
           return {
             ...pos,
             currentPrice: p,
             roePercent: Math.round(currentRoePercent * 100) / 100,
+            netROE: Math.round(currentRoePercent * 100) / 100,
+            grossROE: Math.round(grossROE * 100) / 100,
             unrealizedPnlUsdt: Math.round(unrealizedPnlUsdt * 100) / 100,
             pnlHistory: [...(pos.pnlHistory || []), Math.round(currentRoePercent * 10) / 10].slice(-50),
           };

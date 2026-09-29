@@ -1077,16 +1077,18 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     const isLong = pos.decision === 'LONG';
     const lev = Math.max(1, Number(pos.leverage) || 1);
     const entryP = Number(pos.entryPrice) > 0 ? Number(pos.entryPrice) : p;
-    const priceDiffPct = entryP > 0 ? (((p - entryP) / entryP) * (isLong ? 1 : -1) * 100) : 0;
-    const rawGross = pos.grossROE !== undefined && pos.grossROE !== null ? Number(pos.grossROE) : (priceDiffPct * lev);
-    const grossROE = !isNaN(rawGross) && isFinite(rawGross) ? rawGross : 0;
-    const rawNet = pos.netROE !== undefined && pos.netROE !== null ? Number(pos.netROE) : (pos.roePercent !== undefined && pos.roePercent !== null ? Number(pos.roePercent) : grossROE);
-    const netROE = !isNaN(rawNet) && isFinite(rawNet) ? rawNet : 0;
-    const roePercent = netROE;
     const margin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt >= 0
       ? pos.remainingAmountUsdt
       : (Number(pos.marginUsdt) || Number(pos.initialAmountUsdt) || 0);
     const usdt = calculatePositionUnrealizedPnl(pos, p) || 0;
+    
+    // Derive netROE and roePercent directly from the calculated net PnL (usdt) to ensure 100% mathematical consistency with the displayed USDT value!
+    const netROE = margin > 0 ? (usdt / margin) * 100 : 0;
+    const roePercent = netROE;
+
+    const priceDiffPct = entryP > 0 ? (((p - entryP) / entryP) * (isLong ? 1 : -1) * 100) : 0;
+    const rawGross = pos.grossROE !== undefined && pos.grossROE !== null ? Number(pos.grossROE) : (priceDiffPct * lev);
+    const grossROE = !isNaN(rawGross) && isFinite(rawGross) ? rawGross : 0;
     const rawPeak = pos.peakROE !== undefined && pos.peakROE !== null && !isNaN(Number(pos.peakROE)) ? Number(pos.peakROE) : Math.max(0, roePercent);
     const peakROE = Number(rawPeak) || 0;
     const rawDrawdown = pos.roeDrawdown !== undefined && pos.roeDrawdown !== null && !isNaN(Number(pos.roeDrawdown)) ? Number(pos.roeDrawdown) : Math.max(0, peakROE - roePercent);
