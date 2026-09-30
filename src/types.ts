@@ -665,6 +665,8 @@ export interface BinanceAccountInfo {
   balances: BinanceAccountBalance[];
   totalUsdtEquity: number;
   freeUsdt: number;
+  inTradeMargin?: number;
+  unrealizedProfit?: number;
 }
 
 export interface BinanceApiConfig {

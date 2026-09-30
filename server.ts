@@ -2244,12 +2244,15 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
       const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
       const availMargin = parseFloat(data.availableBalance || '0') || 0;
+      const totalUnrealized = parseFloat(data.totalUnrealizedProfit || '0') || 0;
+      const totalInitialMargin = parseFloat(data.totalInitialMargin || '0') || 0;
       const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
       const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
 
       freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      // Prefer totalWalletBalance as it represents the total equity in USDT-margined futures
-      totalUsdtEquity = totalWallet > 0 ? totalWallet : (totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt));
+      // In Binance Futures, totalMarginBalance represents the total live equity including unrealized profit/loss
+      totalUsdtEquity = totalMargin > 0 ? totalMargin : (totalWallet + totalUnrealized);
+      if (totalUsdtEquity <= 0) totalUsdtEquity = freeUsdt;
     } else {
       // SPOT Account
       nonZeroBalances = (data.balances || [])
@@ -2306,6 +2309,8 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       balances: nonZeroBalances,
       freeUsdt: Math.round(freeUsdt * 100) / 100,
       totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
+      inTradeMargin: Math.round((parseFloat(data.totalInitialMargin || '0') || 0) * 100) / 100,
+      unrealizedProfit: Math.round((parseFloat(data.totalUnrealizedProfit || '0') || 0) * 100) / 100,
       useTestnet,
       latencyMs,
       marketType: actualMarketType,

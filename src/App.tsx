@@ -414,6 +414,8 @@ export const App: React.FC = () => {
             takerCommission: data.takerCommission || 0,
             freeUsdt: Number(data.freeUsdt || 0),
             totalUsdtEquity: Number(data.totalUsdtEquity || data.freeUsdt || 0),
+            inTradeMargin: Number(data.inTradeMargin || 0),
+            unrealizedProfit: Number(data.unrealizedProfit || 0),
           }
         }));
 

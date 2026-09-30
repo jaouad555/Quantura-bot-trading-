@@ -1039,14 +1039,16 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;
   const isOverMaxTrades = displayPositions.length > maxTradesLimit;
 
-  const metrics = calculatePortfolioMetrics(paperWallet, displayPositions, currentPrice, selectedSymbol);
+  const metrics = calculatePortfolioMetrics(
+    paperWallet, 
+    activePositions, 
+    currentPrice, 
+    selectedSymbol, 
+    isLiveMode, 
+    binanceConfig?.accountInfo
+  );
   const floatingPnl = Number(metrics.floatingPnl) || 0;
-
-  const totalEquity = Number(
-    isLiveMode && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
-      ? binanceConfig.accountInfo.totalUsdtEquity
-      : metrics.totalEquity
-  ) || 0;
+  const totalEquity = Number(metrics.totalEquity) || 0;
 
   // Live calculation helper for Futures / Spot positions
   const getPositionMetrics = (pos: ActiveBotPosition) => {

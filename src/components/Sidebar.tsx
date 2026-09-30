@@ -468,39 +468,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Portfolio Balance / Total Equity */}
           {(() => {
             const isLive = executionMode === 'BINANCE_LIVE';
-            if (isLive && binanceConfig?.accountInfo) {
-              const liveEquity = Number(binanceConfig.accountInfo.totalUsdtEquity || binanceConfig.accountInfo.freeUsdt || 0);
-              const freeCash = Number(binanceConfig.accountInfo.freeUsdt || 0);
-              const livePositions = (activeBotPositions || []).filter(p => p.mode === 'BINANCE_LIVE');
-              const inTradeMargin = livePositions.reduce((acc, p) => acc + (p.remainingAmountUsdt || p.marginUsdt || 0), 0);
-              return (
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-                      {isArabic ? 'رصيد بينانس الحي' : 'Binance Live Equity'}
-                    </span>
-                    <span className="text-[8px] font-mono font-bold px-1 rounded bg-rose-500/20 text-rose-300">
-                      LIVE
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono font-bold text-emerald-300 truncate">
-                    ${liveEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
-                  </div>
-                  <div className="text-[8px] text-slate-400 font-mono mt-1 flex items-center justify-between border-t border-slate-900 pt-0.5">
-                    <span>{isArabic ? 'متاح:' : 'Free:'} ${freeCash.toFixed(2)}</span>
-                    <span>{isArabic ? 'في الصفقات:' : 'Trades:'} ${inTradeMargin.toFixed(2)}</span>
-                  </div>
-                </div>
-              );
-            }
-            const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions);
+            const metrics = calculatePortfolioMetrics(
+              paperWallet, 
+              activeBotPositions, 
+              undefined, 
+              undefined, 
+              isLive, 
+              binanceConfig?.accountInfo
+            );
             return (
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
-                    {isArabic ? 'إجمالي المحفظة' : 'Equity'}
+                    {isLive ? (isArabic ? 'رصيد بينانس الحي' : 'Binance Live Equity') : (isArabic ? 'إجمالي المحفظة' : 'Equity')}
                   </span>
-                  {metrics.floatingPnl !== 0 && (
+                  {isLive ? (
+                    <span className="text-[8px] font-mono font-bold px-1 rounded bg-rose-500/20 text-rose-300">
+                      LIVE
+                    </span>
+                  ) : metrics.floatingPnl !== 0 && (
                     <span className={`text-[8px] font-mono font-bold px-1 rounded ${
                       metrics.floatingPnl >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
                     }`}>
@@ -509,14 +495,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </div>
                 <div className="text-[11px] font-mono font-bold text-emerald-300 truncate">
-                  ${metrics.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT
+                  ${metrics.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                 </div>
-                {metrics.inTradeMargin > 0 && (
-                  <div className="text-[8px] text-slate-400 font-mono mt-1 flex items-center justify-between border-t border-slate-900 pt-0.5">
-                    <span>{isArabic ? 'متاح:' : 'Free:'} ${metrics.freeCash.toFixed(0)}</span>
-                    <span>{isArabic ? 'في الصفقات:' : 'Trades:'} ${metrics.inTradeMargin.toFixed(0)}</span>
-                  </div>
-                )}
+                <div className="text-[8px] text-slate-400 font-mono mt-1 flex items-center justify-between border-t border-slate-900 pt-0.5">
+                  <span>{isArabic ? 'متاح:' : 'Free:'} ${metrics.freeCash.toFixed(2)}</span>
+                  <span>{isArabic ? 'في الصفقات:' : 'Trades:'} ${metrics.inTradeMargin.toFixed(2)}</span>
+                </div>
               </div>
             );
           })()}

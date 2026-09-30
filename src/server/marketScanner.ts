@@ -622,9 +622,21 @@ async function processTradingSignal(
     let binanceOrderId = null;
     if (isLive) {
       const orderSide = isLong ? 'BUY' : 'SELL';
-      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice);
+      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false);
       if (!orderRes.success || !orderRes.orderId) {
         console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED or No OrderID:`, orderRes.error);
+        sendServerTelegramNotification(
+          `⚠️ <b>Binance Order Execution Warning</b>\n\n` +
+          `🔹 Pair: <b>${symbol}</b> (${signal.decision})\n` +
+          `❌ Reason: ${orderRes.error || 'Unknown error'}\n` +
+          `ℹ️ Mode: Live/Testnet`
+        );
+        recordPushAlertDirect({
+          title: `[${symbol}] Binance Live Order Failed ⚠️`,
+          body: `Order could not be filled on Binance: ${orderRes.error || 'Check balance/API permissions'}`,
+          type: 'SYSTEM',
+          symbol: symbol,
+        }).catch(() => {});
         return;
       }
       binanceOrderId = orderRes.orderId;

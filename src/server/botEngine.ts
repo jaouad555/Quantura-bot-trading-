@@ -874,10 +874,14 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
       const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
       const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
       const availMargin = parseFloat(data.availableBalance || '0') || 0;
+      const totalUnrealized = parseFloat(data.totalUnrealizedProfit || '0') || 0;
       const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
       const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
+      
       freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      totalUsdtEquity = totalWallet > 0 ? totalWallet : (totalMargin > 0 ? totalMargin : (usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : freeUsdt));
+      // In Binance Futures, totalMarginBalance is the true total account equity (Wallet Balance + Floating PnL)
+      totalUsdtEquity = totalMargin > 0 ? totalMargin : (totalWallet + totalUnrealized);
+      if (totalUsdtEquity <= 0) totalUsdtEquity = freeUsdt;
     } else {
       const balances = data.balances || [];
       const usdt = balances.find((b: any) => b.asset === 'USDT');
@@ -906,82 +910,154 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
   }
 };
 
+export const formatBinanceQuantity = (symbol: string, quantity: number, price?: number): string => {
+  if (!quantity || isNaN(quantity) || quantity <= 0) return '0';
+  const sym = symbol.toUpperCase().replace('/', '').trim();
+  
+  let decimals = 3;
+  if (sym.startsWith('BTC') || sym.startsWith('ETH')) {
+    decimals = 3;
+  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('AVAX') || sym.startsWith('LINK') || sym.startsWith('NEAR') || sym.startsWith('AAVE') || sym.startsWith('DOT') || sym.startsWith('LTC') || sym.startsWith('BCH') || sym.startsWith('ETC') || sym.startsWith('ATOM')) {
+    decimals = 2;
+  } else if (sym.startsWith('XRP') || sym.startsWith('ADA') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('TRX') || sym.startsWith('UNI') || sym.startsWith('XLM') || sym.startsWith('FTM') || sym.startsWith('ALGO')) {
+    decimals = 1;
+  } else if (sym.startsWith('DOGE') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB')) {
+    decimals = 0;
+  } else {
+    if (price && price > 1000) decimals = 3;
+    else if (price && price > 50) decimals = 2;
+    else if (price && price > 1) decimals = 1;
+    else decimals = 0;
+  }
+
+  const factor = Math.pow(10, decimals);
+  const truncated = Math.floor(quantity * factor) / factor;
+  return decimals === 0 ? Math.floor(truncated).toString() : truncated.toFixed(decimals);
+};
+
 // Simulate or real execute order
-export const serverExecuteOrder = async (symbol: string, side: string, quoteOrderQty: number, quantity: number, currentPrice: number) => {
+export const serverExecuteOrder = async (
+  symbol: string, 
+  side: string, 
+  quoteOrderQty: number, 
+  quantity: number, 
+  currentPrice: number,
+  leverage: number = 3,
+  reduceOnly: boolean = false
+) => {
     const config = await getBinanceConfig();
     if (!config.isConnected) {
       return { success: false, error: 'Not connected' };
     }
     
-    console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${quantity} Price: ${currentPrice}`);
+    console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${quantity} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly}`);
     
     try {
-        let formattedQty = quantity;
-        if (quantity && currentPrice) {
-          if (currentPrice > 1000) formattedQty = Number(quantity.toFixed(3)); // BTC, ETH
-          else if (currentPrice > 10) formattedQty = Number(quantity.toFixed(1)); // SOL, BNB
-          else if (currentPrice > 1) formattedQty = Math.floor(quantity); // low price coins
-          else formattedQty = Math.floor(quantity); // DOGE, SHIB, PEPE etc
-        } else if (quantity) {
-          formattedQty = Number(quantity.toFixed(3)); // fallback
-        }
+        const normSymbol = symbol.toUpperCase().replace('/', '').trim();
+        const formattedQty = formatBinanceQuantity(normSymbol, quantity, currentPrice);
 
-        const params: Record<string, string> = {
-          symbol: symbol.toUpperCase(),
-          side: side.toUpperCase(),
-          type: 'MARKET',
-          timestamp: Date.now().toString(),
-          recvWindow: '10000',
-        };
-
-        if (config.marketType === 'FUTURES') {
-            params.quantity = Number(formattedQty).toString();
-        } else {
-            if (quoteOrderQty && quoteOrderQty > 0) {
-              params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
-            } else if (formattedQty && formattedQty > 0) {
-              params.quantity = Number(formattedQty).toString();
-            }
-        }
-
-        const queryString = new URLSearchParams(params).toString();
-        const signature = createBinanceSignature(queryString, config.apiSecret!);
-        
-        let orderUrl = '';
         if (config.marketType === 'FUTURES') {
           const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
-          orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+          
+          // 1. Ensure symbol leverage is configured on Binance Futures
+          try {
+            const targetLev = Math.max(1, Math.min(50, leverage || 3));
+            const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${Date.now()}&recvWindow=10000`;
+            const levSig = createBinanceSignature(levQuery, config.apiSecret!);
+            await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}&signature=${levSig}`, {
+              method: 'POST',
+              headers: {
+                'X-MBX-APIKEY': config.apiKey!,
+                'Content-Type': 'application/json',
+              },
+            });
+          } catch (levErr) {
+            console.warn(`[SERVER ENGINE] Leverage setting notice for ${normSymbol}:`, levErr);
+          }
+
+          // 2. Prepare Futures order parameters
+          const params: Record<string, string> = {
+            symbol: normSymbol,
+            side: side.toUpperCase(),
+            type: 'MARKET',
+            quantity: formattedQty,
+            timestamp: Date.now().toString(),
+            recvWindow: '10000',
+          };
+
+          if (reduceOnly) {
+            params.reduceOnly = 'true';
+          }
+
+          const queryString = new URLSearchParams(params).toString();
+          const signature = createBinanceSignature(queryString, config.apiSecret!);
+          const orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const response = await fetch(orderUrl, {
+            method: 'POST',
+            headers: {
+              'X-MBX-APIKEY': config.apiKey!,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error("[SERVER ENGINE] Binance Futures Order Error:", data);
+            return { success: false, error: data.msg || 'Binance order rejected', binanceCode: data.code };
+          }
+
+          return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
         } else {
+          // SPOT Order
           const baseUrl = getBinanceApiBase(config.useTestnet);
-          orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
+          const params: Record<string, string> = {
+            symbol: normSymbol,
+            side: side.toUpperCase(),
+            type: 'MARKET',
+            timestamp: Date.now().toString(),
+            recvWindow: '10000',
+          };
+
+          if (quoteOrderQty && quoteOrderQty > 0) {
+            params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
+          } else {
+            params.quantity = formattedQty;
+          }
+
+          const queryString = new URLSearchParams(params).toString();
+          const signature = createBinanceSignature(queryString, config.apiSecret!);
+          const orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const response = await fetch(orderUrl, {
+            method: 'POST',
+            headers: {
+              'X-MBX-APIKEY': config.apiKey!,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error("[SERVER ENGINE] Binance Spot Order Error:", data);
+            return { success: false, error: data.msg || 'Binance order rejected', binanceCode: data.code };
+          }
+
+          return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
         }
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
-
-        const response = await fetch(orderUrl, {
-          method: 'POST',
-          headers: {
-            'X-MBX-APIKEY': config.apiKey!,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-
-        const data = await response.json();
-
-        if (!response.ok) {
-           console.error("[SERVER ENGINE] Binance Error:", data);
-           return { success: false, error: data.msg };
-        }
-
-        return { success: true, orderId: data.orderId || Date.now().toString() };
-    } catch (err) {
+    } catch (err: any) {
         console.error("[SERVER ENGINE] Fetch Error:", err);
-        return { success: false, error: 'Network error executing order' };
+        return { success: false, error: err.message || 'Network error executing order' };
     }
-}
+};
 
 
 export const permanentlyClosedPositionIds = new Set<string>();
@@ -1232,7 +1308,7 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP, lev, true);
             }
           } else {
             // Margin lost entirely; zero returned to paper wallet
@@ -1340,7 +1416,7 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP, lev, true);
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -1406,7 +1482,7 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP, lev, true);
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -1483,7 +1559,7 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP, lev, true);
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -1699,7 +1775,7 @@ export const closePositionDirect = async (
 
     if (isPosLive) {
       if (binanceConfig.isConnected) {
-        await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP);
+        await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP, lev, true);
       }
     }
 

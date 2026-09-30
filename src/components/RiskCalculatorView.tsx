@@ -151,7 +151,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
 
   // Determine display values based on mode
   const displayTotalEquity = isLive && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
-    ? binanceConfig.accountInfo.totalUsdtEquity
+    ? binanceConfig.accountInfo.totalUsdtEquity + (totalCombinedUnrealizedPnl !== 0 ? totalCombinedUnrealizedPnl - (binanceConfig.accountInfo.unrealizedProfit || 0) : 0)
     : paperWallet.balance + totalCombinedMargin + totalCombinedUnrealizedPnl;
 
   const displayAvailableBalance = isLive && binanceConfig?.accountInfo?.freeUsdt !== undefined
@@ -159,23 +159,25 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
     : paperWallet.balance;
 
   const displayRealizedPnl = isLive
-    ? 0 // We don't have total realized PNL across the live account without trade history
+    ? 0
     : paperWallet.realizedPnl;
     
-  const displayTotalRoiPercent = isLive 
-    ? 0
-    : (paperWallet.balance + totalCombinedMargin > 0 
-      ? (((paperWallet.realizedPnl || 0) + totalCombinedUnrealizedPnl) / (paperWallet.balance + totalCombinedMargin)) * 100
-      : 0);
+  const baselineEquity = isLive
+    ? Math.max(10, displayTotalEquity - totalCombinedUnrealizedPnl)
+    : (paperWallet.balance + totalCombinedMargin);
+
+  const displayTotalRoiPercent = baselineEquity > 0 
+    ? (((isLive ? 0 : paperWallet.realizedPnl || 0) + totalCombinedUnrealizedPnl) / baselineEquity) * 100
+    : 0;
 
   const displayInTradeMarginUsdt = isLive 
-    ? (binanceConfig?.accountInfo?.totalUsdtEquity !== undefined && binanceConfig?.accountInfo?.freeUsdt !== undefined
-        ? binanceConfig.accountInfo.totalUsdtEquity - binanceConfig.accountInfo.freeUsdt 
-        : 0)
+    ? (binanceConfig?.accountInfo?.inTradeMargin || (binanceConfig?.accountInfo?.totalUsdtEquity !== undefined && binanceConfig?.accountInfo?.freeUsdt !== undefined
+        ? Math.max(0, binanceConfig.accountInfo.totalUsdtEquity - binanceConfig.accountInfo.freeUsdt)
+        : totalCombinedMargin))
     : totalCombinedMargin;
 
-  const displayUnrealizedPnlUsdt = isLive ? 0 : totalCombinedUnrealizedPnl;
-  const displayUnrealizedPnlPercent = isLive ? 0 : (totalCombinedMargin > 0 ? (totalCombinedUnrealizedPnl / totalCombinedMargin) * 100 : 0);
+  const displayUnrealizedPnlUsdt = totalCombinedUnrealizedPnl;
+  const displayUnrealizedPnlPercent = displayInTradeMarginUsdt > 0 ? (totalCombinedUnrealizedPnl / displayInTradeMarginUsdt) * 100 : 0;
 
 
   // Actions

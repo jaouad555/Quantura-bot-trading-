@@ -240,30 +240,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   const portfolioMetrics = React.useMemo(() => {
     const isLive = executionMode === 'BINANCE_LIVE';
-    if (isLive && binanceConfig?.accountInfo) {
-      const realTotalEquity = Number(binanceConfig.accountInfo.totalUsdtEquity || binanceConfig.accountInfo.freeUsdt || 0);
-      const realFreeCash = Number(binanceConfig.accountInfo.freeUsdt || 0);
-      const livePositions = (activeBotPositions || []).filter(p => p.mode === 'BINANCE_LIVE');
-      const inTradeMargin = livePositions.reduce((acc, p) => acc + (p.remainingAmountUsdt || p.marginUsdt || 0), 0);
-      const floatingPnl = livePositions.reduce((acc, p) => {
-        const curPrice = (p.symbol === selectedSymbol && ticker?.price) ? ticker.price : p.currentPrice;
-        if (!p.entryPrice || !curPrice) return acc;
-        const priceDiff = p.decision === 'LONG' ? (curPrice - p.entryPrice) : (p.entryPrice - curPrice);
-        const percentChange = priceDiff / p.entryPrice;
-        const leverage = p.leverage || 1;
-        const margin = p.remainingAmountUsdt || p.marginUsdt || p.initialAmountUsdt || 0;
-        return acc + (margin * percentChange * leverage);
-      }, 0);
-      return {
-        totalPortfolioEquity: Math.round(realTotalEquity * 100) / 100,
-        freeCash: Math.round(realFreeCash * 100) / 100,
-        inTradeMargin: Math.round(inTradeMargin * 100) / 100,
-        floatingPnl: Math.round(floatingPnl * 100) / 100,
-        realizedPnl: 0,
-        totalNetPnl: Math.round(floatingPnl * 100) / 100,
-      };
-    }
-    const res = calculatePortfolioMetrics(paperWallet, activeBotPositions, ticker?.price, selectedSymbol);
+    const res = calculatePortfolioMetrics(
+      paperWallet, 
+      activeBotPositions, 
+      ticker?.price, 
+      selectedSymbol,
+      isLive,
+      binanceConfig?.accountInfo
+    );
     const totalNetPnl = res.realizedPnl + res.floatingPnl;
     return {
       totalPortfolioEquity: res.totalEquity,

@@ -1,4 +1,4 @@
-import { ActiveBotPosition, PaperWallet } from '../types';
+import { ActiveBotPosition, PaperWallet, BinanceAccountInfo } from '../types';
 
 /**
  * Calculates the unrealized PnL (in USDT) for an active bot position.
@@ -40,17 +40,25 @@ export function calculatePositionUnrealizedPnl(
 }
 
 /**
- * Calculates total portfolio equity:
- * Equity = Free Cash + In-Trade Margin + Floating (Unrealized) PnL
+ * Calculates total portfolio equity and detailed sub-metrics:
+ * Supports both PAPER simulation and BINANCE LIVE / TESTNET mode seamlessly.
+ *
+ * In Futures:
+ * Total Equity = Free Cash (Available Balance) + In-Trade Margins + Floating Unrealized PnL
+ * (Or Binance totalMarginBalance + live tick difference)
  */
 export function calculatePortfolioMetrics(
   paperWallet?: PaperWallet | null,
   activeBotPositions?: ActiveBotPosition[] | null,
   liveTickerPrice?: number,
-  selectedSymbol?: string
+  selectedSymbol?: string,
+  isLiveMode?: boolean,
+  binanceAccountInfo?: BinanceAccountInfo | null
 ) {
-  const freeCash = Math.max(0, paperWallet?.balance ?? 1000);
-  const positions = activeBotPositions || [];
+  const isLive = Boolean(isLiveMode);
+  const positions = (activeBotPositions || []).filter(p => 
+    isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER')
+  );
 
   const inTradeMargin = positions.reduce((acc, p) => {
     const margin = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
@@ -65,8 +73,40 @@ export function calculatePortfolioMetrics(
     return acc + calculatePositionUnrealizedPnl(p, priceToUse);
   }, 0);
 
-  const realizedPnl = paperWallet?.realizedPnl ?? 0;
-  const totalEquity = Math.max(0, freeCash + inTradeMargin + floatingPnl);
+  let freeCash = 0;
+  let realizedPnl = 0;
+  let totalEquity = 0;
+
+  if (isLive && binanceAccountInfo) {
+    const rawFree = Number(binanceAccountInfo.freeUsdt) || 0;
+    const rawTotalEquity = Number(binanceAccountInfo.totalUsdtEquity) || rawFree;
+    
+    freeCash = Math.max(0, rawFree);
+    realizedPnl = 0;
+
+    // In Binance Futures, totalMarginBalance from API already includes the API-snapshot floating PnL.
+    // We add the difference with real-time UI floating PnL for ultra-smooth responsiveness!
+    if (rawTotalEquity > 0) {
+      const apiUnrealized = Number(binanceAccountInfo.unrealizedProfit) || 0;
+      const livePnlDelta = floatingPnl - apiUnrealized;
+      totalEquity = Math.max(0, rawTotalEquity + livePnlDelta);
+    } else {
+      totalEquity = Math.max(0, freeCash + inTradeMargin + floatingPnl);
+    }
+  } else {
+    // Paper trading mode
+    freeCash = Math.max(0, paperWallet?.balance ?? 1000);
+    realizedPnl = paperWallet?.realizedPnl ?? 0;
+    totalEquity = Math.max(0, freeCash + inTradeMargin + floatingPnl);
+  }
+
+  // Base capital estimation for percentage calculations
+  const baselineCapital = isLive 
+    ? Math.max(10, totalEquity - floatingPnl) 
+    : Math.max(10, freeCash + inTradeMargin - realizedPnl);
+
+  const netPnlCombined = floatingPnl + realizedPnl;
+  const floatingPnlPercent = baselineCapital > 0 ? (netPnlCombined / baselineCapital) * 100 : 0;
 
   return {
     totalEquity: Math.round(totalEquity * 100) / 100,
@@ -74,6 +114,8 @@ export function calculatePortfolioMetrics(
     inTradeMargin: Math.round(inTradeMargin * 100) / 100,
     floatingPnl: Math.round(floatingPnl * 100) / 100,
     realizedPnl: Math.round(realizedPnl * 100) / 100,
+    floatingPnlPercent: Math.round(floatingPnlPercent * 100) / 100,
   };
 }
+
 
