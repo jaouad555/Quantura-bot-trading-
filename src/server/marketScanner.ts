@@ -619,13 +619,15 @@ async function processTradingSignal(
     const notional = margin * lev;
     const quantity = notional / currentPrice;
 
+    let binanceOrderId = null;
     if (isLive) {
       const orderSide = isLong ? 'BUY' : 'SELL';
       const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice);
-      if (!orderRes.success) {
-        console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED:`, orderRes.error);
+      if (!orderRes.success || !orderRes.orderId) {
+        console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED or No OrderID:`, orderRes.error);
         return;
       }
+      binanceOrderId = orderRes.orderId;
     } else {
       const freshWalletStr = await kv.get('btc_paper_wallet');
       let freshWallet = freshWalletStr ? JSON.parse(freshWalletStr) : { balance: 1000, realizedPnl: 0 };
@@ -672,6 +674,7 @@ async function processTradingSignal(
       strategyStatus: 'ACTIVE',
       confidence: signal.confidence,
       mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
+      binanceOrderId: binanceOrderId,
       lastAction: isFutures ? `Futures ${lev}x ${signal.decision} Opened (${signal.strategyName})` : `Spot Buy Executed (${signal.strategyName})`,
       isTrailingActive: false,
       peakPrice: currentPrice,
