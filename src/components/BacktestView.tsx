@@ -30,7 +30,6 @@ import {
 } from '../utils/backtestEngine';
 import { RESPECTED_TRADING_PAIRS, formatCoinPrice } from '../utils/tradingPairs';
 import { translations } from '../utils/translations';
-import { formatDateTime } from '../utils/timezone';
 import { exportBacktestToCSV } from '../utils/csvExport';
 import {
   Play,
@@ -39,35 +38,26 @@ import {
   Shield,
   Layers,
   Coins,
-  Sparkles,
   Zap,
   CheckCircle2,
   Sliders,
-  Flame,
-  ArrowRight,
   RotateCcw,
   Download,
   BarChart3,
   TrendingDown,
-  Percent,
   Search,
   Check,
   Cpu,
   Trophy,
-  ArrowUpRight,
-  ArrowDownRight,
-  Eye,
   Crosshair,
   Gauge,
-  Wallet,
   Clock,
   CircleDot,
   LineChart as LineChartIcon,
   Activity,
   ChevronDown,
   X,
-  Star,
-  Filter,
+  ExternalLink,
 } from 'lucide-react';
 
 interface BacktestViewProps {
@@ -87,13 +77,11 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   activeTimeframe = '1h',
   symbol = 'BTCUSDT',
   language,
-  timezone,
   botConfig,
   onUpdateBotConfig,
   onSelectSymbol,
   onNavigateToBot,
 }) => {
-  const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
 
   const savedState = useMemo(() => {
@@ -161,17 +149,15 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   const [tradeResultFilter, setTradeResultFilter] = useState<'ALL' | 'WINS' | 'LOSSES' | 'LIQUIDATED'>('ALL');
   const [visibleTradesLimit, setVisibleTradesLimit] = useState<number>(35);
 
-  // Symbol selector dropdown & search state
+  // Dropdown States
   const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false);
   const [symbolSearchQuery, setSymbolSearchQuery] = useState('');
   const [selectedPairCategory, setSelectedPairCategory] = useState<'ALL' | 'HOT' | 'MAJOR' | 'DEFI' | 'LAYER1'>('ALL');
   const symbolDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Timeframe selector in-app dropdown state
   const [isTimeframeDropdownOpen, setIsTimeframeDropdownOpen] = useState(false);
   const timeframeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Leverage selector in-app dropdown state
   const [isLeverageDropdownOpen, setIsLeverageDropdownOpen] = useState(false);
   const leverageDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -202,7 +188,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   const toggleBasketSymbol = (sym: string) => {
     setActiveSymbolsForBacktest((prev) => {
       if (prev.includes(sym)) {
-        if (prev.length <= 1) return prev; // keep at least 1 coin
+        if (prev.length <= 1) return prev;
         return prev.filter((s) => s !== sym);
       } else {
         return [...prev, sym];
@@ -324,7 +310,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
     ]
   );
 
-  // Filtered trading pairs for pro symbol selector
+  // Filtered trading pairs
   const filteredTradingPairs = useMemo(() => {
     return RESPECTED_TRADING_PAIRS.filter((pair) => {
       const q = symbolSearchQuery.trim().toLowerCase();
@@ -442,7 +428,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
         const singleRes = runHistoricalBacktest(primaryKlines, currentConfig, currentSymbol);
         setSingleResult(singleRes);
 
-        // 2. 6 Strategies Comparison Matrix
+        // 2. 10 Strategies Benchmark Comparison Matrix
         const compMatrix = runComparativeStrategyBacktest(primaryKlines, currentConfig, currentSymbol);
         setStrategyComparison(compMatrix);
 
@@ -536,139 +522,207 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   );
 
   return (
-    <div className="flex flex-col w-full h-full gap-4 text-slate-100 pb-10" dir={isArabic ? 'rtl' : 'ltr'}>
+    <div className="flex flex-col w-full h-full gap-4 text-slate-100 pb-12" dir={isArabic ? 'rtl' : 'ltr'}>
       {/* Toast Notification */}
       {showAppliedToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-emerald-500/90 backdrop-blur-md text-white font-bold rounded-xl shadow-2xl shadow-emerald-500/30 border border-emerald-400/40 animate-bounce">
-          <CheckCircle2 className="w-5 h-5" />
-          <span>{isArabic ? 'تم تطبيق بارامترات الاستراتيجية بنجاح على البوت الحي!' : 'Strategy parameters applied to Live Bot!'}</span>
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-emerald-600/95 backdrop-blur-md text-white font-bold rounded-xl shadow-2xl shadow-emerald-500/30 border border-emerald-400/40 animate-in fade-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-200" />
+          <div className="flex flex-col text-left rtl:text-right">
+            <span className="text-sm font-black">{isArabic ? 'تمت المزامنة بنجاح!' : 'Successfully Synchronized!'}</span>
+            <span className="text-xs text-emerald-100 font-normal">
+              {isArabic ? 'تم تطبيق المعايير ومصفوفة الاستراتيجية على البوت الحي.' : 'Parameters & strategy preset applied to Live Bot.'}
+            </span>
+          </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* COMPACT PRO CONTROL BAR (Platform Grade Terminal Header)                 */}
+      {/* TOP HEADER & CONTROL CONSOLE                                              */}
       {/* ========================================================================= */}
-      <div className={`relative ${isLeverageDropdownOpen || isSymbolDropdownOpen || isTimeframeDropdownOpen ? 'z-50' : 'z-20'} bg-[#0f172a]/95 border border-[#1e293b] rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col gap-4`}>
+      <div className={`relative ${isLeverageDropdownOpen || isSymbolDropdownOpen || isTimeframeDropdownOpen ? 'z-50' : 'z-20'} bg-[#0f172a] border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col gap-4`}>
         
-        {/* Row 1: Strategy Selector Bar & Mode Switches */}
-        <div className="flex flex-col gap-3 border-b border-[#1e293b] pb-3.5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Strategy Title & Quick Pills */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-brand-400" />
-                {isArabic ? 'الاستراتيجية:' : 'Strategy:'}
-              </span>
-
-              {BACKTEST_STRATEGIES.map((strat) => {
-                const isSelected = selectedStrategyId === strat.id;
-                return (
-                  <button
-                    key={strat.id}
-                    onClick={() => handleSelectStrategy(strat.id)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 border relative cursor-pointer ${
-                      isSelected
-                        ? 'bg-brand-500/20 text-brand-300 border-brand-500/70 shadow-[0_0_10px_rgba(20,184,166,0.3)] ring-1 ring-brand-500/50'
-                        : 'bg-[#1e293b]/60 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-[#1e293b]'
-                    }`}
-                    title={isArabic ? strat.shortDescAr : strat.shortDesc}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: strat.color }}
-                    />
-                    <span className={isSelected ? 'font-black text-white' : ''}>
-                      {isArabic ? strat.nameAr.split('(')[0].trim() : strat.name}
-                    </span>
-                    <span className="text-[9px] px-1 py-0.2 rounded bg-black/50 text-slate-300 font-mono border border-slate-700/40">
-                      {strat.defaultTimeframe.toUpperCase()}
-                    </span>
-                  </button>
-                );
-              })}
+        {/* Row 1: Console Header & Quick Global Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1e293b] pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+              <Cpu className="w-5 h-5" />
             </div>
-
-            {/* Quick Right Action Buttons */}
-            <div className="flex items-center gap-2">
-              {onUpdateBotConfig && (
-                <button
-                  onClick={handleApplyToLiveBot}
-                  className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
-                  title={isArabic ? 'نقل هذه الإعدادات مباشرة للبوت الحي' : 'Apply parameters to Live Bot'}
-                >
-                  <Zap className="w-3 h-3 text-amber-300" />
-                  <span>{isArabic ? 'تطبيق على البوت' : 'Apply to Bot'}</span>
-                </button>
-              )}
-
-              {singleResult && singleResult.trades.length > 0 && (
-                <button
-                  onClick={() => exportBacktestToCSV(singleResult)}
-                  className="px-2.5 py-1 bg-[#1e293b] hover:bg-[#334155] text-slate-300 rounded-lg text-[11px] font-bold flex items-center gap-1 border border-slate-700 transition-all active:scale-95 cursor-pointer"
-                  title="Export CSV"
-                >
-                  <Download className="w-3 h-3" />
-                  <span className="hidden sm:inline">CSV</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => executeSimulation(true)}
-                disabled={isLoading}
-                className="px-3 py-1 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-md shadow-brand-600/25 transition-all active:scale-95 cursor-pointer"
-              >
-                <Play className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>{isLoading ? (isArabic ? 'جاري المحاكاة...' : 'Simulating...') : isArabic ? 'إعادة الاختبار' : 'Run Test'}</span>
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-white tracking-tight">
+                  {isArabic ? 'مختبر الاختبار الخوارزمي والمحاكاة التاريخية' : 'Algorithmic Backtesting & Simulation'}
+                </h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 font-mono font-bold">
+                  10 Strategies
+                </span>
+                {botConfig?.marketType && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-bold">
+                    {botConfig.marketType} {botConfig.leverage ? `${botConfig.leverage}x` : ''}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isArabic
+                  ? 'محاكاة رياضية على بيانات بينانس الحقيقية مع احتساب العمولات، الانزلاق، ووقف الخسارة المتحرك.'
+                  : 'Deterministic historical simulation on Binance candles with realistic fees, slippage, and trailing ratchets.'}
+              </p>
             </div>
           </div>
 
-          {/* DYNAMIC ACTIVE STRATEGY SHOWCASE BANNER */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            {onUpdateBotConfig && (
+              <button
+                type="button"
+                onClick={handleApplyToLiveBot}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                title={isArabic ? 'نقل هذه الإعدادات مباشرة للبوت الحي' : 'Apply parameters to Live Bot'}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+                <span>{isArabic ? 'تطبيق على البوت' : 'Apply to Bot'}</span>
+              </button>
+            )}
+
+            {onNavigateToBot && (
+              <button
+                type="button"
+                onClick={onNavigateToBot}
+                className="px-3 py-1.5 bg-[#1e293b] hover:bg-[#334155] text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'واجهة البوت' : 'Live Bot'}</span>
+              </button>
+            )}
+
+            {singleResult && singleResult.trades.length > 0 && (
+              <button
+                type="button"
+                onClick={() => exportBacktestToCSV(singleResult)}
+                className="px-3 py-1.5 bg-[#1e293b] hover:bg-[#334155] text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+                title="Export CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => executeSimulation(true)}
+              disabled={isLoading}
+              className="px-4 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-brand-600/25 transition-all active:scale-95 cursor-pointer"
+            >
+              <Play className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>{isLoading ? (isArabic ? 'جاري المحاكاة...' : 'Simulating...') : isArabic ? 'تشغيل المحاكاة' : 'Run Backtest'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* PARALLEL SYMMETRIC STRATEGY MATRIX (تصفيف الاستراتيجيات بانتظام متوازية)     */}
+        {/* ========================================================================= */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-brand-400" />
+              {isArabic ? 'مصفوفة الاستراتيجيات العشر (تصفيف متوازي ومنتظم):' : 'Strategy Portfolio Matrix (Symmetric Parallel Layout):'}
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              {isArabic ? 'انقر على أي استراتيجية لتحميل إعداداتها فوراً' : 'Click to load strategy preset'}
+            </span>
+          </div>
+
+          {/* Symmetrical Parallel Grid of All 11 Strategies (10 Individual + Ensemble) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-1.5">
+            {BACKTEST_STRATEGIES.map((strat) => {
+              const isSelected = selectedStrategyId === strat.id;
+              return (
+                <button
+                  key={strat.id}
+                  type="button"
+                  onClick={() => handleSelectStrategy(strat.id)}
+                  className={`p-2 rounded-xl text-left rtl:text-right transition-all flex flex-col justify-between gap-1 border relative cursor-pointer min-h-[64px] ${
+                    isSelected
+                      ? 'bg-brand-500/15 text-white border-brand-500 shadow-md shadow-brand-500/10 ring-1 ring-brand-500/40'
+                      : 'bg-[#1e293b]/60 text-slate-300 border-slate-700/50 hover:bg-[#1e293b] hover:border-slate-600'
+                  }`}
+                  title={isArabic ? strat.shortDescAr : strat.shortDesc}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: strat.color }}
+                      />
+                      <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">
+                        {strat.badge}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-3 h-3 text-brand-400" />
+                    )}
+                  </div>
+
+                  <div className="font-bold text-xs leading-tight truncate text-white" title={isArabic ? strat.nameAr : strat.name}>
+                    {isArabic ? strat.nameAr.split('(')[0].trim() : strat.name}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono pt-1 border-t border-slate-800/80">
+                    <span className="px-1 py-0.2 rounded bg-black/40 text-slate-300">
+                      {strat.defaultTimeframe.toUpperCase()}
+                    </span>
+                    <span className="text-amber-300/90 font-bold">
+                      {strat.defaultLeverage}x
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active Strategy Detailed Context Banner */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900/90 border border-slate-800 rounded-xl mt-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <div
-                className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]"
+              <span
+                className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor]"
                 style={{ color: activeStrategyObj.color, backgroundColor: activeStrategyObj.color }}
               />
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-slate-400 font-medium">
-                  {isArabic ? 'الاستراتيجية:' : 'Strategy:'}
+                <span className="text-xs text-slate-400">
+                  {isArabic ? 'الاستراتيجية النشطة:' : 'Selected Strategy:'}
                 </span>
-                <span className="text-xs font-extrabold text-white tracking-wide">
+                <span className="text-xs font-black text-white">
                   {isArabic ? activeStrategyObj.nameAr : activeStrategyObj.name}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-500/15 text-brand-300 border border-brand-500/30 font-bold font-mono">
-                  {isArabic ? `فريم: ${timeframe.toUpperCase()}` : `Frame: ${timeframe.toUpperCase()}`}
+              <div className="flex items-center gap-1 text-[10px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-brand-500/15 text-brand-300 border border-brand-500/30 font-bold">
+                  {timeframe.toUpperCase()}
                 </span>
-                {marketType === 'SPOT' ? (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold font-mono">
-                    {isArabic ? 'سوق فوري (بدون رافعة)' : 'Spot: 1x (No Lev)'}
-                  </span>
-                ) : (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono">
-                    {isArabic ? `رافعة: ${leverage}x` : `Lev: ${leverage}x`}
-                  </span>
-                )}
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold font-mono">
-                  {isArabic ? `هدف: 1:${riskRewardTarget}` : `RR: 1:${riskRewardTarget}`}
+                <span className={`px-2 py-0.5 rounded font-bold border ${marketType === 'FUTURES' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'}`}>
+                  {marketType === 'FUTURES' ? `${leverage}x Lev` : 'Spot 1x'}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold">
+                  R:R 1:{riskRewardTarget}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold">
+                  SL {slAtrMultiplier}x ATR
                 </span>
               </div>
             </div>
-            <p className="text-[10px] text-slate-400 leading-snug max-w-xl">
+
+            <p className="text-[11px] text-slate-400 max-w-2xl leading-relaxed">
               {isArabic ? activeStrategyObj.shortDescAr : activeStrategyObj.shortDesc}
             </p>
           </div>
         </div>
 
-        {/* Row 2: Parameters Grid (High Density) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
+        {/* Row 2: Unified Execution Controls Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 text-xs pt-1 border-t border-slate-800">
           
-          {/* Mode Switch (Single Coin vs Multi Coin) */}
+          {/* Scope Mode (Single vs Multi Basket) */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {isArabic ? 'وضع النطاق' : 'Scope'}
+              {isArabic ? 'نطاق الاختبار' : 'Simulation Scope'}
             </span>
             <div className="flex bg-[#1e293b] p-0.5 rounded-lg border border-slate-700/60">
               <button
@@ -694,49 +748,44 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
             </div>
           </div>
 
-          {/* Symbol Selector (when single coin) or Basket Trigger (when multi coin) */}
+          {/* Symbol / Basket Selector */}
           {viewMode === 'SINGLE_COIN' ? (
             <div className={`flex flex-col gap-1 relative ${isSymbolDropdownOpen ? 'z-50' : 'z-10'}`} ref={symbolDropdownRef}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {isArabic ? 'زوج التداول' : 'Symbol'}
+                  {isArabic ? 'الزوج المحدد' : 'Asset Pair'}
                 </span>
-                <span className="text-[9px] text-brand-400/80 font-mono">
+                <span className="text-[9px] text-brand-400 font-mono">
                   {RESPECTED_TRADING_PAIRS.length} {isArabic ? 'متاح' : 'pairs'}
                 </span>
               </div>
               
-              {/* Trigger Button */}
               <button
                 type="button"
                 onClick={() => setIsSymbolDropdownOpen((prev) => !prev)}
                 className={`w-full bg-[#1e293b] border ${
                   isSymbolDropdownOpen ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-700 hover:border-slate-600'
-                } rounded-lg px-2 py-1 text-xs font-bold text-white flex items-center justify-between transition-all shadow-sm cursor-pointer`}
+                } rounded-lg px-2.5 py-1 text-xs font-bold text-white flex items-center justify-between transition-all cursor-pointer`}
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0 animate-pulse" />
                   <span className="font-mono text-white text-xs">{currentSymbol}</span>
-                  <span className="text-[9px] text-slate-400 font-normal">
-                    ({RESPECTED_TRADING_PAIRS.find(p => p.symbol === currentSymbol)?.baseAsset || 'USDT'})
-                  </span>
                 </div>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isSymbolDropdownOpen ? 'rotate-180 text-brand-400' : ''}`} />
               </button>
 
-              {/* Floating Pro Pairs Dropdown Menu (Strictly within in-app container) */}
+              {/* Floating Pro Pairs Dropdown */}
               {isSymbolDropdownOpen && (
-                <div className="absolute top-[105%] start-0 z-[100] w-72 sm:w-80 bg-[#0f172a] border border-slate-700/90 rounded-xl shadow-2xl backdrop-blur-xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/80">
-                  {/* Search Bar inside dropdown */}
+                <div className="absolute top-[105%] start-0 z-[100] w-72 sm:w-80 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/80">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={symbolSearchQuery}
                       onChange={(e) => setSymbolSearchQuery(e.target.value)}
-                      placeholder={isArabic ? 'بحث في الأزواج (BTC, SOL, ETH)...' : 'Search pair or token (e.g. BTC, SOL)...'}
+                      placeholder={isArabic ? 'بحث في الأزواج...' : 'Search token...'}
                       autoFocus
-                      className="w-full bg-[#1e293b] border border-slate-700/80 rounded-lg pl-8 pr-7 py-1 text-xs font-bold text-white placeholder:text-slate-500 focus:outline-none focus:border-brand-500"
+                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-8 pr-7 py-1 text-xs font-bold text-white placeholder:text-slate-500 focus:outline-none focus:border-brand-500"
                     />
                     {symbolSearchQuery && (
                       <button
@@ -749,8 +798,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                     )}
                   </div>
 
-                  {/* Category Pills */}
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[9px]">
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[9px]">
                     {[
                       { id: 'ALL', label: isArabic ? 'الكل' : 'All' },
                       { id: 'HOT', label: isArabic ? 'الشائعة' : 'Hot' },
@@ -765,7 +813,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                         className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap transition-colors cursor-pointer ${
                           selectedPairCategory === cat.id
                             ? 'bg-brand-500 text-white shadow-xs'
-                            : 'bg-[#1e293b] text-slate-400 hover:text-slate-200 hover:bg-[#334155]'
+                            : 'bg-[#1e293b] text-slate-400 hover:text-slate-200'
                         }`}
                       >
                         {cat.label}
@@ -773,7 +821,6 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                     ))}
                   </div>
 
-                  {/* Pairs Scrollable List */}
                   <div className="max-h-52 overflow-y-auto divide-y divide-slate-800/60 rounded-lg border border-slate-800">
                     {filteredTradingPairs.length === 0 ? (
                       <div className="py-4 text-center text-slate-500 text-xs">
@@ -791,29 +838,21 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                               if (onSelectSymbol) onSelectSymbol(pair.symbol);
                               setIsSymbolDropdownOpen(false);
                             }}
-                            className={`w-full px-2.5 py-1.5 text-left flex items-center justify-between transition-colors cursor-pointer ${
-                              isCurrent
-                                ? 'bg-brand-500/20 text-brand-300 font-bold'
-                                : 'hover:bg-[#1e293b] text-slate-300'
+                            className={`w-full px-2.5 py-1.5 text-left rtl:text-right flex items-center justify-between transition-colors cursor-pointer ${
+                              isCurrent ? 'bg-brand-500/20 text-brand-300 font-bold' : 'hover:bg-[#1e293b] text-slate-300'
                             }`}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-xs text-white">
-                                {pair.symbol}
-                              </span>
-                              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700/50">
+                              <span className="font-mono font-bold text-xs text-white">{pair.symbol}</span>
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-400">
                                 {pair.baseAsset}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               {pair.category && (
-                                <span className="text-[9px] text-slate-500 uppercase font-mono">
-                                  {pair.category}
-                                </span>
+                                <span className="text-[9px] text-slate-500 uppercase font-mono">{pair.category}</span>
                               )}
-                              {isCurrent && (
-                                <Check className="w-3 h-3 text-brand-400" />
-                              )}
+                              {isCurrent && <Check className="w-3 h-3 text-brand-400" />}
                             </div>
                           </button>
                         );
@@ -836,22 +875,20 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsBasketModalOpen(true)}
-                className="flex items-center justify-between px-2 py-1 bg-[#1e293b] hover:bg-slate-800 border border-brand-500/40 hover:border-brand-500 rounded-lg text-xs font-bold text-brand-300 transition-all shadow-sm cursor-pointer"
+                className="flex items-center justify-between px-2.5 py-1 bg-[#1e293b] hover:bg-slate-800 border border-brand-500/40 rounded-lg text-xs font-bold text-brand-300 transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-400 flex-shrink-0 animate-pulse" />
-                  <span className="font-mono text-white text-xs">
-                    {activeSymbolsForBacktest.length} {isArabic ? 'أزواج' : 'Pairs'}
-                  </span>
+                  <span className="font-mono text-white text-xs">{activeSymbolsForBacktest.length} {isArabic ? 'أزواج' : 'Pairs'}</span>
                 </div>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30">
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-bold">
                   {isArabic ? 'تعديل' : 'Edit'}
                 </span>
               </button>
             </div>
           )}
 
-          {/* Market Type (Futures / Spot) */}
+          {/* Market & Leverage Selector */}
           <div className={`flex flex-col gap-1 relative ${isLeverageDropdownOpen ? 'z-[80]' : 'z-10'}`} ref={leverageDropdownRef}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'السوق والرافعة' : 'Market & Lev'}
@@ -861,8 +898,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setMarketType('FUTURES')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                    marketType === 'FUTURES' ? 'bg-brand-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
+                    marketType === 'FUTURES' ? 'bg-brand-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Futures
@@ -874,8 +911,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                     setLeverage(1);
                     setIsLeverageDropdownOpen(false);
                   }}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                    marketType === 'SPOT' ? 'bg-cyan-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
+                    marketType === 'SPOT' ? 'bg-cyan-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Spot
@@ -883,179 +920,108 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
 
               {marketType === 'FUTURES' ? (
-                <div className={`relative ${isLeverageDropdownOpen ? 'z-[90]' : 'z-10'}`}>
+                <div className="relative">
                   <button
                     type="button"
                     onClick={() => setIsLeverageDropdownOpen((prev) => !prev)}
-                    className={`bg-[#1e293b] border ${
-                      isLeverageDropdownOpen ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-amber-500/50 hover:border-amber-400'
-                    } rounded-lg px-2.5 py-1 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer`}
+                    className="bg-[#1e293b] border border-amber-500/50 hover:border-amber-400 rounded-lg px-2 py-1 text-xs font-bold text-amber-300 flex items-center gap-1 cursor-pointer"
                   >
-                    <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="font-mono font-bold text-amber-300">{leverage}x</span>
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    <span className="font-mono">{leverage}x</span>
                     <ChevronDown className={`w-3 h-3 text-amber-400/80 transition-transform ${isLeverageDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Vertical Popover List strictly inside the app, floating high above Net P&L and all cards */}
                   {isLeverageDropdownOpen && (
-                    <div className="absolute top-full mt-2 start-0 z-[9999] w-64 bg-[#0a1224] border-2 border-amber-500/80 rounded-xl shadow-[0_25px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100 max-h-80 overflow-y-auto ring-4 ring-amber-500/20">
+                    <div className="absolute top-full mt-2 start-0 z-[9999] w-60 bg-[#0f172a] border-2 border-amber-500/80 rounded-xl shadow-2xl p-2 flex flex-col gap-1 max-h-72 overflow-y-auto">
                       <div className="px-2 py-1 text-[10px] font-bold text-amber-400 uppercase border-b border-slate-800 flex items-center justify-between">
-                        <span>{isArabic ? 'الرافعة المالية (عمودية)' : 'Select Leverage (Futures)'}</span>
-                        <span className="font-mono text-xs text-white">{leverage}x</span>
+                        <span>{isArabic ? 'الرافعة المالية' : 'Leverage Level'}</span>
+                        <span className="font-mono text-white">{leverage}x</span>
                       </div>
-
-                      {/* Custom Leverage Input */}
-                      <div className="px-1 py-1 flex items-center gap-2 bg-[#141e33] rounded-lg border border-slate-700/80">
-                        <span className="text-[10px] text-slate-400 shrink-0 pl-1">
-                          {isArabic ? 'مخصص:' : 'Custom:'}
-                        </span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={125}
-                          value={leverage}
-                          onChange={(e) => {
-                            const val = Math.min(125, Math.max(1, parseInt(e.target.value, 10) || 1));
-                            setLeverage(val);
+                      {[
+                        { lev: 1, label: '1x (Safe)' },
+                        { lev: 2, label: '2x (Conservative)' },
+                        { lev: 3, label: '3x (Optimal)' },
+                        { lev: 5, label: '5x (Standard)' },
+                        { lev: 7, label: '7x (Momentum)' },
+                        { lev: 10, label: '10x (Active Scalp)' },
+                        { lev: 15, label: '15x (High Risk)' },
+                        { lev: 20, label: '20x (Fast Scalp)' },
+                      ].map((item) => (
+                        <button
+                          key={item.lev}
+                          type="button"
+                          onClick={() => {
+                            setLeverage(item.lev);
+                            setIsLeverageDropdownOpen(false);
                           }}
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded px-2 py-0.5 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                        />
-                        <span className="text-xs font-bold text-amber-400 pr-1">x</span>
-                      </div>
-
-                      {/* Vertical Ordered Multipliers */}
-                      <div className="flex flex-col gap-1">
-                        {[
-                          { lev: 1, label: '1x', desc: isArabic ? 'بدون مضاعفة (محافظ)' : '1x Conservative', tag: 'Safe' },
-                          { lev: 2, label: '2x', desc: isArabic ? 'موصى به للأمان' : '2x Low Risk', tag: 'Safe' },
-                          { lev: 3, label: '3x', desc: isArabic ? 'توازن مثالي' : '3x Balanced', tag: 'Optimal' },
-                          { lev: 5, label: '5x', desc: isArabic ? 'مخاطرة قياسية' : '5x Standard', tag: 'Standard' },
-                          { lev: 7, label: '7x', desc: isArabic ? 'صفقات زخم' : '7x Momentum', tag: 'Active' },
-                          { lev: 10, label: '10x', desc: isArabic ? 'مضاربة نشطة' : '10x Scalp', tag: 'Aggressive' },
-                          { lev: 15, label: '15x', desc: isArabic ? 'مضاربة عالية' : '15x High Risk', tag: 'High' },
-                          { lev: 20, label: '20x', desc: isArabic ? 'مضاربة سريعة' : '20x Fast Scalp', tag: 'High' },
-                          { lev: 25, label: '25x', desc: isArabic ? 'احترافية قصوى' : '25x Pro Only', tag: 'Expert' },
-                          { lev: 50, label: '50x', desc: isArabic ? 'مخاطرة قصوى' : '50x Extreme', tag: 'Extreme' },
-                        ].map((item) => {
-                          const isSelected = Number(leverage) === item.lev;
-                          return (
-                            <button
-                              key={item.lev}
-                              type="button"
-                              onClick={() => {
-                                setLeverage(item.lev);
-                                setIsLeverageDropdownOpen(false);
-                              }}
-                              className={`w-full px-2.5 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/50 ring-1 ring-amber-500/30'
-                                  : 'hover:bg-[#1e293b] text-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-xs text-amber-300 min-w-6">
-                                  {item.label}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  ({item.desc})
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
-                                  item.lev <= 3 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40' :
-                                  item.lev <= 10 ? 'bg-amber-950 text-amber-400 border border-amber-800/40' :
-                                  'bg-rose-950 text-rose-400 border border-rose-800/40'
-                                }`}>
-                                  {item.tag}
-                                </span>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                          className={`w-full px-2 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between text-xs font-mono transition-colors cursor-pointer ${
+                            Number(leverage) === item.lev ? 'bg-amber-500/20 text-amber-300 font-bold' : 'hover:bg-[#1e293b] text-slate-300'
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          {Number(leverage) === item.lev && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="px-2 py-1 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-[10px] font-mono text-cyan-300 flex items-center gap-1">
-                  <span>1x (Spot)</span>
+                <div className="px-2 py-1 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-[10px] font-mono text-cyan-300">
+                  1x Spot
                 </div>
               )}
             </div>
           </div>
 
-          {/* Timeframe Selector (Custom in-app popover dropdown strictly inside the application) */}
+          {/* Timeframe Selector */}
           <div className={`flex flex-col gap-1 relative ${isTimeframeDropdownOpen ? 'z-50' : 'z-10'}`} ref={timeframeDropdownRef}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {isArabic ? 'الفريم الزمني' : 'Timeframe'}
             </span>
-            
-            {/* Timeframe Trigger Button */}
             <button
               type="button"
               onClick={() => setIsTimeframeDropdownOpen((prev) => !prev)}
-              className={`w-full bg-[#1e293b] border ${
-                isTimeframeDropdownOpen ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-700 hover:border-slate-600'
-              } rounded-lg px-2 py-1 text-xs font-bold text-white flex items-center justify-between transition-all shadow-sm cursor-pointer`}
+              className="w-full bg-[#1e293b] border border-slate-700 hover:border-slate-600 rounded-lg px-2.5 py-1 text-xs font-bold text-white flex items-center justify-between transition-all cursor-pointer"
             >
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-brand-400" />
-                <span className="font-mono text-white uppercase text-xs">{timeframe}</span>
+                <span className="font-mono uppercase">{timeframe}</span>
               </div>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isTimeframeDropdownOpen ? 'rotate-180 text-brand-400' : ''}`} />
             </button>
 
-            {/* In-app floating popup inside container */}
             {isTimeframeDropdownOpen && (
-              <div className="absolute top-[105%] start-0 z-[100] w-48 bg-[#0a101f] border border-slate-700 rounded-xl shadow-2xl backdrop-blur-2xl p-1.5 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-brand-500/20">
+              <div className="absolute top-[105%] start-0 z-[100] w-44 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl p-1.5 flex flex-col gap-1">
                 {[
-                  { value: '15m' as Timeframe, label: '15m', desc: isArabic ? '15 دقيقة' : '15 Min', tag: 'Scalper' },
-                  { value: '30m' as Timeframe, label: '30m', desc: isArabic ? '30 دقيقة' : '30 Min', tag: 'Breakout' },
-                  { value: '1h' as Timeframe, label: '1h', desc: isArabic ? '1 ساعة' : '1 Hour', tag: 'Trend/SMC' },
-                  { value: '4h' as Timeframe, label: '4h', desc: isArabic ? '4 ساعات' : '4 Hours', tag: 'Swing' },
-                  { value: '1d' as Timeframe, label: '1d', desc: isArabic ? '1 يوم' : '1 Day', tag: 'Macro' },
-                ].map((tf) => {
-                  const isCurrent = timeframe === tf.value;
-                  return (
-                    <button
-                      key={tf.value}
-                      type="button"
-                      onClick={() => {
-                        setTimeframe(tf.value);
-                        setIsTimeframeDropdownOpen(false);
-                      }}
-                      className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'bg-brand-500/20 text-brand-300 font-bold border border-brand-500/40'
-                          : 'hover:bg-[#1e293b] text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold text-xs text-white uppercase">
-                          {tf.label}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          ({tf.desc})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-black/40 text-slate-400 font-mono">
-                          {tf.tag}
-                        </span>
-                        {isCurrent && <Check className="w-3 h-3 text-brand-400" />}
-                      </div>
-                    </button>
-                  );
-                })}
+                  { value: '15m' as Timeframe, label: '15m', desc: 'Scalper' },
+                  { value: '30m' as Timeframe, label: '30m', desc: 'Breakout' },
+                  { value: '1h' as Timeframe, label: '1h', desc: 'Trend / SMC' },
+                  { value: '4h' as Timeframe, label: '4h', desc: 'Swing' },
+                  { value: '1d' as Timeframe, label: '1d', desc: 'Macro' },
+                ].map((tf) => (
+                  <button
+                    key={tf.value}
+                    type="button"
+                    onClick={() => {
+                      setTimeframe(tf.value);
+                      setIsTimeframeDropdownOpen(false);
+                    }}
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-left rtl:text-right flex items-center justify-between text-xs transition-colors cursor-pointer ${
+                      timeframe === tf.value ? 'bg-brand-500/20 text-brand-300 font-bold' : 'hover:bg-[#1e293b] text-slate-300'
+                    }`}
+                  >
+                    <span className="font-mono font-bold uppercase">{tf.label}</span>
+                    <span className="text-[10px] text-slate-400">{tf.desc}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Historical Horizon */}
+          {/* Horizon (Months) */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {isArabic ? 'العمق الزمني' : 'Horizon'}
+              {isArabic ? 'العمق التاريخي' : 'Horizon'}
             </span>
             <div className="flex bg-[#1e293b] p-0.5 rounded-lg border border-slate-700">
               {[
@@ -1069,8 +1035,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   key={h.m}
                   type="button"
                   onClick={() => setMonths(h.m)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                    months === h.m ? 'bg-brand-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`flex-1 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                    months === h.m ? 'bg-brand-500 text-slate-950 font-black' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   {h.label}
@@ -1082,30 +1048,30 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
           {/* Initial Capital */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {isArabic ? 'رأس المال' : 'Balance'}
+              {isArabic ? 'رأس المال' : 'Balance ($)'}
             </span>
             <div className="relative">
               <input
                 type="number"
                 value={initialBalance}
                 onChange={(e) => setInitialBalance(Math.max(10, Number(e.target.value)))}
-                className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 pl-5 focus:ring-1 focus:ring-brand-500 focus:outline-none"
+                className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-400 pl-5 focus:ring-1 focus:ring-brand-500 focus:outline-none"
               />
               <span className="absolute left-1.5 top-1.5 text-slate-400 text-xs font-bold">$</span>
             </div>
           </div>
 
-          {/* Allocation % */}
+          {/* Trade Allocation % */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {isArabic ? 'تخصيص الصفقة' : 'Per Trade Alloc'}
+              {isArabic ? 'تخصيص الصفقة' : 'Trade Allocation'}
             </span>
             <div className="relative">
               <input
                 type="number"
                 value={tradeAllocationPercent}
                 onChange={(e) => setTradeAllocationPercent(Math.min(100, Math.max(1, Number(e.target.value))))}
-                className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white pr-5 focus:ring-1 focus:ring-brand-500 focus:outline-none"
+                className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-white pr-5 focus:ring-1 focus:ring-brand-500 focus:outline-none"
               />
               <span className="absolute right-1.5 top-1.5 text-slate-400 text-xs font-bold">%</span>
             </div>
@@ -1113,7 +1079,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
         </div>
 
-        {/* Progress bar during simulation */}
+        {/* Loading Progress Indicator */}
         {isLoading && (
           <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
@@ -1125,13 +1091,13 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* EXECUTIVE KPI PERFORMANCE STRIP (Institutional Financial Metrics)        */}
+      {/* EXECUTIVE FINANCIAL KPI STRIP (Institutional Performance Metrics)         */}
       {/* ========================================================================= */}
       {activeResult && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 relative z-0 isolate">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           
           {/* Card 1: Net PnL & ROI */}
-          <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md relative overflow-hidden">
+          <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 {isArabic ? 'صافي الأرباح' : 'Net P&L'}
@@ -1141,21 +1107,21 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
             </div>
             <div className="mt-2">
-              <div className={`text-xl font-extrabold font-mono ${activeResult.netProfitUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <div className={`text-xl font-black font-mono tabular-nums ${activeResult.netProfitUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {activeResult.netProfitUsdt >= 0 ? '+' : ''}${activeResult.netProfitUsdt.toLocaleString()}
               </div>
               <div className="flex items-center gap-1.5 text-xs font-bold mt-0.5">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${activeResult.netReturnPercent >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${activeResult.netReturnPercent >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
                   {activeResult.netReturnPercent >= 0 ? '+' : ''}{activeResult.netReturnPercent.toFixed(2)}% ROI
                 </span>
-                <span className="text-[10px] text-slate-500">
-                  ${activeResult.finalBalance.toLocaleString()} bal
+                <span className="text-[10px] text-slate-500 font-mono">
+                  ${activeResult.finalBalance.toLocaleString()}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Card 2: Win Rate & Ratio */}
+          {/* Card 2: Win Rate */}
           <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -1164,14 +1130,14 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <Target className="w-3.5 h-3.5 text-brand-400" />
             </div>
             <div className="mt-2">
-              <div className="text-xl font-extrabold font-mono text-brand-300">
+              <div className="text-xl font-black font-mono tabular-nums text-brand-300">
                 {activeResult.winRate.toFixed(1)}%
               </div>
-              <div className="flex items-center gap-1 text-[11px] font-bold mt-0.5 text-slate-400">
+              <div className="flex items-center gap-1 text-[11px] font-bold mt-0.5 font-mono text-slate-400">
                 <span className="text-emerald-400">{activeResult.winningTrades}W</span>
                 <span>/</span>
                 <span className="text-rose-400">{activeResult.losingTrades}L</span>
-                <span className="text-slate-500">({activeResult.totalTrades} {isArabic ? 'صفقة' : 'trades'})</span>
+                <span className="text-slate-500 font-normal">({activeResult.totalTrades} {isArabic ? 'صفقة' : 'trades'})</span>
               </div>
             </div>
           </div>
@@ -1185,11 +1151,11 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <Gauge className="w-3.5 h-3.5 text-amber-400" />
             </div>
             <div className="mt-2">
-              <div className={`text-xl font-extrabold font-mono ${activeResult.profitFactor >= 2 ? 'text-emerald-400' : activeResult.profitFactor >= 1.3 ? 'text-amber-400' : 'text-rose-400'}`}>
+              <div className={`text-xl font-black font-mono tabular-nums ${activeResult.profitFactor >= 2 ? 'text-emerald-400' : activeResult.profitFactor >= 1.3 ? 'text-amber-400' : 'text-rose-400'}`}>
                 {activeResult.profitFactor > 0 ? activeResult.profitFactor.toFixed(2) : '0.00'}
               </div>
               <div className="text-[10px] font-bold text-slate-500 mt-0.5">
-                {activeResult.profitFactor >= 2 ? (isArabic ? 'ممتاز جداً' : 'Institutional Grade') : (isArabic ? 'مقبول' : 'Standard')}
+                {activeResult.profitFactor >= 2 ? (isArabic ? 'أداء مؤسسي ممتاز' : 'Institutional Grade') : (isArabic ? 'مقبول' : 'Standard')}
               </div>
             </div>
           </div>
@@ -1203,10 +1169,10 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <Shield className="w-3.5 h-3.5 text-rose-400" />
             </div>
             <div className="mt-2">
-              <div className="text-xl font-extrabold font-mono text-rose-400">
+              <div className="text-xl font-black font-mono tabular-nums text-rose-400">
                 -{activeResult.maxDrawdownPercent.toFixed(2)}%
               </div>
-              <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
                 -${activeResult.maxDrawdownUsdt.toFixed(1)} peak dd
               </div>
             </div>
@@ -1221,29 +1187,29 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
             </div>
             <div className="mt-2">
-              <div className="text-xl font-extrabold font-mono text-indigo-300">
+              <div className="text-xl font-black font-mono tabular-nums text-indigo-300">
                 {activeResult.sharpeRatio.toFixed(2)}
               </div>
-              <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
                 Sortino: {activeResult.sortinoRatio.toFixed(2)}
               </div>
             </div>
           </div>
 
-          {/* Card 6: Expectancy / Trade */}
+          {/* Card 6: Expectancy */}
           <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-3.5 flex flex-col justify-between shadow-md">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                {isArabic ? 'توقع كل صفقة' : 'Expectancy / Trade'}
+                {isArabic ? 'التوقع للصفقة' : 'Trade Expectancy'}
               </span>
               <CircleDot className="w-3.5 h-3.5 text-teal-400" />
             </div>
             <div className="mt-2">
-              <div className={`text-xl font-extrabold font-mono ${activeResult.expectancy >= 0 ? 'text-teal-300' : 'text-rose-300'}`}>
+              <div className={`text-xl font-black font-mono tabular-nums ${activeResult.expectancy >= 0 ? 'text-teal-300' : 'text-rose-300'}`}>
                 {activeResult.expectancy >= 0 ? '+' : ''}${activeResult.expectancy.toFixed(2)}
               </div>
-              <div className="text-[10px] font-bold text-slate-500 mt-0.5">
-                R:R target: 1:{riskRewardTarget}
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                Target 1:{riskRewardTarget} R:R
               </div>
             </div>
           </div>
@@ -1252,82 +1218,87 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MULTI-TAB WORKSPACE NAVIGATION                                           */}
+      {/* WORKSPACE NAVIGATION TABS                                                 */}
       {/* ========================================================================= */}
       <div className="bg-[#0f172a] border border-[#1e293b] rounded-2xl overflow-hidden shadow-xl flex flex-col">
         
-        {/* Navigation Tabs Header */}
+        {/* Navigation Bar */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e293b] bg-slate-900/80">
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
+              type="button"
               onClick={() => setActiveTab('CHART')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'CHART'
                   ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
               }`}
             >
               <LineChartIcon className="w-3.5 h-3.5" />
-              <span>{isArabic ? 'منحنى النمو والمحفظة' : 'Equity Curve'}</span>
+              <span>{isArabic ? 'منحنى النمو والمحفظة' : 'Equity Growth'}</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('STRATEGY_MATRIX')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'STRATEGY_MATRIX'
                   ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
               }`}
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isArabic ? 'مقارنة أداء كافة الاستراتيجيات' : 'All Strategies Benchmark'}</span>
+              <span>{isArabic ? 'مصفوفة مقارنة الاستراتيجيات (10)' : 'Benchmark Matrix (10 Strategies)'}</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('TRADES')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'TRADES'
                   ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>{isArabic ? 'سجل الصفقات المنفذة' : 'Trade Blotter'} ({singleResult?.trades.length || 0})</span>
+              <span>{isArabic ? 'سجل الصفقات' : 'Trade Blotter'} ({singleResult?.trades.length || 0})</span>
             </button>
 
             {viewMode === 'MULTI_COIN' && (
               <button
+                type="button"
                 onClick={() => setActiveTab('PORTFOLIO')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'PORTFOLIO'
                     ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
                 }`}
               >
                 <Coins className="w-3.5 h-3.5" />
-                <span>{isArabic ? 'ترتيب سلة العملات' : 'Basket Ranking'}</span>
+                <span>{isArabic ? 'ترتيب سلة العملات' : 'Basket Assets'}</span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => setActiveTab('SETTINGS')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'SETTINGS'
                   ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>{isArabic ? 'الإعدادات المتقدمة' : 'Advanced Parameters'}</span>
+              <span>{isArabic ? 'المعايير المتقدمة' : 'Risk & Execution'}</span>
             </button>
           </div>
 
-          <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400">
-            <span className="flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-3 text-xs font-mono font-bold text-slate-400">
+            <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-brand-400" />
-              {isArabic ? 'استراتيجية البوت' : 'Bot Equity'}
+              {isArabic ? 'نمو البوت' : 'Bot Strategy'}
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
               {isArabic ? 'الشراء والاحتفاظ' : 'Buy & Hold'}
             </span>
@@ -1335,27 +1306,27 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* TAB 1: EQUITY CURVE CHART & PERFORMANCE VISUALIZATION                     */}
+        {/* TAB 1: EQUITY CURVE & PERFORMANCE VISUALIZATION                           */}
         {/* ========================================================================= */}
         {activeTab === 'CHART' && activeResult && (
           <div className="p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-slate-800/80">
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <span
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: activeStrategyObj.color }}
                 />
-                <span className="text-xs font-extrabold text-white">
+                <span className="text-xs font-bold text-white">
                   {isArabic
                     ? `منحنى النمو: ${activeStrategyObj.nameAr} (${viewMode === 'SINGLE_COIN' ? currentSymbol : 'سلة العملات'})`
-                    : `Equity Growth: ${activeStrategyObj.name} (${viewMode === 'SINGLE_COIN' ? currentSymbol : 'Basket'})`}
+                    : `Equity Curve: ${activeStrategyObj.name} (${viewMode === 'SINGLE_COIN' ? currentSymbol : 'Basket'})`}
                 </span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
                   {timeframe} • {marketType === 'FUTURES' ? `${leverage}x` : 'Spot'}
                 </span>
               </div>
               <span className="text-[11px] text-slate-400 font-mono">
-                {activeResult.trades.length} {isArabic ? 'صفقة منفذة خلال' : 'trades across'} {months} {isArabic ? 'أشهر' : 'months'}
+                {activeResult.trades.length} {isArabic ? 'صفقة على مدى' : 'trades across'} {months} {isArabic ? 'أشهر' : 'months'}
               </span>
             </div>
 
@@ -1430,41 +1401,41 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
               <div className="bg-[#1e293b]/40 border border-emerald-500/20 p-3 rounded-xl flex flex-col justify-between">
                 <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                  {isArabic ? 'تخريج الهدف 1 (TP1)' : 'Target 1 (TP1 Hit)'}
+                  {isArabic ? 'تحقيق الهدف 1 (TP1)' : 'Target 1 (TP1 Hit)'}
                 </span>
                 <div className="flex items-baseline justify-between mt-1">
-                  <span className="text-lg font-extrabold font-mono text-emerald-300">{activeResult.tp1Rate}%</span>
+                  <span className="text-lg font-bold font-mono text-emerald-300">{activeResult.tp1Rate}%</span>
                   <span className="text-[10px] text-slate-400">{isArabic ? 'حجز 50% + Breakeven' : '50% secured'}</span>
                 </div>
               </div>
 
               <div className="bg-[#1e293b]/40 border border-teal-500/20 p-3 rounded-xl flex flex-col justify-between">
                 <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider">
-                  {isArabic ? 'تخريج الهدف 2 (TP2)' : 'Target 2 (TP2 Hit)'}
+                  {isArabic ? 'تحقيق الهدف 2 (TP2)' : 'Target 2 (TP2 Hit)'}
                 </span>
                 <div className="flex items-baseline justify-between mt-1">
-                  <span className="text-lg font-extrabold font-mono text-teal-300">{activeResult.tp2Rate}%</span>
+                  <span className="text-lg font-bold font-mono text-teal-300">{activeResult.tp2Rate}%</span>
                   <span className="text-[10px] text-slate-400">{isArabic ? 'حجز 25% إضافي' : '25% locked'}</span>
                 </div>
               </div>
 
               <div className="bg-[#1e293b]/40 border border-brand-500/20 p-3 rounded-xl flex flex-col justify-between">
                 <span className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                  {isArabic ? 'تخريج الهدف 3 الكامل (TP3)' : 'Target 3 (TP3 Full Scale)'}
+                  {isArabic ? 'تحقيق الهدف 3 الكامل (TP3)' : 'Target 3 (TP3 Full Scale)'}
                 </span>
                 <div className="flex items-baseline justify-between mt-1">
-                  <span className="text-lg font-extrabold font-mono text-brand-300">{activeResult.tp3Rate}%</span>
+                  <span className="text-lg font-bold font-mono text-brand-300">{activeResult.tp3Rate}%</span>
                   <span className="text-[10px] text-slate-400">{isArabic ? 'إغلاق كامل بربح مضاعف' : 'Full scale-out'}</span>
                 </div>
               </div>
 
               <div className="bg-[#1e293b]/40 border border-rose-500/20 p-3 rounded-xl flex flex-col justify-between">
                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                  {isArabic ? 'نسبة ضرب الوقف (SL Rate)' : 'Stop Loss (SL Rate)'}
+                  {isArabic ? 'نسبة وقف الخسارة (SL Rate)' : 'Stop Loss (SL Rate)'}
                 </span>
                 <div className="flex items-baseline justify-between mt-1">
-                  <span className="text-lg font-extrabold font-mono text-rose-300">{activeResult.slRate}%</span>
-                  <span className="text-[10px] text-slate-400">{isArabic ? 'حماية رأس المال' : 'Protected'}</span>
+                  <span className="text-lg font-bold font-mono text-rose-300">{activeResult.slRate}%</span>
+                  <span className="text-[10px] text-slate-400">{isArabic ? 'حماية رأس المال' : 'Capital protected'}</span>
                 </div>
               </div>
             </div>
@@ -1472,169 +1443,258 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: 6 STRATEGIES COMPARISON BENCHMARK MATRIX                           */}
+        {/* TAB 2: 10 STRATEGIES COMPARISON BENCHMARK MATRIX                           */}
         {/* ========================================================================= */}
         {activeTab === 'STRATEGY_MATRIX' && (
-          <div className="p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+          <div className="p-5 flex flex-col gap-6">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  {isArabic ? `مقارنة أداء كافة الاستراتيجيات على ${currentSymbol}` : `Benchmark: All Strategies Performance on ${currentSymbol}`}
+                  {isArabic ? `مقارنة أداء كافة الاستراتيجيات العشر على ${currentSymbol}` : `Benchmark Matrix: All 10 Strategies on ${currentSymbol}`}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {isArabic
-                    ? 'اختبار حقيقي لكافة الاستراتيجيات على نفس الشموع لمعرفة الاستراتيجية الأكثر إنتاجية وربحية.'
-                    : 'Simultaneous backtest of all available strategies on identical historical candles to find the optimal trading model.'}
+                    ? 'اختبار حقيقي لكافة الاستراتيجيات على نفس الشموع التاريخية بتصفيف متوازي يسهل المقارنة واختيار الأفضل.'
+                    : 'Parallel backtest of all strategies on identical historical candles to find the mathematically optimal model.'}
                 </p>
               </div>
 
               <button
+                type="button"
                 onClick={() => executeSimulation(false)}
-                className="px-3 py-1.5 bg-[#1e293b] hover:bg-[#334155] text-slate-300 rounded-lg text-xs font-bold border border-slate-700 transition-all flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-[#1e293b] hover:bg-[#334155] text-slate-300 rounded-lg text-xs font-bold border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>{isArabic ? 'تحديث المقارنة' : 'Refresh'}</span>
+                <span>{isArabic ? 'تحديث الاختبار' : 'Refresh Matrix'}</span>
               </button>
             </div>
 
-            {/* Leaderboard Table */}
-            <div className="overflow-x-auto rounded-xl border border-[#1e293b]">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#1e293b]/70 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-[#1e293b]">
-                  <tr>
-                    <th className="py-3 px-4">{isArabic ? 'الاستراتيجية' : 'Strategy'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'الصافي ($)' : 'Net P&L ($)'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'العائد %' : 'ROI %'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'نسبة النجاح' : 'Win Rate'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'الصفقات' : 'Trades'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'معامل الربح' : 'Profit Factor'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'أقصى تراجع' : 'Max DD'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'شارب' : 'Sharpe'}</th>
-                    <th className="py-3 px-4 text-center">{isArabic ? 'إجراء' : 'Action'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1e293b] font-mono">
-                  {strategyComparison.map((item, idx) => {
-                    const isCurrent = selectedStrategyId === item.strategyId;
-                    return (
-                      <tr
-                        key={item.strategyId}
-                        className={`transition-colors ${
-                          item.isBest
-                            ? 'bg-amber-500/10 hover:bg-amber-500/15'
-                            : isCurrent
-                            ? 'bg-brand-500/10 hover:bg-brand-500/15'
-                            : 'hover:bg-[#1e293b]/40'
-                        }`}
-                      >
-                        {/* Strategy Info */}
-                        <td className="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+            {/* Symmetrical Parallel Strategy Cards Grid (بطاقات متوازية بانتظام) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+              {strategyComparison.map((item, idx) => {
+                const isCurrent = selectedStrategyId === item.strategyId;
+                return (
+                  <div
+                    key={item.strategyId}
+                    className={`bg-[#1e293b]/50 rounded-xl p-3.5 border transition-all flex flex-col justify-between gap-3 ${
+                      item.isBest
+                        ? 'border-amber-500/70 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
+                        : isCurrent
+                        ? 'border-brand-500/70 shadow-lg shadow-brand-500/10 ring-1 ring-brand-500/30'
+                        : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Card Header */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
                           <span
-                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            className="w-2.5 h-2.5 rounded-full"
                             style={{ backgroundColor: item.color }}
                           />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span>{isArabic ? item.strategyNameAr : item.strategyName}</span>
-                              {item.isBest && (
-                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                  {isArabic ? '★ الأفضل' : '★ Top #1'}
-                                </span>
-                              )}
-                              {isCurrent && (
-                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                                  {isArabic ? 'المحددة حالياً' : 'Active'}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-normal">
-                              {item.badge}
-                            </span>
-                          </div>
-                        </td>
+                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                            {item.badge}
+                          </span>
+                        </div>
+                        {item.isBest && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            ★ TOP #1
+                          </span>
+                        )}
+                        {isCurrent && !item.isBest && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
 
-                        {/* Net Profit */}
-                        <td className={`py-3 px-3 font-bold ${item.netProfitUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <h4 className="font-bold text-xs text-white truncate" title={isArabic ? item.strategyNameAr : item.strategyName}>
+                        {isArabic ? item.strategyNameAr : item.strategyName}
+                      </h4>
+                    </div>
+
+                    {/* Parallel Metric Grid */}
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono py-2 border-y border-slate-800/80">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'صافي الربح' : 'Net P&L'}</span>
+                        <span className={`font-bold ${item.netProfitUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {item.netProfitUsdt >= 0 ? '+' : ''}${item.netProfitUsdt.toLocaleString()}
-                        </td>
-
-                        {/* ROI % */}
-                        <td className={`py-3 px-3 font-bold ${item.netReturnPercent >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'العائد ROI' : 'ROI'}</span>
+                        <span className={`font-bold ${item.netReturnPercent >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                           {item.netReturnPercent >= 0 ? '+' : ''}{item.netReturnPercent.toFixed(1)}%
-                        </td>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'نسبة النجاح' : 'Win Rate'}</span>
+                        <span className="text-slate-200 font-bold">{item.winRate.toFixed(1)}%</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'معامل الربح' : 'Profit Factor'}</span>
+                        <span className={`font-bold ${item.profitFactor >= 2 ? 'text-emerald-400' : item.profitFactor >= 1.3 ? 'text-amber-400' : 'text-rose-400'}`}>
+                          {item.profitFactor > 0 ? item.profitFactor.toFixed(2) : '0.00'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'أقصى تراجع' : 'Max DD'}</span>
+                        <span className="text-rose-400 font-bold">-{item.maxDrawdownPercent.toFixed(1)}%</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-sans block">{isArabic ? 'الصفقات' : 'Trades'}</span>
+                        <span className="text-slate-300 font-bold">{item.totalTrades}</span>
+                      </div>
+                    </div>
 
-                        {/* Win Rate */}
-                        <td className="py-3 px-3 font-bold text-slate-200">
-                          {item.winRate.toFixed(1)}%
-                          <span className="text-[10px] text-slate-500 font-normal ml-1">
-                            ({item.winningTrades}W/{item.losingTrades}L)
-                          </span>
-                        </td>
+                    {/* Action CTA */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectStrategy(item.strategyId);
+                        setActiveTab('CHART');
+                      }}
+                      className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
+                          : 'bg-[#1e293b] hover:bg-brand-600 hover:text-white text-slate-300 border border-slate-700'
+                      }`}
+                    >
+                      {isCurrent ? (isArabic ? 'مفعلة حالياً' : 'Current Active') : (isArabic ? 'اختيار ومحاكاة' : 'Select & Simulate')}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
 
-                        {/* Total Trades */}
-                        <td className="py-3 px-3 text-slate-300 font-bold">
-                          {item.totalTrades}
-                        </td>
+            {/* Comprehensive Parallel Leaderboard Table */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold text-slate-300">
+                {isArabic ? 'جدول الترتيب والمقارنة الرقمية الدقيقة:' : 'Ranked Benchmark Financial Table:'}
+              </span>
+              <div className="overflow-x-auto rounded-xl border border-[#1e293b]">
+                <table className="w-full text-xs text-left rtl:text-right">
+                  <thead className="bg-[#1e293b]/70 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-[#1e293b]">
+                    <tr>
+                      <th className="py-3 px-4">{isArabic ? 'الاستراتيجية' : 'Strategy'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'الصافي ($)' : 'Net P&L ($)'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'العائد %' : 'ROI %'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'نسبة النجاح' : 'Win Rate'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'الصفقات' : 'Trades'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'معامل الربح' : 'Profit Factor'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'أقصى تراجع' : 'Max DD'}</th>
+                      <th className="py-3 px-3">{isArabic ? 'شارب' : 'Sharpe'}</th>
+                      <th className="py-3 px-4 text-center">{isArabic ? 'إجراء' : 'Action'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1e293b] font-mono tabular-nums">
+                    {strategyComparison.map((item) => {
+                      const isCurrent = selectedStrategyId === item.strategyId;
+                      return (
+                        <tr
+                          key={item.strategyId}
+                          className={`transition-colors ${
+                            item.isBest
+                              ? 'bg-amber-500/10 hover:bg-amber-500/15'
+                              : isCurrent
+                              ? 'bg-brand-500/10 hover:bg-brand-500/15'
+                              : 'hover:bg-[#1e293b]/40'
+                          }`}
+                        >
+                          <td className="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span>{isArabic ? item.strategyNameAr : item.strategyName}</span>
+                                {item.isBest && (
+                                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    ★ #1
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {item.badge}
+                              </span>
+                            </div>
+                          </td>
 
-                        {/* Profit Factor */}
-                        <td className="py-3 px-3">
-                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
-                            item.profitFactor >= 2 ? 'bg-emerald-500/20 text-emerald-300' : item.profitFactor >= 1.3 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
-                          }`}>
-                            {item.profitFactor > 0 ? item.profitFactor.toFixed(2) : '0.00'}
-                          </span>
-                        </td>
+                          <td className={`py-3 px-3 font-bold ${item.netProfitUsdt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {item.netProfitUsdt >= 0 ? '+' : ''}${item.netProfitUsdt.toLocaleString()}
+                          </td>
 
-                        {/* Max Drawdown */}
-                        <td className="py-3 px-3 text-rose-400 font-bold">
-                          -{item.maxDrawdownPercent.toFixed(1)}%
-                        </td>
+                          <td className={`py-3 px-3 font-bold ${item.netReturnPercent >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            {item.netReturnPercent >= 0 ? '+' : ''}{item.netReturnPercent.toFixed(1)}%
+                          </td>
 
-                        {/* Sharpe */}
-                        <td className="py-3 px-3 text-indigo-300 font-bold">
-                          {item.sharpeRatio.toFixed(2)}
-                        </td>
+                          <td className="py-3 px-3 font-bold text-slate-200">
+                            {item.winRate.toFixed(1)}%
+                            <span className="text-[10px] text-slate-500 font-normal ml-1">
+                              ({item.winningTrades}W/{item.losingTrades}L)
+                            </span>
+                          </td>
 
-                        {/* Action Button */}
-                        <td className="py-3 px-4 text-center font-sans">
-                          <button
-                            onClick={() => {
-                              handleSelectStrategy(item.strategyId);
-                              setActiveTab('CHART');
-                            }}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                              isCurrent
-                                ? 'bg-brand-500 text-white'
-                                : 'bg-[#1e293b] hover:bg-brand-600 hover:text-white text-slate-300 border border-slate-700'
-                            }`}
-                          >
-                            {isCurrent ? (isArabic ? 'مفعلة' : 'Active') : (isArabic ? 'اختيار' : 'Select')}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          <td className="py-3 px-3 text-slate-300 font-bold">
+                            {item.totalTrades}
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                              item.profitFactor >= 2 ? 'bg-emerald-500/20 text-emerald-300' : item.profitFactor >= 1.3 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                            }`}>
+                              {item.profitFactor > 0 ? item.profitFactor.toFixed(2) : '0.00'}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-rose-400 font-bold">
+                            -{item.maxDrawdownPercent.toFixed(1)}%
+                          </td>
+
+                          <td className="py-3 px-3 text-indigo-300 font-bold">
+                            {item.sharpeRatio.toFixed(2)}
+                          </td>
+
+                          <td className="py-3 px-4 text-center font-sans">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectStrategy(item.strategyId);
+                                setActiveTab('CHART');
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                isCurrent
+                                  ? 'bg-brand-500 text-white'
+                                  : 'bg-[#1e293b] hover:bg-brand-600 hover:text-white text-slate-300 border border-slate-700'
+                              }`}
+                            >
+                              {isCurrent ? (isArabic ? 'مفعلة' : 'Active') : (isArabic ? 'اختيار' : 'Select')}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: TRADE BLOTTER / DETAILED TRANSACTION LOGS                          */}
+        {/* TAB 3: REAL SIMULATED TRADE BLOTTER                                       */}
         {/* ========================================================================= */}
         {activeTab === 'TRADES' && (
           <div className="p-5 flex flex-col gap-4">
-            
-            {/* Blotter Controls */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-1 max-w-sm">
                 <div className="relative w-full">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder={isArabic ? 'بحث في الصفقات (الاستراتيجية، النتيجة)...' : 'Search trades (strategy, result)...'}
+                    placeholder={isArabic ? 'بحث في الصفقات (الرمز، النتيجة)...' : 'Search blotter...'}
                     value={tradeSearch}
                     onChange={(e) => setTradeSearch(e.target.value)}
                     className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -1642,13 +1702,13 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                 </div>
               </div>
 
-              {/* Filter Pills */}
               <div className="flex items-center gap-1.5">
                 {(['ALL', 'WINS', 'LOSSES', 'LIQUIDATED'] as const).map((filter) => (
                   <button
                     key={filter}
+                    type="button"
                     onClick={() => setTradeResultFilter(filter)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${
                       tradeResultFilter === filter
                         ? 'bg-brand-500/20 text-brand-300 border-brand-500/50'
                         : 'bg-[#1e293b]/60 text-slate-400 border-slate-700/50 hover:bg-[#1e293b]'
@@ -1666,9 +1726,8 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
             </div>
 
-            {/* Trades Table */}
             <div className="overflow-x-auto rounded-xl border border-[#1e293b]">
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-xs text-left rtl:text-right">
                 <thead className="bg-[#1e293b]/70 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-[#1e293b]">
                   <tr>
                     <th className="py-3 px-3">#</th>
@@ -1676,25 +1735,23 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                     <th className="py-3 px-3">{isArabic ? 'الاستراتيجية' : 'Strategy'}</th>
                     <th className="py-3 px-3">{isArabic ? 'سعر الدخول' : 'Entry Price'}</th>
                     <th className="py-3 px-3">{isArabic ? 'سعر الخروج' : 'Exit Price'}</th>
-                    <th className="py-3 px-3">{isArabic ? 'النتيجة والسبب' : 'Result'}</th>
+                    <th className="py-3 px-3">{isArabic ? 'النتيجة' : 'Result'}</th>
                     <th className="py-3 px-3">{isArabic ? 'الربح %' : 'ROE %'}</th>
                     <th className="py-3 px-3">{isArabic ? 'الربح ($)' : 'PnL ($)'}</th>
                     <th className="py-3 px-3">{isArabic ? 'الرصيد بعد' : 'Balance After'}</th>
                     <th className="py-3 px-3">{isArabic ? 'المدة' : 'Duration'}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1e293b] font-mono">
+                <tbody className="divide-y divide-[#1e293b] font-mono tabular-nums">
                   {filteredTrades.slice(0, visibleTradesLimit).map((trade, idx) => {
                     const isWin = trade.pnlPercent > 0;
                     return (
                       <tr key={trade.id} className="hover:bg-[#1e293b]/40 transition-colors">
                         <td className="py-2.5 px-3 text-slate-500 text-[10px]">{idx + 1}</td>
-
-                        {/* Type & Pair */}
                         <td className="py-2.5 px-3 font-sans">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
                                 trade.type === 'LONG'
                                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                   : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
@@ -1705,25 +1762,17 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                             <span className="font-bold text-white">{trade.symbol}</span>
                           </div>
                         </td>
-
-                        {/* Strategy */}
                         <td className="py-2.5 px-3 font-sans text-slate-300 font-bold">
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] border border-slate-700">
                             {trade.strategyName || 'Ensemble'}
                           </span>
                         </td>
-
-                        {/* Entry Price */}
                         <td className="py-2.5 px-3 text-slate-200">
                           ${formatCoinPrice(trade.entryPrice)}
                         </td>
-
-                        {/* Exit Price */}
                         <td className="py-2.5 px-3 text-slate-200">
                           ${formatCoinPrice(trade.exitPrice)}
                         </td>
-
-                        {/* Result */}
                         <td className="py-2.5 px-3 font-sans">
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -1739,23 +1788,15 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                             {trade.result}
                           </span>
                         </td>
-
-                        {/* ROE % */}
                         <td className={`py-2.5 px-3 font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {isWin ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
                         </td>
-
-                        {/* PnL USDT */}
                         <td className={`py-2.5 px-3 font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {isWin ? '+' : ''}${trade.pnlUsdt.toFixed(2)}
                         </td>
-
-                        {/* Balance After */}
                         <td className="py-2.5 px-3 text-slate-300">
                           ${trade.balanceAfter.toLocaleString()}
                         </td>
-
-                        {/* Duration */}
                         <td className="py-2.5 px-3 text-slate-400 text-[11px]">
                           {trade.durationCandles || 1} {isArabic ? 'شمعة' : 'bars'}
                         </td>
@@ -1772,14 +1813,14 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               )}
             </div>
 
-            {/* Pagination / Load more */}
             {filteredTrades.length > visibleTradesLimit && (
               <div className="flex justify-center pt-2">
                 <button
+                  type="button"
                   onClick={() => setVisibleTradesLimit((prev) => prev + 50)}
-                  className="px-4 py-2 bg-[#1e293b] hover:bg-[#334155] text-slate-300 rounded-lg text-xs font-bold border border-slate-700 transition-all"
+                  className="px-4 py-2 bg-[#1e293b] hover:bg-[#334155] text-slate-300 rounded-lg text-xs font-bold border border-slate-700 transition-all cursor-pointer"
                 >
-                  {isArabic ? `عرض المزيد (+50 صفقة)` : `Load More Trades (+50)`}
+                  {isArabic ? `عرض المزيد (+50 صفقة)` : `Load More (+50)`}
                 </button>
               </div>
             )}
@@ -1796,7 +1837,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               {isArabic ? 'ترتيب أداء العملات في السلة' : 'Basket Assets Performance Ranking'}
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {multiResult.coinsRanked.map((coin, idx) => (
                 <div
                   key={coin.symbol}
@@ -1809,7 +1850,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                       </span>
                       <span className="font-bold text-white text-sm">{coin.symbol}</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-xs font-extrabold font-mono ${coin.netReturnPercent >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${coin.netReturnPercent >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
                       {coin.netReturnPercent >= 0 ? '+' : ''}{coin.netReturnPercent.toFixed(1)}%
                     </span>
                   </div>
@@ -1964,11 +2005,12 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
 
             <div className="flex justify-end pt-2">
               <button
+                type="button"
                 onClick={() => {
                   executeSimulation(false);
                   setActiveTab('CHART');
                 }}
-                className="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all cursor-pointer"
               >
                 {isArabic ? 'تطبيق وإعادة المحاكاة' : 'Apply & Re-simulate'}
               </button>
@@ -1985,7 +2027,6 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
             className="bg-[#0f172a] border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95"
             dir={isArabic ? 'rtl' : 'ltr'}
           >
-            {/* Modal Header */}
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-brand-500/15 border border-brand-500/30 text-brand-400">
@@ -2011,7 +2052,6 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </button>
             </div>
 
-            {/* Quick Presets Bar */}
             <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/30 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-[11px] font-bold text-slate-400">
                 {isArabic ? 'تحديدات سريعة:' : 'Quick Presets:'}
@@ -2020,49 +2060,48 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setBasketPreset('TOP3')}
-                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 text-xs cursor-pointer"
                 >
-                  Top 3 (BTC, ETH, SOL)
+                  Top 3
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('TOP5')}
-                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 text-xs cursor-pointer"
                 >
-                  Top 5 Major
+                  Top 5
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('LAYER1')}
-                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 text-xs cursor-pointer"
                 >
                   Layer 1
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('DEFI')}
-                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 hover:border-brand-500/50 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 text-xs cursor-pointer"
                 >
                   DeFi
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('ALL')}
-                  className="px-2.5 py-1 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 font-bold border border-brand-500/40 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 font-bold border border-brand-500/40 text-xs cursor-pointer"
                 >
                   {isArabic ? 'الكل (21)' : 'All (21)'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setBasketPreset('CLEAR')}
-                  className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 font-bold border border-rose-500/30 transition-all text-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 font-bold border border-rose-500/30 text-xs cursor-pointer"
                 >
                   {isArabic ? 'مسح' : 'Clear'}
                 </button>
               </div>
             </div>
 
-            {/* Search Filter */}
             <div className="p-4 border-b border-slate-800">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -2070,7 +2109,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                   type="text"
                   value={basketSearchQuery}
                   onChange={(e) => setBasketSearchQuery(e.target.value)}
-                  placeholder={isArabic ? 'بحث في أزواج السلة (BTC, SOL, XRP, SUI)...' : 'Filter pairs (e.g. BTC, SOL, XRP)...'}
+                  placeholder={isArabic ? 'بحث في أزواج السلة (BTC, SOL, XRP)...' : 'Filter pairs (e.g. BTC, SOL)...'}
                   className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs font-bold text-white placeholder:text-slate-500 focus:outline-none focus:border-brand-500"
                 />
                 {basketSearchQuery && (
@@ -2085,7 +2124,6 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
             </div>
 
-            {/* Pairs Grid */}
             <div className="flex-1 p-3 overflow-y-auto max-h-96">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                 {RESPECTED_TRADING_PAIRS.filter((p) => {
@@ -2112,7 +2150,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                         >
                           {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                         </div>
-                        <div className="flex flex-col text-left">
+                        <div className="flex flex-col text-left rtl:text-right">
                           <span className="font-mono font-bold text-xs text-white">
                             {pair.symbol}
                           </span>
@@ -2132,7 +2170,6 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               </div>
             </div>
 
-            {/* Footer */}
             <div className="px-5 py-3.5 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -2142,15 +2179,13 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
                     : `${activeSymbolsForBacktest.length} pairs selected for Backtesting`}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsBasketModalOpen(false)}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all cursor-pointer"
-                >
-                  {isArabic ? 'حفظ وتطبيق السلة' : 'Done & Apply Basket'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsBasketModalOpen(false)}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-brand-600/25 transition-all cursor-pointer"
+              >
+                {isArabic ? 'حفظ وتطبيق السلة' : 'Apply Basket'}
+              </button>
             </div>
           </div>
         </div>
