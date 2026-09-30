@@ -2441,6 +2441,34 @@ app.post('/api/risk/unlock', async (req, res) => {
   }
 });
 
+app.post('/api/risk/reset-all', async (req, res) => {
+  try {
+    const { customEquity } = req.body || {};
+    let equity = Number(customEquity);
+    if (!equity || equity <= 0) {
+      try {
+        const walletStr = await kv.get('btc_paper_wallet');
+        if (walletStr) {
+          const parsed = JSON.parse(walletStr);
+          if (typeof parsed.balance === 'number' && parsed.balance > 0) {
+            equity = parsed.balance;
+          }
+        }
+      } catch {}
+    }
+    const riskEngine = RiskEngine.getInstance();
+    const result = await riskEngine.resetAllToZero(equity);
+    return res.json({
+      success: true,
+      message: 'Risk lock, daily loss, drawdown, and loss streak successfully reset to ZERO',
+      status: result.config.riskLockStatus,
+      drawdownState: result.drawdownState,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to reset risk engine' });
+  }
+});
+
 app.get('/api/risk/audit-logs', async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 100;

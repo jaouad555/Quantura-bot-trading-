@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, ShieldAlert, AlertTriangle, RefreshCw, CheckCircle2, ShieldCheck, 
-  TrendingDown, TrendingUp, Anchor, Activity, Sliders, DollarSign,
-  Lock, Unlock, AlertOctagon, Flame, Eye, Layers, Shield
+  X, AlertTriangle, RefreshCw, ShieldCheck, 
+  TrendingDown, Anchor, Activity, Sliders,
+  Unlock, AlertOctagon, Flame, Layers, Shield,
+  RotateCcw, CheckCircle2, Sparkles, Info
 } from 'lucide-react';
 import { 
   AutoBotConfig, Language, BinanceApiConfig, PaperWallet, TradingExecutionMode,
-  FrontendRiskEngineConfig, RiskEngineMetrics, RiskAuditLogEntry, RiskLevel, RiskLockStatus 
+  FrontendRiskEngineConfig, RiskEngineMetrics, RiskAuditLogEntry, RiskLockStatus 
 } from '../types';
 
 interface RiskManagementModalProps {
@@ -40,6 +41,8 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
   const [auditStats, setAuditStats] = useState<{ totalEvaluations: number; approvedCount: number; rejectedCount: number; approvalRatePercent: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSuccessNotice, setResetSuccessNotice] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form State
@@ -131,7 +134,6 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
         throw new Error(err.error || 'Failed to save risk configuration');
       }
 
-      // Also update local bot config if applicable
       onSaveConfig({
         ...botConfig,
         riskPerTradePercent: payload.riskPerTradePercent,
@@ -154,7 +156,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
       await fetch('/api/risk/emergency-stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active, reason: 'User Manual Emergency Kill Switch via Dashboard UI' })
+        body: JSON.stringify({ active, reason: 'Manual Emergency Kill Switch via Dashboard UI' })
       });
       await fetchRiskData();
     } catch (err) {
@@ -164,23 +166,31 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
     }
   };
 
-  const handleUnlockRisk = async () => {
+  // Full Reset to ZERO
+  const handleResetAllToZero = async () => {
     try {
-      setIsLoading(true);
-      await fetch('/api/risk/unlock', {
+      setIsResetting(true);
+      setErrorMessage(null);
+      const res = await fetch('/api/risk/reset-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manualAdminOverride: true })
+        body: JSON.stringify({})
       });
+      if (res.ok) {
+        setResetSuccessNotice(true);
+        setTimeout(() => setResetSuccessNotice(false), 4500);
+      }
       await fetchRiskData();
-    } catch (err) {
-      console.error('Failed to unlock risk lock:', err);
+    } catch (err: any) {
+      console.error('Failed to reset risk engine to zero:', err);
+      setErrorMessage(err.message || 'Failed to reset risk engine');
     } finally {
-      setIsLoading(false);
+      setIsResetting(false);
     }
   };
 
   const getScoreColor = (score: number) => {
+    if (score === 0) return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
     if (score < 30) return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
     if (score < 60) return 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10';
     if (score < 80) return 'text-amber-400 border-amber-500/30 bg-amber-500/10';
@@ -198,18 +208,20 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
       case 'WARNING':
         return { label: isArabic ? 'تحذير مخاطر' : 'RISK WARNING', color: 'bg-yellow-500 text-slate-950 font-bold' };
       default:
-        return { label: isArabic ? 'نظام المخاطر: آمن' : 'ALL SYSTEMS OPTIMAL', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' };
+        return { label: isArabic ? 'نظام المخاطر: آمن تماماً (0 خسائر)' : 'ALL SYSTEMS OPTIMAL', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold' };
     }
   };
 
   const lockBadge = getLockBadge(metrics?.riskLockStatus || riskConfig?.riskLockStatus);
+  const currentRiskScore = metrics?.riskScore ?? 0;
+  const isScoreZero = currentRiskScore === 0;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md" dir={isArabic ? 'rtl' : 'ltr'}>
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col overflow-hidden transform transition-all max-h-[92vh] min-h-0">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col overflow-hidden transform transition-all max-h-[92vh] min-h-0">
         
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/60">
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/70">
           <div className="flex items-center gap-2.5">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shadow-inner ${
               metrics?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' 
@@ -223,12 +235,16 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <h2 className="text-base sm:text-lg font-black text-white font-sans tracking-tight">
                   {isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Engine'}
                 </h2>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                   v2.0 PRO
                 </span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  {isArabic ? 'حماية فورية' : 'Zero-Latency Defense'}
+                </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-bold">
-                {isArabic ? 'حماية رأس المال والمطابقة الرياضية الصارمة' : 'Deterministic Capital Preservation & Pre-Trade Defense'}
+              <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                {isArabic ? 'حماية رأس المال والمطابقة الرياضية الصارمة قبل التنفيذ' : 'Deterministic Capital Preservation & Pre-Trade Defense'}
               </p>
             </div>
           </div>
@@ -246,7 +262,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
           <button
             id="tab-risk-metrics"
             onClick={() => setActiveTab('METRICS')}
-            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'METRICS'
                 ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
@@ -258,7 +274,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
           <button
             id="tab-risk-config"
             onClick={() => setActiveTab('CONFIG')}
-            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'CONFIG'
                 ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
@@ -270,7 +286,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
           <button
             id="tab-risk-audit"
             onClick={() => setActiveTab('AUDIT')}
-            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 text-xs font-bold rounded-t-lg transition-all flex items-center gap-1.5 border-b-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'AUDIT'
                 ? 'text-cyan-400 border-cyan-500 bg-slate-800/60'
                 : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/30'
@@ -289,210 +305,312 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
         {/* Modal Body */}
         <div className="p-3.5 sm:p-5 space-y-4 overflow-y-auto overscroll-contain touch-pan-y flex-1 min-h-0">
 
-          {/* System Lock / Emergency Stop Banner */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-3.5 rounded-xl bg-slate-950 border border-slate-800 gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-0.5 rounded-lg text-[10px] uppercase tracking-wider font-mono ${lockBadge.color}`}>
+          {/* Master Control & Action Banner */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950 border border-slate-800/90 gap-3 shadow-inner">
+            <div className="flex items-center gap-2.5">
+              <span className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] uppercase tracking-wider font-mono ${lockBadge.color}`}>
                 {lockBadge.label}
               </span>
               {metrics?.riskLockReason && (
-                <span className="text-[11px] text-rose-400 font-medium">
+                <span className="text-xs text-rose-400 font-medium">
                   {metrics.riskLockReason}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+              {/* PRIMARY PROMINENT RESET BUTTON */}
+              <button
+                id="btn-master-reset-all"
+                onClick={handleResetAllToZero}
+                disabled={isResetting || isLoading}
+                title={isArabic ? 'إعادة تصفير كل العدادات والتراجع وسلسلة الخسائر إلى الصفر' : 'Reset all drawdowns, loss streaks, and metrics to clean zero baseline'}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all transform active:scale-95 cursor-pointer"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+                <span>{isArabic ? 'إعادة التصفير للصفر (Reset to Zero)' : 'Reset All to ZERO'}</span>
+              </button>
+
+              {/* Unlock button if locked specifically */}
               {metrics?.riskLockStatus === 'LOCKED' && (
                 <button
                   id="btn-unlock-risk-lock"
-                  onClick={handleUnlockRisk}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-bold rounded-lg flex items-center gap-1 transition cursor-pointer"
+                  onClick={handleResetAllToZero}
+                  disabled={isLoading || isResetting}
+                  className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Unlock className="w-3 h-3" />
-                  {isArabic ? 'إلغاء القفل اليدوي' : 'Reset Risk Lock'}
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'فك القفل' : 'Unlock Engine'}</span>
                 </button>
               )}
+
+              {/* Kill switch button */}
               <button
                 id="btn-toggle-emergency-kill-switch"
                 onClick={() => handleToggleEmergencyStop(!metrics?.emergencyStop)}
                 disabled={isLoading}
-                className={`px-3 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-sm transition cursor-pointer ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition cursor-pointer ${
                   metrics?.emergencyStop
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20 animate-pulse'
+                    : 'bg-rose-600/90 hover:bg-rose-600 text-white shadow-rose-600/20'
                 }`}
               >
                 <AlertOctagon className="w-3.5 h-3.5" />
-                {metrics?.emergencyStop 
-                  ? (isArabic ? 'استئناف التداول' : 'Resume System') 
-                  : (isArabic ? 'قاطع الطوارئ الشامل' : 'EMERGENCY KILL SWITCH')}
+                <span>
+                  {metrics?.emergencyStop 
+                    ? (isArabic ? 'استئناف التداول' : 'Resume System') 
+                    : (isArabic ? 'قاطع الطوارئ' : 'Kill Switch')}
+                </span>
               </button>
             </div>
           </div>
 
+          {/* Success Banner on Reset */}
+          {resetSuccessNotice && (
+            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs text-emerald-300 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold">
+                  {isArabic 
+                    ? '✅ تم تصفير محرك المخاطر بنجاح: تم إلغاء القفل، وتصفير سلسلة الخسائر، وإعادة ضبط ذروة الحساب إلى الرصيد الفعلي الحالي!' 
+                    : '✅ Risk Engine successfully reset to ZERO: Lock cleared, streak reset, and equity baseline recalibrated!'}
+                </span>
+              </div>
+              <button onClick={() => setResetSuccessNotice(false)} className="text-emerald-400 hover:text-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: METRICS */}
           {activeTab === 'METRICS' && (
-            <div className="space-y-5">
-              {/* Top High-Level Gauges */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-4">
+
+              {/* Top Core Metrics (3-Column Grid) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 
-                {/* Quantitative Risk Score */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
+                {/* 1. Quantitative Risk Score Card */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-slate-700/80 transition-all shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-cyan-400" />
                       {isArabic ? 'مؤشر المخاطر التراكمي' : 'Quantitative Risk Score'}
                     </span>
-                    <span className="font-mono text-[11px] text-slate-500">0-100</span>
-                  </span>
-                  <div className="my-2 flex items-baseline gap-2">
-                    <span className="text-3xl font-black font-mono text-white">
-                      {metrics?.riskScore ?? 15}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-md font-bold uppercase ${getScoreColor(metrics?.riskScore ?? 15)}`}>
-                      {metrics?.riskLevel ?? 'LOW'}
+                    <span className="font-mono text-[10px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                      0 - 100
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+
+                  <div className="my-2.5 flex items-baseline gap-2.5">
+                    <span className={`text-4xl font-black font-mono tracking-tight ${
+                      isScoreZero ? 'text-emerald-400' :
+                      currentRiskScore < 30 ? 'text-emerald-400' :
+                      currentRiskScore < 60 ? 'text-yellow-400' :
+                      currentRiskScore < 80 ? 'text-amber-400' : 'text-rose-400'
+                    }`}>
+                      {currentRiskScore}
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${getScoreColor(currentRiskScore)}`}>
+                      {isScoreZero ? (isArabic ? 'صفر مخاطرة (آمن)' : 'PRISTINE SAFE') : (metrics?.riskLevel ?? 'LOW')}
+                    </span>
+                  </div>
+
+                  {/* Progress Meter */}
+                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden mb-2">
                     <div 
-                      className={`h-full transition-all duration-500 ${
-                        (metrics?.riskScore ?? 15) < 30 ? 'bg-emerald-500' :
-                        (metrics?.riskScore ?? 15) < 60 ? 'bg-yellow-500' :
-                        (metrics?.riskScore ?? 15) < 80 ? 'bg-amber-500' : 'bg-rose-500'
+                      className={`h-full transition-all duration-700 ${
+                        isScoreZero ? 'bg-emerald-500' :
+                        currentRiskScore < 30 ? 'bg-emerald-500' :
+                        currentRiskScore < 60 ? 'bg-yellow-500' :
+                        currentRiskScore < 80 ? 'bg-amber-500' : 'bg-rose-500'
                       }`}
-                      style={{ width: `${Math.min(100, metrics?.riskScore ?? 15)}%` }}
+                      style={{ width: `${Math.max(4, Math.min(100, currentRiskScore))}%` }}
                     />
+                  </div>
+
+                  {/* Transparency breakdown explanation so user knows exactly where score comes from */}
+                  <div className="pt-2 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400 font-mono">
+                    <span title="Consecutive loss penalty">
+                      {isArabic ? 'الخسائر:' : 'Streak:'} <strong className="text-slate-200">{(metrics?.consecutiveLosses || 0) * 2} pts</strong>
+                    </span>
+                    <span title="Drawdown penalty">
+                      {isArabic ? 'التراجع:' : 'DD:'} <strong className="text-slate-200">{Math.round((metrics?.dailyDrawdownPercent || 0))} pts</strong>
+                    </span>
+                    <span title="Exposure">
+                      {isArabic ? 'التعرض:' : 'Exp:'} <strong className="text-slate-200">{Math.round(metrics?.totalExposurePercent || 0)} pts</strong>
+                    </span>
                   </div>
                 </div>
 
-                {/* Daily Loss Metric */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
+                {/* 2. Daily Loss Metric Card */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-slate-700/80 transition-all shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
                       {isArabic ? 'الخسارة اليومية الحالية' : 'Daily Loss vs Limit'}
                     </span>
-                    <span className="font-mono text-[11px] text-slate-500">Cap: -{metrics?.maxDailyLossPercent ?? 3.0}%</span>
-                  </span>
-                  <div className="my-2 flex items-baseline gap-1.5">
-                    <span className={`text-2xl font-black font-mono ${
-                      (metrics?.dailyLossPercent || 0) > 0 ? 'text-rose-400' : 'text-slate-200'
-                    }`}>
-                      {(metrics?.dailyLossPercent || 0) > 0 ? `-${metrics?.dailyLossPercent.toFixed(2)}%` : '0.00%'}
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      (${metrics?.dailyLossUsdt ? metrics.dailyLossUsdt.toFixed(2) : '0.00'} USDT)
+                    <span className="font-mono text-[10px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                      Cap: -{riskConfig?.maxDailyLossPercent ?? 3.0}%
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+
+                  <div className="my-2.5 flex items-baseline gap-2">
+                    <span className={`text-3xl font-black font-mono tracking-tight ${
+                      (metrics?.dailyDrawdownPercent || 0) > 0 ? 'text-rose-400' : 'text-slate-200'
+                    }`}>
+                      {(metrics?.dailyDrawdownPercent || 0) > 0 
+                        ? `-${(metrics?.dailyDrawdownPercent || 0).toFixed(2)}%` 
+                        : '0.00%'}
+                    </span>
+                    <span className="text-xs text-slate-500 font-mono">
+                      (${Math.abs(metrics?.dailyRealizedPnl || 0).toFixed(2)} USDT)
+                    </span>
+                  </div>
+
+                  {/* Meter */}
+                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden mb-2">
                     <div 
-                      className="h-full bg-rose-500 transition-all duration-500"
-                      style={{ width: `${Math.min(100, (((metrics?.dailyLossPercent || 0) / (metrics?.maxDailyLossPercent || 3.0)) * 100))}%` }}
+                      className="h-full bg-rose-500 transition-all duration-700"
+                      style={{ width: `${Math.min(100, (((metrics?.dailyDrawdownPercent || 0) / (riskConfig?.maxDailyLossPercent || 3.0)) * 100))}%` }}
                     />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/70 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                    <span>{isArabic ? 'الرسوم المدفوعة:' : 'Fees Paid:'} ${metrics?.dailyFeesPaid ? metrics.dailyFeesPaid.toFixed(2) : '0.00'}</span>
+                    <span className="text-emerald-400 font-bold">{isArabic ? 'الحالة: ضمن الحدود' : 'Within Limit'}</span>
                   </div>
                 </div>
 
-                {/* Max Peak-to-Trough Drawdown */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between">
-                  <span className="text-xs text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
+                {/* 3. Account Drawdown Card */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-slate-700/80 transition-all shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Anchor className="w-3.5 h-3.5 text-amber-400" />
                       {isArabic ? 'أقصى تراجع من القمة' : 'Account Drawdown'}
                     </span>
-                    <span className="font-mono text-[11px] text-slate-500">Cap: -{metrics?.maxDrawdownPercent ?? 10.0}%</span>
-                  </span>
-                  <div className="my-2 flex items-baseline gap-1.5">
-                    <span className={`text-2xl font-black font-mono ${
-                      (metrics?.currentDrawdownPercent || 0) > 0 ? 'text-amber-400' : 'text-slate-200'
+                    <span className="font-mono text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      Cap: -{riskConfig?.maxDrawdownPercent ?? 10.0}%
+                    </span>
+                  </div>
+
+                  <div className="my-2.5 flex items-baseline gap-2">
+                    <span className={`text-3xl font-black font-mono tracking-tight ${
+                      (metrics?.maxAccountDrawdownPercent || 0) > 0 ? 'text-amber-400' : 'text-slate-200'
                     }`}>
-                      {(metrics?.currentDrawdownPercent || 0) > 0 ? `-${metrics?.currentDrawdownPercent.toFixed(2)}%` : '0.00%'}
+                      {(metrics?.maxAccountDrawdownPercent || 0) > 0 
+                        ? `-${(metrics?.maxAccountDrawdownPercent || 0).toFixed(2)}%` 
+                        : '0.00%'}
                     </span>
                     <span className="text-xs text-slate-500 font-mono">
-                      (Peak: ${(metrics?.peakEquity ?? 10000).toFixed(0)})
+                      (Peak: ${(metrics?.peakEquity ?? 1000).toFixed(0)})
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+
+                  {/* Meter */}
+                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden mb-2">
                     <div 
-                      className="h-full bg-amber-500 transition-all duration-500"
-                      style={{ width: `${Math.min(100, (((metrics?.currentDrawdownPercent || 0) / (metrics?.maxDrawdownPercent || 10.0)) * 100))}%` }}
+                      className="h-full bg-amber-500 transition-all duration-700"
+                      style={{ width: `${Math.min(100, (((metrics?.maxAccountDrawdownPercent || 0) / (riskConfig?.maxDrawdownPercent || 10.0)) * 100))}%` }}
                     />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/70 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                    <span>{isArabic ? 'الرصيد الفعلي:' : 'Current Equity:'} ${(metrics?.currentEquity ?? 1000).toFixed(2)}</span>
+                    <span className="text-emerald-400 font-bold">{isArabic ? 'المحفظة محمية' : 'Equity Safe'}</span>
                   </div>
                 </div>
 
               </div>
 
-              {/* Exposure & Risk Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Secondary Details Grid (2-Columns) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 
-                {/* Total Portfolio Risk */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                {/* Aggregate Portfolio Risk & Exposure */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 hover:border-slate-700/80 transition-all">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold">
-                      {isArabic ? 'إجمالي المخاطرة المفتوحة للمحفظة' : 'Aggregate Portfolio Risk'}
+                    <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                      {isArabic ? 'المخاطرة المفتوحة للمحفظة' : 'Aggregate Portfolio Risk'}
                     </span>
                     <span className="text-cyan-400 font-mono font-bold">
-                      {(metrics?.currentPortfolioRiskPercent ?? 0).toFixed(2)}% / {metrics?.maxPortfolioRiskPercent ?? 3.0}%
+                      {(metrics?.totalPortfolioRiskPercent ?? 0).toFixed(2)}% / {riskConfig?.maxPortfolioRiskPercent ?? 3.0}%
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+
+                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-cyan-500 transition-all duration-500"
-                      style={{ width: `${Math.min(100, (((metrics?.currentPortfolioRiskPercent ?? 0) / (metrics?.maxPortfolioRiskPercent ?? 3.0)) * 100))}%` }}
+                      style={{ width: `${Math.min(100, (((metrics?.totalPortfolioRiskPercent ?? 0) / (riskConfig?.maxPortfolioRiskPercent || 3.0)) * 100))}%` }}
                     />
                   </div>
-                  <p className="text-[11px] text-slate-500">
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
+                    <span>{isArabic ? 'المراكز المفتوحة:' : 'Open Positions:'} <strong className="text-white">{metrics?.totalOpenPositions ?? 0}</strong></span>
+                    <span>{isArabic ? 'إجمالي التعرض:' : 'Exposure:'} <strong className="text-white">{(metrics?.totalExposurePercent ?? 0).toFixed(1)}%</strong></span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed border-t border-slate-800/60 pt-2">
                     {isArabic 
-                      ? 'مجموع المخاطرة الفعلية لكل الصفقات المفتوحة معاً إذا ضُربت جميع وقوف الخسارة.' 
-                      : 'Combined capital at risk across all active open positions if stop losses trigger.'}
+                      ? 'مجموع رأس المال المعرض للخطر فعلياً إذا ضربت كل الصفقات المفتوحة وقوف خسارتها معاً.' 
+                      : 'Combined capital strictly at risk across all active open positions if stop losses trigger.'}
                   </p>
                 </div>
 
-                {/* Consecutive Losses & Anti-Martingale Status */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                {/* Consecutive Loss Streak & Anti-Martingale */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 hover:border-slate-700/80 transition-all">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold">
+                    <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
                       {isArabic ? 'سلسلة الخسائر المتتالية' : 'Consecutive Loss Streak'}
                     </span>
-                    <span className={`font-mono font-bold px-2 py-0.5 rounded-md ${
-                      (metrics?.consecutiveLosses ?? 0) >= 3 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-300'
+                    <span className={`font-mono font-bold px-2 py-0.5 rounded-md text-xs ${
+                      (metrics?.consecutiveLosses ?? 0) === 0
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : (metrics?.consecutiveLosses ?? 0) >= 3 
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
+                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                     }`}>
-                      {metrics?.consecutiveLosses ?? 0} {isArabic ? 'صفقات' : 'Losses'}
+                      {metrics?.consecutiveLosses ?? 0} {isArabic ? 'خسائر' : 'Losses'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <Flame className={`w-4 h-4 ${metrics?.consecutiveLosses ? 'text-amber-400' : 'text-slate-600'}`} />
-                    <span>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span className="font-semibold">
                       {(metrics?.consecutiveLosses ?? 0) >= 2 
-                        ? (isArabic ? 'تخفيض حجم العقود تلقائياً لحماية الحساب' : 'Dynamic size scaling reduced by 50%') 
-                        : (isArabic ? 'حجم الصفقات بالحجم الاسمي الكامل' : 'Standard 100% position sizing active')}
+                        ? (isArabic ? '⚠️ نظام الحماية خفّض حجم العقود بنسبة 50%' : '⚠️ Dynamic size scaling reduced by 50%') 
+                        : (isArabic ? '✅ حجم الصفقات بالحجم الطبيعي الكامل (100%)' : '✅ Standard 100% position sizing active')}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    {isArabic ? 'يمنع محرك المخاطر مضاعفة الحجم بعد الخسارة بشكل قاطع (Anti-Martingale Enforced).' : 'Strict anti-martingale protection prevents revenge trading and size increases.'}
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed border-t border-slate-800/60 pt-2">
+                    {isArabic 
+                      ? 'نظام Anti-Martingale المؤسسي: يمنع مضاعفة العقود بعد الخسارة لمنع التداول الانتقامي نهائياً.' 
+                      : 'Institutional Anti-Martingale: strictly forbids size doubling after loss to prevent revenge trading.'}
                   </p>
                 </div>
 
               </div>
 
-              {/* Core Principles Guarantee */}
-              <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+              {/* Informational Guidance Box */}
+              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 flex items-start gap-3">
+                <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-cyan-300/90 leading-relaxed">
                   <span className="font-bold text-white block mb-0.5">
-                    {isArabic ? 'مبدأ كوانتورا الصارم لحماية رأس المال' : 'Institutional Risk Engine Authority'}
+                    {isArabic ? 'كيف تعيد المحرك إلى الصفر في أي وقت؟' : 'How to Reset the Risk Engine to Zero Anytime'}
                   </span>
                   {isArabic 
-                    ? 'الذكاء الاصطناعي والاستراتيجيات لا تنفذ أي صفقة مباشرة. محرك المخاطر هو السلطة النهائية المستقلة للتحقق من وقف الخسارة، السبريد، الارتباط، وحدود التراجع قبل إرسال أي أمر إلى بينانس.' 
-                    : 'AI and trading strategies never execute trades directly. The Risk Management Engine is the final deterministic authority that validates Stop Loss, Slippage, Spread, Correlation, and Drawdown bounds before any order reaches Binance.'}
+                    ? 'الضغط على زر "إعادة التصفير للصفر" بالأعلى يزيل فوراً أي تراجع قديم (Drawdown)، ويصفّر سلسلة الخسائر والخسارة اليومية، ويعيد معايرة ذروة الحساب إلى رصيدك الفعلي الحالي.' 
+                    : 'Clicking "Reset All to ZERO" immediately clears historical drawdowns, resets loss streaks to 0, and aligns peak equity to your current live balance.'}
                 </div>
               </div>
+
             </div>
           )}
 
           {/* TAB 2: CONFIGURATION */}
           {activeTab === 'CONFIG' && (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {errorMessage && (
                 <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -500,7 +618,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 {/* Risk Per Trade */}
                 <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
@@ -517,9 +635,9 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>0.25% (Conservative)</span>
+                    <span>0.25%</span>
                     <span>1.0% (Standard)</span>
-                    <span>2.0% (Max Allowed)</span>
+                    <span>2.0% (Max)</span>
                   </div>
                   <p className="text-[11px] text-slate-400 pt-1">
                     {isArabic ? 'يتم احتساب حجم العقد بدقة بحيث لا تتجاوز خسارة الـ SL هذه النسبة من رأس المال.' : 'Exact position sizing calculated so SL distance precisely matches this percentage.'}
@@ -586,9 +704,9 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>1x (Spot / No Lev)</span>
+                    <span>1x (Spot)</span>
                     <span>5x</span>
-                    <span>10x (Institutional Cap)</span>
+                    <span>10x (Cap)</span>
                   </div>
                 </div>
 
@@ -607,7 +725,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-emerald-500 cursor-pointer"
                   />
                   <p className="text-[11px] text-slate-400 pt-1">
-                    {isArabic ? 'يتم رفض أي صفقة لا توفر هدف ربح أول يعادل ضعفي المخاطرة على الأقل.' : 'Rejects any trade setup whose TP1 to SL distance is below this ratio.'}
+                    {isArabic ? 'يرفض أي صفقة لا توفر هدف ربح أول يعادل ضعفي المخاطرة على الأقل.' : 'Rejects any trade setup whose TP1 to SL distance is below this ratio.'}
                   </p>
                 </div>
 
@@ -626,7 +744,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                     className="w-full h-2 rounded-lg appearance-none bg-slate-800 accent-cyan-500 cursor-pointer"
                   />
                   <p className="text-[11px] text-slate-400 pt-1">
-                    {isArabic ? 'يمنع تكديس صفقات أو عقود تفوق هذه النسبة من إجمالي رأس المال على نفس الرمز.' : 'Prevents single asset concentration and multiple simultaneous positions in the same symbol.'}
+                    {isArabic ? 'يمنع تكديس صفقات تفوق هذه النسبة من إجمالي رأس المال على نفس الرمز.' : 'Prevents single asset concentration and multiple simultaneous positions in the same symbol.'}
                   </p>
                 </div>
 
@@ -728,13 +846,20 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
         <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="truncate">{isArabic ? 'محرك التدقيق يعمل في الوقت الفعلي' : 'Risk Engine Active & Synchronized'}</span>
+            <span className="truncate">
+              {isArabic ? 'محرك التدقيق يعمل في الوقت الفعلي' : 'Risk Engine Active & Synchronized'}
+            </span>
+            <span className="hidden sm:inline text-slate-600">|</span>
+            <span className="hidden sm:inline font-mono text-slate-400">
+              Equity: ${(metrics?.currentEquity ?? paperWallet?.balance ?? 1000).toFixed(2)} USDT
+            </span>
           </div>
+
           <div className="flex items-center gap-2">
             <button
               id="btn-cancel-risk-settings"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg font-bold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition text-[11px] sm:text-xs cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl font-bold bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs cursor-pointer"
             >
               {isArabic ? 'إغلاق' : 'Close'}
             </button>
@@ -743,10 +868,10 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 id="btn-save-risk-bounds"
                 onClick={handleSaveRiskConfig}
                 disabled={isSaving}
-                className="px-3.5 py-1.5 rounded-lg font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-sm transition text-[11px] sm:text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-1.5 rounded-xl font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-sm transition text-xs flex items-center gap-1.5 cursor-pointer"
               >
-                {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
-                <span>{isArabic ? 'حفظ الحدود الإلزامية' : 'Save Institutional Bounds'}</span>
+                {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                <span>{isArabic ? 'حفظ المعايير' : 'Save Bounds'}</span>
               </button>
             )}
           </div>

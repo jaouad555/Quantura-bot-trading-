@@ -10,7 +10,7 @@ import {
 } from './types';
 import { DEFAULT_RISK_CONFIG } from './constants';
 import { PositionSizer } from './PositionSizer';
-import { DrawdownTracker } from './DrawdownTracker';
+import { DrawdownTracker, DrawdownState } from './DrawdownTracker';
 import { PortfolioRiskEvaluator } from './PortfolioRiskEvaluator';
 import { MarketProtection } from './MarketProtection';
 import { RiskScoreCalculator } from './RiskScoreCalculator';
@@ -102,15 +102,67 @@ export class RiskEngine {
     return this.getConfig();
   }
 
-  public async unlockRiskLock(adminConfirmation: boolean = true): Promise<RiskEngineConfig> {
+  public async unlockRiskLock(adminConfirmation: boolean = true, customEquity?: number): Promise<RiskEngineConfig> {
     if (adminConfirmation) {
       this.config.riskLockStatus = 'NORMAL';
       this.config.riskLockReason = undefined;
       this.config.riskLockTimestamp = undefined;
       this.config.emergencyStop = false;
       await kv.set('quantura_risk_config', JSON.stringify(this.config));
+
+      // Resolve current equity baseline so drawdown resets strictly to 0.00%
+      let baselineEquity = customEquity;
+      if (!baselineEquity || baselineEquity <= 0) {
+        try {
+          const walletStr = await kv.get('btc_paper_wallet');
+          if (walletStr) {
+            const parsed = JSON.parse(walletStr);
+            if (typeof parsed.balance === 'number' && parsed.balance > 0) {
+              baselineEquity = parsed.balance;
+            }
+          }
+        } catch {}
+      }
+      if (!baselineEquity || baselineEquity <= 0) {
+        baselineEquity = 1000;
+      }
+
+      // Reset drawdown state to clean zero baseline so it doesn't immediately re-lock
+      this.drawdownTracker.setState({
+        startingDailyEquity: baselineEquity,
+        lastDailyResetTimestamp: Date.now(),
+        peakEquity: baselineEquity,
+        dailyRealizedPnl: 0,
+        dailyFeesPaid: 0,
+        dailyFundingPaid: 0,
+        consecutiveLosses: 0,
+        consecutiveWins: 0,
+        lastClosedTradePnl: 0,
+        lastClosedTradeSizeUsdt: 0,
+        lastClosedTradeLeverage: 1,
+      });
+      await kv.set('quantura_risk_drawdown_state', JSON.stringify(this.drawdownTracker.getState()));
+
+      // Also reset bot circuit breaker in btc_bot_config if present
+      try {
+        const botConfigStr = await kv.get('btc_bot_config');
+        if (botConfigStr) {
+          const parsed = JSON.parse(botConfigStr);
+          parsed.circuitBreakerTripped = false;
+          parsed.circuitBreakerTrippedAt = undefined;
+          await kv.set('btc_bot_config', JSON.stringify(parsed));
+        }
+      } catch (e) {}
     }
     return this.getConfig();
+  }
+
+  public async resetAllToZero(customEquity?: number): Promise<{ config: RiskEngineConfig; drawdownState: DrawdownState }> {
+    const config = await this.unlockRiskLock(true, customEquity);
+    return {
+      config,
+      drawdownState: this.drawdownTracker.getState(),
+    };
   }
 
   public recordTradeClosed(pnlUsdt: number, feeUsdt: number = 0, metadata?: any) {

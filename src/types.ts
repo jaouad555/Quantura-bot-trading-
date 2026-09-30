@@ -790,23 +790,37 @@ export interface FrontendRiskEngineConfig {
 export interface RiskEngineMetrics {
   currentEquity: number;
   peakEquity: number;
-  dailyLossUsdt: number;
-  dailyLossPercent: number;
-  maxDailyLossPercent: number;
-  currentDrawdownUsdt: number;
-  currentDrawdownPercent: number;
-  maxDrawdownPercent: number;
+  startingDailyEquity?: number;
+  dailyLossUsdt?: number;
+  dailyLossPercent?: number;
+  dailyRealizedPnl?: number;
+  dailyUnrealizedPnl?: number;
+  dailyFeesPaid?: number;
+  dailyFundingPaid?: number;
+  netDailyPnlUsdt?: number;
+  netDailyPnlPercent?: number;
+  dailyDrawdownPercent?: number;
+  maxDailyLossPercent?: number;
+  currentDrawdownUsdt?: number;
+  currentDrawdownPercent?: number;
+  maxDrawdownPercent?: number;
+  maxAccountDrawdownPercent?: number;
   consecutiveLosses: number;
-  currentPortfolioRiskPercent: number;
-  maxPortfolioRiskPercent: number;
-  totalExposureUsdt: number;
-  totalExposurePercent: number;
-  openPositionsCount: number;
+  consecutiveWins?: number;
+  currentPortfolioRiskPercent?: number;
+  totalPortfolioRiskPercent?: number;
+  maxPortfolioRiskPercent?: number;
+  totalExposureUsdt?: number;
+  totalExposurePercent?: number;
+  openPositionsCount?: number;
+  totalOpenPositions?: number;
   riskScore: number;
   riskLevel: RiskLevel;
   riskLockStatus: RiskLockStatus;
   riskLockReason?: string;
+  lockReason?: string;
   emergencyStop: boolean;
+  lastEvaluatedAt?: number;
 }
 
 export interface RiskEvaluationResult {
