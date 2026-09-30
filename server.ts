@@ -1518,7 +1518,7 @@ app.get('/api/binance/market-data', async (req, res) => {
     const useTestnet = req.query.useTestnet === 'true';
     const isDevMode = req.query.devMode === 'true';
 
-    const payload = await getMarketDataDirect(symbol, timeframe, marketType, isDevMode, useTestnet);
+    const payload = await getMarketDataDirect(symbol, timeframe, marketType, isDevMode);
     res.json(payload);
   } catch (error: any) {
     console.error('Market data server error:', error);

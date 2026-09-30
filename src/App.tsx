@@ -2977,7 +2977,7 @@ export const App: React.FC = () => {
     });
 
     setTradeHistory(prev => {
-      const filtered = prev.filter(t => isLiveMode ? t.mode !== 'BINANCE_LIVE' : (t.mode && t.mode !== 'PAPER'));
+      const filtered = prev.filter(t => t.status !== 'ACTIVE');
       tradeHistoryRef.current = filtered;
       try {
         apiStorage.setItem('btc_trade_history', JSON.stringify(filtered));
@@ -3755,7 +3755,6 @@ export const App: React.FC = () => {
                     pnlHistory: pos.pnlHistory,
                   })),
                 ...(tradeHistory || [])
-                  .filter(t => executionMode === 'BINANCE_LIVE' ? t.mode === 'BINANCE_LIVE' : (!t.mode || t.mode === 'PAPER'))
                   .filter(t => t.status !== 'ACTIVE')
               ]}
               paperWallet={paperWallet}
