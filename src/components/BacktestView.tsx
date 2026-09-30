@@ -364,7 +364,18 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
   const handleApplyToLiveBot = () => {
     if (onUpdateBotConfig) {
       const activePresets = selectedStrategyId === 'ALL_STRATEGIES'
-        ? ['MOMENTUM', 'SCALPER', 'BREAKOUT', 'MEAN_REVERSION', 'INSTITUTIONAL_SMC', 'SWING']
+        ? [
+            'MOMENTUM',
+            'SCALPER',
+            'SWING',
+            'BREAKOUT',
+            'MEAN_REVERSION',
+            'INSTITUTIONAL_SMC',
+            'MTF_CONFLUENCE',
+            'VWAP_VOLUME_DELTA',
+            'FUNDING_SQUEEZE',
+            'LIQUIDITY_HUNT'
+          ]
         : [selectedStrategyId];
       onUpdateBotConfig({
         activePresets: activePresets as any,
@@ -1269,7 +1280,7 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               }`}
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isArabic ? 'مصفوفة مقارنة الاستراتيجيات الست' : '6 Strategies Benchmark'}</span>
+              <span>{isArabic ? 'مقارنة أداء كافة الاستراتيجيات' : 'All Strategies Benchmark'}</span>
             </button>
 
             <button
@@ -1469,12 +1480,12 @@ export const BacktestView: React.FC<BacktestViewProps> = ({
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  {isArabic ? `مقارنة أداء الاستراتيجيات الست على ${currentSymbol}` : `Benchmark: 6 Strategies Performance on ${currentSymbol}`}
+                  {isArabic ? `مقارنة أداء كافة الاستراتيجيات على ${currentSymbol}` : `Benchmark: All Strategies Performance on ${currentSymbol}`}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {isArabic
                     ? 'اختبار حقيقي لكافة الاستراتيجيات على نفس الشموع لمعرفة الاستراتيجية الأكثر إنتاجية وربحية.'
-                    : 'Simultaneous backtest of all 6 strategies on identical historical candles to find the optimal trading model.'}
+                    : 'Simultaneous backtest of all available strategies on identical historical candles to find the optimal trading model.'}
                 </p>
               </div>
 

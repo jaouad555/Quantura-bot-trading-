@@ -44,7 +44,7 @@ export interface StrategySignal {
 }
 
 // -------------------------------------------------------------
-// DEFAULT INACTIVE STATE: ALL 9 STRATEGIES MUST BE INACTIVE BY DEFAULT
+// DEFAULT INACTIVE STATE: ALL REGISTERED STRATEGIES MUST BE INACTIVE BY DEFAULT
 // -------------------------------------------------------------
 const DEFAULT_STRATEGIES: Record<StrategyId, Omit<StrategyDefinition, 'enabled'>> = {
   INSTITUTIONAL_SMC: {
@@ -262,7 +262,7 @@ class StrategyManager {
   }
 
   /**
-   * Returns all 6 registered strategies
+   * Returns all registered strategies
    */
   public getAllStrategies(): StrategyDefinition[] {
     return Array.from(this.strategies.values());

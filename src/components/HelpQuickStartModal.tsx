@@ -748,10 +748,10 @@ export const HelpQuickStartModal: React.FC<HelpQuickStartModalProps> = ({
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {isArabic 
-                    ? 'تعرف على الفرق بين أوضاع التداول، وشرح الاستراتيجيات الست، وضبط الرافعة المالية بأمان.'
+                    ? 'تعرف على الفرق بين أوضاع التداول، وشرح الاستراتيجيات المتاحة، وضبط الرافعة المالية بأمان.'
                     : isFrench
-                    ? 'Découvrez les modes d’exécution, les 6 stratégies quantitatives et la gestion sécurisée du levier.'
-                    : 'Understand execution modes, the 6 quantitative strategy presets, and safe leverage limits.'}
+                    ? 'Découvrez les modes d’exécution, les stratégies quantitatives et la gestion sécurisée du levier.'
+                    : 'Understand execution modes, the quantitative strategy presets, and safe leverage limits.'}
                 </p>
               </div>
 

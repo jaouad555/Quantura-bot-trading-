@@ -917,11 +917,11 @@ export const formatBinanceQuantity = (symbol: string, quantity: number, price?: 
   let decimals = 3;
   if (sym.startsWith('BTC') || sym.startsWith('ETH')) {
     decimals = 3;
-  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('AVAX') || sym.startsWith('LINK') || sym.startsWith('NEAR') || sym.startsWith('AAVE') || sym.startsWith('DOT') || sym.startsWith('LTC') || sym.startsWith('BCH') || sym.startsWith('ETC') || sym.startsWith('ATOM')) {
+  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('AVAX') || sym.startsWith('LINK') || sym.startsWith('NEAR') || sym.startsWith('AAVE') || sym.startsWith('DOT') || sym.startsWith('LTC') || sym.startsWith('BCH') || sym.startsWith('ETC') || sym.startsWith('ATOM') || sym.startsWith('LINK')) {
     decimals = 2;
-  } else if (sym.startsWith('XRP') || sym.startsWith('ADA') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('TRX') || sym.startsWith('UNI') || sym.startsWith('XLM') || sym.startsWith('FTM') || sym.startsWith('ALGO')) {
+  } else if (sym.startsWith('XRP') || sym.startsWith('ADA') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('TRX') || sym.startsWith('UNI') || sym.startsWith('XLM') || sym.startsWith('FTM') || sym.startsWith('ALGO') || sym.startsWith('APT') || sym.startsWith('RENDER')) {
     decimals = 1;
-  } else if (sym.startsWith('DOGE') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB')) {
+  } else if (sym.startsWith('DOGE') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB') || sym.startsWith('WIF') || sym.startsWith('FET')) {
     decimals = 0;
   } else {
     if (price && price > 1000) decimals = 3;
@@ -931,7 +931,15 @@ export const formatBinanceQuantity = (symbol: string, quantity: number, price?: 
   }
 
   const factor = Math.pow(10, decimals);
-  const truncated = Math.floor(quantity * factor) / factor;
+  // We use Math.round for opening orders to avoid truncation to zero for small positions, 
+  // but truncation is strictly required by Binance for stepSize.
+  let truncated = Math.floor(quantity * factor) / factor;
+  
+  // Safety: If quantity is valid but truncated to zero, use the smallest possible step
+  if (truncated === 0 && quantity > 0) {
+    truncated = 1 / factor;
+  }
+  
   return decimals === 0 ? Math.floor(truncated).toString() : truncated.toFixed(decimals);
 };
 
@@ -950,19 +958,34 @@ export const serverExecuteOrder = async (
       return { success: false, error: 'Not connected' };
     }
     
-    console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${quantity} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly}`);
-    
     try {
         const normSymbol = symbol.toUpperCase().replace('/', '').trim();
         const formattedQty = formatBinanceQuantity(normSymbol, quantity, currentPrice);
 
+        if (formattedQty === '0' || parseFloat(formattedQty) <= 0) {
+          return { success: false, error: `Position size too small for ${normSymbol} (Min Qty not met). Try increasing margin or leverage.` };
+        }
+
+        console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly}`);
+
         if (config.marketType === 'FUTURES') {
           const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
           
-          // 1. Ensure symbol leverage is configured on Binance Futures
+          // 1. Ensure symbol leverage and margin type are configured
           try {
+            const now = Date.now();
+            // Set Margin Type to ISOLATED (Binance errors if already set, so we wrap in try-catch)
+            try {
+              const marginQuery = `symbol=${normSymbol}&marginType=ISOLATED&timestamp=${now}&recvWindow=10000`;
+              const marginSig = createBinanceSignature(marginQuery, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/marginType?${marginQuery}&signature=${marginSig}`, {
+                method: 'POST',
+                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
+              });
+            } catch (mErr) { /* Ignore "No need to change margin type" error */ }
+
             const targetLev = Math.max(1, Math.min(50, leverage || 3));
-            const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${Date.now()}&recvWindow=10000`;
+            const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${now}&recvWindow=10000`;
             const levSig = createBinanceSignature(levQuery, config.apiSecret!);
             await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}&signature=${levSig}`, {
               method: 'POST',
@@ -972,7 +995,7 @@ export const serverExecuteOrder = async (
               },
             });
           } catch (levErr) {
-            console.warn(`[SERVER ENGINE] Leverage setting notice for ${normSymbol}:`, levErr);
+            console.warn(`[SERVER ENGINE] Setup notice for ${normSymbol}:`, levErr);
           }
 
           // 2. Prepare Futures order parameters
@@ -1011,6 +1034,7 @@ export const serverExecuteOrder = async (
             return { success: false, error: data.msg || 'Binance order rejected', binanceCode: data.code };
           }
 
+          console.log(`[SERVER ENGINE] Binance Futures Order SUCCESS:`, data);
           return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
         } else {
           // SPOT Order

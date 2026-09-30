@@ -105,11 +105,63 @@ export const BACKTEST_STRATEGIES: BacktestStrategyInfo[] = [
     color: '#10b981', // emerald-500
   },
   {
+    id: 'MTF_CONFLUENCE',
+    name: 'MTF Confluence',
+    nameAr: 'توافق الفريمات (MTF Confluence)',
+    shortDesc: 'Tri-timeframe agreement 4H/1H/15m with >75% confluence',
+    shortDescAr: 'رافعة 3x • فريم 15m • توافق اتجاه 4H مع زخم 1H ودخول دقيق 15M',
+    defaultTimeframe: '15m',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.5,
+    defaultRiskReward: 2.2,
+    badge: 'MTF',
+    color: '#0891b2', // cyan-600
+  },
+  {
+    id: 'VWAP_VOLUME_DELTA',
+    name: 'VWAP Volume Delta',
+    nameAr: 'تدفق السيولة و VWAP (Volume Delta)',
+    shortDesc: 'VWAP pullbacks with institutional order book delta imbalance',
+    shortDescAr: 'رافعة 3x • فريم 30m • ارتدادات VWAP مع اختلالات تدفق الأوامر الكبرى',
+    defaultTimeframe: '30m',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.3,
+    defaultRiskReward: 2.0,
+    badge: 'VWAP',
+    color: '#4f46e5', // indigo-600
+  },
+  {
+    id: 'FUNDING_SQUEEZE',
+    name: 'Funding Squeeze',
+    nameAr: 'قناص السكويز (Funding Squeeze)',
+    shortDesc: 'Short/Long squeeze setups on extreme funding rate bias',
+    shortDescAr: 'رافعة 3x • فريم 1h • اصطياد الشورت/اللونغ سكويز عند تطرف معدلات التمويل',
+    defaultTimeframe: '1h',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.5,
+    defaultRiskReward: 2.5,
+    badge: 'SQUEEZE',
+    color: '#e11d48', // rose-600
+  },
+  {
+    id: 'LIQUIDITY_HUNT',
+    name: 'Liquidity Hunt',
+    nameAr: 'صائد السيولة (Liquidity Hunt)',
+    shortDesc: 'Sniper entries on fakeouts and retail stop-loss sweeps',
+    shortDescAr: 'رافعة 3x • فريم 15m • اقتناص الاختراقات الكاذبة ومصائد السيولة عند القمم والقيعان',
+    defaultTimeframe: '15m',
+    defaultLeverage: 3,
+    defaultSlAtr: 1.2,
+    defaultRiskReward: 2.8,
+    badge: 'SWEEP',
+    color: '#7c3aed', // violet-600
+  },
+  {
     id: 'ALL_STRATEGIES',
     name: 'Multi-Strategy Ensemble',
     nameAr: 'محفظة الاستراتيجيات الشاملة (All Strategies Ensemble)',
-    shortDesc: 'Dynamic ensemble evaluating all 6 strategies with confidence weighting',
-    shortDescAr: 'محفظة ذكية متكاملة تجمع وتفاضل بين كافة الاستراتيجيات الست لاختيار أفضل الفرص',
+    shortDesc: 'Dynamic ensemble evaluating all 10 strategies with confidence weighting',
+    shortDescAr: 'محفظة ذكية متكاملة تجمع وتفاضل بين كافة الاستراتيجيات العشر لاختيار أفضل الفرص',
     defaultTimeframe: '1h',
     defaultLeverage: 3,
     defaultSlAtr: 1.5,
@@ -714,6 +766,151 @@ function evaluateSingleStrategy(
       break;
     }
 
+    case 'MTF_CONFLUENCE': {
+      // Multi-Timeframe Tri-Agreement (Dummy logic for backtest as real MTF needs multiple feeds)
+      const isMtfBullish = currentPrice > ema50 && ema50 > ema200 && rsi >= 52;
+      const isMtfBearish = currentPrice < ema50 && ema50 < ema200 && rsi <= 48;
+
+      if (isMtfBullish) {
+        const risk = Math.max(atr * 1.3, currentPrice * 0.009);
+        const stopLoss = currentPrice - risk;
+        return {
+          decision: 'LONG',
+          confidence: 88,
+          stopLoss,
+          tp1: currentPrice + risk * 1.8,
+          tp2: currentPrice + risk * 3.2,
+          tp3: currentPrice + risk * 5.0,
+          reason: 'MTF Confluence: Directional alignment across timeframes',
+          strategyId: 'MTF_CONFLUENCE',
+          strategyName: 'MTF Confluence',
+        };
+      } else if (isFutures && isMtfBearish) {
+        const risk = Math.max(atr * 1.3, currentPrice * 0.009);
+        const stopLoss = currentPrice + risk;
+        return {
+          decision: 'SHORT',
+          confidence: 88,
+          stopLoss,
+          tp1: currentPrice - risk * 1.8,
+          tp2: currentPrice - risk * 3.2,
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * 5.0),
+          reason: 'MTF Confluence: Bearish alignment across timeframes',
+          strategyId: 'MTF_CONFLUENCE',
+          strategyName: 'MTF Confluence',
+        };
+      }
+      break;
+    }
+
+    case 'VWAP_VOLUME_DELTA': {
+      const vwapVal = inds.vwap || ema20;
+      const vol = inds.volume || 0;
+      const volAvg = inds.volumeAvg20 || 0;
+      const hasVolConfirmation = volAvg > 0 ? vol >= volAvg * 1.05 : true;
+
+      if (currentPrice >= vwapVal && hasVolConfirmation && rsi >= 45 && rsi <= 68 && currentPrice >= ema50) {
+        const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+        const stopLoss = Math.min(vwapVal * 0.995, currentPrice - risk);
+        return {
+          decision: 'LONG',
+          confidence: 85,
+          stopLoss,
+          tp1: currentPrice + risk * 1.8,
+          tp2: currentPrice + risk * 3.0,
+          tp3: currentPrice + risk * 4.8,
+          reason: 'VWAP Volume Delta: Bullish hold above VWAP with volume surge',
+          strategyId: 'VWAP_VOLUME_DELTA',
+          strategyName: 'VWAP Volume Delta',
+        };
+      } else if (isFutures && currentPrice <= vwapVal && hasVolConfirmation && rsi <= 55 && rsi >= 32 && currentPrice <= ema50) {
+        const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+        const stopLoss = Math.max(vwapVal * 1.005, currentPrice + risk);
+        return {
+          decision: 'SHORT',
+          confidence: 85,
+          stopLoss,
+          tp1: currentPrice - risk * 1.8,
+          tp2: currentPrice - risk * 3.0,
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * 4.8),
+          reason: 'VWAP Volume Delta: Bearish rejection below VWAP',
+          strategyId: 'VWAP_VOLUME_DELTA',
+          strategyName: 'VWAP Volume Delta',
+        };
+      }
+      break;
+    }
+
+    case 'FUNDING_SQUEEZE': {
+      // In backtest we don't have historical funding rates easily, so use extreme RSI as proxy
+      if (rsi <= 25) {
+        const risk = Math.max(atr * 1.5, currentPrice * 0.01);
+        const stopLoss = currentPrice - risk;
+        return {
+          decision: 'LONG',
+          confidence: 82,
+          stopLoss,
+          tp1: currentPrice + risk * 2.0,
+          tp2: currentPrice + risk * 3.5,
+          tp3: currentPrice + risk * 5.5,
+          reason: 'Funding Squeeze: Extreme oversold capitulation proxy',
+          strategyId: 'FUNDING_SQUEEZE',
+          strategyName: 'Funding Squeeze',
+        };
+      } else if (isFutures && rsi >= 75) {
+        const risk = Math.max(atr * 1.5, currentPrice * 0.01);
+        const stopLoss = currentPrice + risk;
+        return {
+          decision: 'SHORT',
+          confidence: 82,
+          stopLoss,
+          tp1: currentPrice - risk * 2.0,
+          tp2: currentPrice - risk * 3.5,
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * 5.5),
+          reason: 'Funding Squeeze: Extreme overbought exhaustion proxy',
+          strategyId: 'FUNDING_SQUEEZE',
+          strategyName: 'Funding Squeeze',
+        };
+      }
+      break;
+    }
+
+    case 'LIQUIDITY_HUNT': {
+      const hasLowSweep = (ms.swingLow > 0 && currentPrice < ms.swingLow * 1.002 && currentPrice >= ms.swingLow * 0.992) || (currentPrice <= bb.lower && rsi <= 35);
+      const hasHighSweep = (ms.swingHigh > 0 && currentPrice > ms.swingHigh * 0.998 && currentPrice <= ms.swingHigh * 1.008) || (currentPrice >= bb.upper && rsi >= 65);
+
+      if (hasLowSweep && stoch.k > stoch.d) {
+        const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+        const stopLoss = currentPrice - risk;
+        return {
+          decision: 'LONG',
+          confidence: 90,
+          stopLoss,
+          tp1: currentPrice + risk * 2.0,
+          tp2: currentPrice + risk * 3.5,
+          tp3: currentPrice + risk * 5.5,
+          reason: 'Liquidity Hunt: Sweep below swing low with RSI rebound',
+          strategyId: 'LIQUIDITY_HUNT',
+          strategyName: 'Liquidity Hunt',
+        };
+      } else if (isFutures && hasHighSweep && stoch.k < stoch.d) {
+        const risk = Math.max(atr * 1.2, currentPrice * 0.008);
+        const stopLoss = currentPrice + risk;
+        return {
+          decision: 'SHORT',
+          confidence: 90,
+          stopLoss,
+          tp1: currentPrice - risk * 2.0,
+          tp2: currentPrice - risk * 3.5,
+          tp3: Math.max(currentPrice * 0.05, currentPrice - risk * 5.5),
+          reason: 'Liquidity Hunt: Sweep above swing high with RSI exhaustion',
+          strategyId: 'LIQUIDITY_HUNT',
+          strategyName: 'Liquidity Hunt',
+        };
+      }
+      break;
+    }
+
     default:
       return null;
   }
@@ -741,7 +938,7 @@ function evaluateStrategyEntrySignal(
     return null;
   }
 
-  // ALL_STRATEGIES Ensemble: evaluate all 6 and select the highest confidence signal
+  // ALL_STRATEGIES Ensemble: evaluate all 10 and select the highest confidence signal
   const activeIds: BacktestStrategyId[] = [
     'MOMENTUM',
     'SCALPER',
@@ -749,6 +946,10 @@ function evaluateStrategyEntrySignal(
     'BREAKOUT',
     'MEAN_REVERSION',
     'INSTITUTIONAL_SMC',
+    'MTF_CONFLUENCE',
+    'VWAP_VOLUME_DELTA',
+    'FUNDING_SQUEEZE',
+    'LIQUIDITY_HUNT',
   ];
 
   let bestSignal: EvaluatedSignal | null = null;
@@ -1463,6 +1664,10 @@ export function runComparativeStrategyBacktest(
     'BREAKOUT',
     'MEAN_REVERSION',
     'INSTITUTIONAL_SMC',
+    'MTF_CONFLUENCE',
+    'VWAP_VOLUME_DELTA',
+    'FUNDING_SQUEEZE',
+    'LIQUIDITY_HUNT',
   ];
 
   const results: StrategyComparisonItem[] = [];

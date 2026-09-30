@@ -767,7 +767,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {executionMode === 'BINANCE_LIVE' ? 'LIVE' : 'PAPER'}
               </span>
               <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              {executionMode === 'PAPER' && (portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
+              {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
                 <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
                   portfolioMetrics.totalNetPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
                 }`}>

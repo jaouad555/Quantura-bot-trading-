@@ -1515,9 +1515,10 @@ app.get('/api/binance/market-data', async (req, res) => {
     const symbol = ((req.query.symbol as string) || 'BTCUSDT').toUpperCase();
     const timeframe = (req.query.timeframe as Timeframe) || '1h';
     const marketType = (req.query.marketType as 'SPOT' | 'FUTURES') === 'FUTURES' ? 'FUTURES' : 'SPOT';
+    const useTestnet = req.query.useTestnet === 'true';
     const isDevMode = req.query.devMode === 'true';
 
-    const payload = await getMarketDataDirect(symbol, timeframe, marketType, isDevMode);
+    const payload = await getMarketDataDirect(symbol, timeframe, marketType, isDevMode, useTestnet);
     res.json(payload);
   } catch (error: any) {
     console.error('Market data server error:', error);

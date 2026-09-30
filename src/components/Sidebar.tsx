@@ -482,11 +482,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span className="text-[9px] uppercase font-mono text-slate-500 block mb-0.5">
                     {isLive ? (isArabic ? 'رصيد بينانس الحي' : 'Binance Live Equity') : (isArabic ? 'إجمالي المحفظة' : 'Equity')}
                   </span>
-                  {isLive ? (
-                    <span className="text-[8px] font-mono font-bold px-1 rounded bg-rose-500/20 text-rose-300">
-                      LIVE
-                    </span>
-                  ) : metrics.floatingPnl !== 0 && (
+                  {metrics.floatingPnl !== 0 && (
                     <span className={`text-[8px] font-mono font-bold px-1 rounded ${
                       metrics.floatingPnl >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
                     }`}>

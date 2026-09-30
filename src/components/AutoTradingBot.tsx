@@ -865,6 +865,74 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         : (isArabic ? 'تجميع مؤسسي 1H • أعلى نسبة دقة مع مناطق السيولة الكبرى' : '1H Spot • Smart Money accumulation zones with institutional bias'),
     },
     {
+      id: 'BREAKOUT' as const,
+      title: isArabic ? 'قناص الاختراقات السعرية' : 'Breakout Sniper',
+      badge: isArabic ? 'انفجار سعري • 30m' : 'BREAKOUT • 30m',
+      icon: Target,
+      color: {
+        text: 'text-purple-400',
+        activeCard: 'border-purple-500/50 bg-gradient-to-br from-purple-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(168,85,247,0.15)]',
+        activeIconBg: 'bg-purple-500/20 border-purple-500/40 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.25)]',
+        tagBg: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+      },
+      tagsFutures: ['4x Lev', '30m Frame', 'Vol Surge', 'BB Squeeze'],
+      tagsSpot: ['1x Spot', '30m Frame', 'Momentum Break', 'High Volatility'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 4x • فريم 30m • انفجار سعري عند كسر المقاومات بحجم تداول عالي' : '4x Leverage • 30m Frame • Bollinger squeeze expansion with volume surge')
+        : (isArabic ? 'اختراق مستويات فوري • صفقات عالية السرعة مع أحجام تداول قياسية' : '1x Spot • High volatility momentum breakouts with volume confirmation'),
+    },
+    {
+      id: 'SCALPER' as const,
+      title: isArabic ? 'سكالبينج عالي التردد' : 'HFT High-Freq Scalper',
+      badge: isArabic ? 'سكالبينج • 15m' : 'SCALPER • 15m',
+      icon: Scissors,
+      color: {
+        text: 'text-amber-400',
+        activeCard: 'border-amber-500/50 bg-gradient-to-br from-amber-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(245,158,11,0.15)]',
+        activeIconBg: 'bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.25)]',
+        tagBg: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+      },
+      tagsFutures: ['5x Lev', '15m Frame', 'Stoch Extreme', 'Fast Scalp'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Oversold Bounce', 'Micro-Pullbacks'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 5x • فريم 15m • صفقات خاطفة مع وقف خسارة ضيق وسريع' : '5x Leverage • 15m Frame • High-frequency fast micro-pullbacks on RSI/Stoch extremes')
+        : (isArabic ? 'تداول لحظي 15m • صفقات خاطفة عند تشبعات المؤشرات' : '1x Spot • Fast scalp entries on oscillator extreme levels'),
+    },
+    {
+      id: 'MEAN_REVERSION' as const,
+      title: isArabic ? 'الارتداد للمتوسط السعري' : 'Mean Reversion Pro',
+      badge: isArabic ? 'ارتداد سعري • 15m' : 'REVERSION • 15m',
+      icon: Activity,
+      color: {
+        text: 'text-pink-400',
+        activeCard: 'border-pink-500/50 bg-gradient-to-br from-pink-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(236,72,153,0.15)]',
+        activeIconBg: 'bg-pink-500/20 border-pink-500/40 text-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.25)]',
+        tagBg: 'bg-pink-500/10 text-pink-300 border-pink-500/20',
+      },
+      tagsFutures: ['3x Lev', '15m Frame', 'BB Deviation', 'RSI Exhaustion'],
+      tagsSpot: ['1x Spot', '15m Frame', 'Mean Reversion', 'Support/Res Bounce'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • ارتداد عند حدود البولينجر وتشبع RSI' : '3x Leverage • 15m Frame • Statistical return to Mean/EMA20 from extreme BB levels')
+        : (isArabic ? 'ارتداد فوري 15m • شراء عند تشبع البيع وبيع عند تشبع الشراء' : '1x Spot • Reversion strategy on extreme RSI exhaustion'),
+    },
+    {
+      id: 'LIQUIDITY_HUNT' as const,
+      title: isArabic ? 'صائد السيولة والستوبات' : 'Liquidity Hunt',
+      badge: isArabic ? 'صيد السيولة • 15m' : 'HUNT • 15m',
+      icon: Compass,
+      color: {
+        text: 'text-violet-400',
+        activeCard: 'border-violet-500/50 bg-gradient-to-br from-violet-950/40 via-slate-900/95 to-slate-950 shadow-[0_0_24px_rgba(167,139,250,0.15)]',
+        activeIconBg: 'bg-violet-500/20 border-violet-500/40 text-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.25)]',
+        tagBg: 'bg-violet-500/10 text-violet-300 border-violet-500/20',
+      },
+      tagsFutures: ['3x Lev', '15m Frame', 'Stop Hunt', 'Delta Absorption'],
+      tagsSpot: ['1x Spot', '15m Frame', 'False Breakout', 'Liquidity Sweep'],
+      desc: botConfig.marketType === 'FUTURES'
+        ? (isArabic ? 'رافعة 3x • فريم 15m • اقتناص الاختراقات الكاذبة ومصائد السيولة' : '3x Leverage • 15m Frame • Sniper entries on fakeouts and retail stop-loss sweeps')
+        : (isArabic ? 'صيد الستوبات فوري • اقتناص انعكاسات قوية بعد ضرب الستوبات' : '1x Spot • Trading false breakouts and liquidity sweeps at key levels'),
+    },
+    {
       id: 'MOMENTUM' as const,
       title: isArabic ? 'شبكة الزخم والاتجاه' : 'Momentum Trend Pro',
       badge: isArabic ? 'زخم وترند • 1H' : 'MOMENTUM • 1H',
