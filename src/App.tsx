@@ -3479,6 +3479,11 @@ export const App: React.FC = () => {
                   onOpenNotifications={() => setIsNotificationsOpen(true)}
                   liquidityAssessment={liquidityAssessment}
                   onOpenDepthDetails={() => setActiveTab('market')}
+                  walletBalance={paperWallet?.balance || 1000}
+                  onQuickTrade={(direction, price) => {
+                    executeAutoTradeAction('OPEN', price, 'Terminal quick execution', undefined, direction);
+                  }}
+                  onNavigateToBot={() => setActiveTab('autoBot')}
                 />
               </div>
 

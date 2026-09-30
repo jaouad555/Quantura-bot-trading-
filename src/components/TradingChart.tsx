@@ -721,90 +721,178 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
   }, [activePosition, currentPrice]);
 
+  // Active indicators count
+  const activeIndicatorsCount = [
+    showEma20,
+    showEma50,
+    showEma200,
+    showBollinger,
+    showVolume,
+    showPivots,
+    showSignalLevels,
+    Boolean(showPositionLevels && activePosition),
+  ].filter(Boolean).length;
+
+  // Smart Indicator Confluence Presets (الشيء الذكي)
+  const handleApplyScalpPreset = () => {
+    setShowEma20(true);
+    setShowEma50(false);
+    setShowEma200(false);
+    setShowBollinger(true);
+    setShowVolume(true);
+    setShowPivots(false);
+    setShowSignalLevels(true);
+  };
+
+  const handleApplyTrendPreset = () => {
+    setShowEma20(false);
+    setShowEma50(true);
+    setShowEma200(true);
+    setShowBollinger(false);
+    setShowVolume(true);
+    setShowPivots(true);
+    setShowSignalLevels(true);
+  };
+
+  const handleToggleAllIndicators = (enable: boolean) => {
+    setShowEma20(enable);
+    setShowEma50(enable);
+    setShowEma200(enable);
+    setShowBollinger(enable);
+    setShowVolume(enable);
+    setShowPivots(enable);
+    setShowSignalLevels(enable);
+    setShowPositionLevels(enable);
+  };
+
+  // Smart Signal Target Proximity Radar (الشيء الذكي)
+  const signalTargetDistances = useMemo(() => {
+    if (!activeSignal || !currentPrice || currentPrice <= 0) return null;
+    const ideal = activeSignal.entryZone?.ideal || currentPrice;
+    const tp1 = activeSignal.targets?.tp1;
+    const sl = activeSignal.stopLoss;
+
+    const isLong = activeSignal.decision === 'LONG';
+    const tp1Diff = tp1 ? ((tp1 - currentPrice) / currentPrice) * 100 : null;
+    const slDiff = sl ? ((sl - currentPrice) / currentPrice) * 100 : null;
+
+    return {
+      ideal,
+      tp1,
+      sl,
+      tp1Diff,
+      slDiff,
+      isLong,
+      rr: activeSignal.riskRewardRatio || '2.5',
+    };
+  }, [activeSignal, currentPrice]);
+
+  // Current Candle Spread / Volatility
+  const candleRangeInfo = useMemo(() => {
+    const c = hoveredCandle || latestCandle;
+    if (!c || c.high === undefined || c.low === undefined) return null;
+    const spreadDollar = Math.max(0, c.high - c.low);
+    const spreadPct = c.low > 0 ? (spreadDollar / c.low) * 100 : 0;
+    return {
+      spreadDollar,
+      spreadPct,
+    };
+  }, [hoveredCandle, latestCandle]);
+
   return (
     <div
       className={`bg-slate-950 border border-slate-800 rounded-3xl p-3 sm:p-5 shadow-2xl flex flex-col gap-3.5 transition-all ${
         isFullscreen ? 'fixed inset-2 z-50 bg-slate-950/95 backdrop-blur-xl border-cyan-500/40' : 'h-full min-h-[620px]'
       }`}
     >
-      {/* 1. TOP SMART TRADING CARD (Asset Identity, Live Telemetry, Unified Lucide Controls) */}
-      <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 sm:px-4 sm:py-3.5 shadow-xl flex flex-col gap-2.5">
-        {/* Row 1: Asset Identity, Status & Quick Action Buttons */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          {/* Left: Symbol & Badges */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+      {/* ========================================================================= */}
+      {/* 1. TOP SMART TRADING CARD (Binance Futures Stream, Live Telemetry, Controls) */}
+      {/* ========================================================================= */}
+      <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 sm:px-4 sm:py-3.5 shadow-xl flex flex-col gap-3">
+        {/* Row 1: Asset Identity, Mode, Live Binance Feed & Quick Action Tools */}
+        <div className="flex items-center justify-between gap-2.5 flex-wrap">
+          {/* Left: Symbol & Badges & Live Feed Status */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             <div className="p-1.5 sm:p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 shrink-0">
               <BarChart2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-base sm:text-lg font-black font-mono tracking-tight text-white">
-                  {symbol}
+            
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg font-black font-mono tracking-tight text-white">
+                {symbol}
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 font-mono">
+                {marketType}
+              </span>
+              {trendStatus.includes('BULLISH') && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-mono">
+                  <TrendingUp className="w-3 h-3" />
+                  <span>{isArabic ? 'صاعد' : 'BULL'}</span>
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 font-mono">
-                  {marketType}
+              )}
+              {trendStatus.includes('BEARISH') && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1 font-mono">
+                  <TrendingDown className="w-3 h-3" />
+                  <span>{isArabic ? 'هابط' : 'BEAR'}</span>
                 </span>
-                {trendStatus.includes('BULLISH') && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 font-mono">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>{isArabic ? 'صاعد' : 'BULL'}</span>
-                  </span>
-                )}
-                {trendStatus.includes('BEARISH') && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/25 flex items-center gap-1 font-mono">
-                    <TrendingDown className="w-3 h-3" />
-                    <span>{isArabic ? 'هابط' : 'BEAR'}</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-slate-400 flex items-center gap-1.5 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Binance Futures Stream
-              </p>
+              )}
+            </div>
+
+            {/* Binance Futures Stream Badge */}
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Binance Futures Stream</span>
+              <span className="text-emerald-600 hidden sm:inline">•</span>
+              <span className="text-emerald-300 text-[9px] hidden sm:inline">LIVE</span>
             </div>
           </div>
 
-          {/* Right: Quick Action Tools (Unified Lucide Family) */}
-          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90">
+          {/* Right: Quick Action Tools (Unified Symmetrical Lucide Toolbar) */}
+          <div className="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-800">
             <button
               id="btn-chart-reset-zoom"
               onClick={handleResetZoom}
-              className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer active:scale-95 text-xs font-mono flex items-center gap-1.5 border border-slate-800 hover:border-slate-700"
               title={isArabic ? 'إعادة ضبط العرض' : isFrench ? 'Recentrer le graphique' : 'Reset Chart Zoom'}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">{isArabic ? 'ضبط العرض' : 'Reset'}</span>
             </button>
             <button
               id="btn-chart-toggle-indicators-bar"
               onClick={() => setShowIndicatorsBar(!showIndicatorsBar)}
-              className={`p-1.5 rounded-lg transition cursor-pointer active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer active:scale-95 text-xs font-mono flex items-center gap-1.5 border ${
                 showIndicatorsBar
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border-slate-800 hover:border-slate-700'
               }`}
               title={isArabic ? 'لوحة المؤشرات الفنية' : isFrench ? 'Barre des indicateurs' : 'Technical Indicators'}
             >
-              <Sliders className="w-3.5 h-3.5" />
+              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{isArabic ? 'المؤشرات' : 'Indicators'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-slate-950 text-[10px] font-bold text-cyan-300 border border-cyan-500/30">
+                {activeIndicatorsCount}
+              </span>
             </button>
             <button
               id="btn-chart-fullscreen"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className={`p-1.5 rounded-lg transition cursor-pointer active:scale-95 ${
+              className={`p-1.5 rounded-lg transition cursor-pointer active:scale-95 border ${
                 isFullscreen
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border-slate-800 hover:border-slate-700'
               }`}
-              title={isFullscreen ? (isArabic ? 'تصغير' : isFrench ? 'Réduire' : 'Exit Fullscreen') : (isArabic ? 'ملء الشاشة' : isFrench ? 'Plein écran' : 'Fullscreen')}
+              title={isFullscreen ? (isArabic ? 'تصغير' : 'Exit Fullscreen') : (isArabic ? 'ملء الشاشة' : 'Fullscreen')}
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>
 
-        {/* Row 2: Live Price, Telemetry, and Lucide Chart Type Switcher */}
+        {/* Row 2: Live Price, Telemetry, Slider, and Chart Style Switcher */}
         <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-800/70 flex-wrap">
           {/* Price & Sentiment Metrics */}
-          <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 flex-wrap">
             {/* Real-Time Price */}
             <div className="flex items-baseline gap-2">
               <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
@@ -834,16 +922,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 </span>
                 <span className="text-[9px] text-slate-400 font-normal hidden sm:inline">
                   {rsiValue >= 70
-                    ? (isArabic ? 'تشبع شراء' : isFrench ? 'Suracheté' : 'Overbought')
+                    ? (isArabic ? 'تشبع شراء' : 'Overbought')
                     : rsiValue <= 30
-                    ? (isArabic ? 'تشبع بيع' : isFrench ? 'Survendu' : 'Oversold')
-                    : (isArabic ? 'معتدل' : isFrench ? 'Neutre' : 'Neutral')}
+                    ? (isArabic ? 'تشبع بيع' : 'Oversold')
+                    : (isArabic ? 'معتدل' : 'Neutral')}
                 </span>
               </div>
             </div>
 
-            {/* 24h High/Low Mini Slider (Desktop & Tablet) */}
-            <div className="hidden lg:flex flex-col gap-1 min-w-[120px] font-mono">
+            {/* 24h High/Low Mini Slider */}
+            <div className="hidden lg:flex flex-col gap-1 min-w-[125px] font-mono">
               <div className="flex justify-between text-[10px] text-slate-400">
                 <span>L: ${formatCoinPrice(low24h, symbol)}</span>
                 <span>H: ${formatCoinPrice(high24h, symbol)}</span>
@@ -857,25 +945,25 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             </div>
           </div>
 
-          {/* Chart Style Switcher (Unified Lucide Family - No emojis) */}
-          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90 font-mono">
+          {/* Symmetrical Chart Style Switcher (Unified family) */}
+          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800 font-mono">
             <button
               id="btn-style-candle"
               onClick={() => setChartType('candlestick')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 chartType === 'candlestick'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'شموع يابانية' : isFrench ? 'Bougies' : 'Candlesticks'}
+              title={isArabic ? 'شموع يابانية' : 'Candlesticks'}
             >
               <CandlestickChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'شموع' : isFrench ? 'Bougies' : 'Candles'}</span>
+              <span>{isArabic ? 'شموع' : 'Candles'}</span>
             </button>
             <button
               id="btn-style-heikin"
               onClick={() => setChartType('heikin-ashi')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 chartType === 'heikin-ashi'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -883,167 +971,281 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               title="Heikin-Ashi"
             >
               <BarChart3 className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">Heikin</span>
+              <span>Heikin</span>
             </button>
             <button
               id="btn-style-area"
               onClick={() => setChartType('area')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 chartType === 'area'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'مساحة' : isFrench ? 'Zone' : 'Area'}
+              title={isArabic ? 'مساحة' : 'Area'}
             >
               <AreaChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'مساحة' : isFrench ? 'Zone' : 'Area'}</span>
+              <span>{isArabic ? 'مساحة' : 'Area'}</span>
             </button>
             <button
               id="btn-style-line"
               onClick={() => setChartType('line')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 chartType === 'line'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={isArabic ? 'خط' : isFrench ? 'Ligne' : 'Line'}
+              title={isArabic ? 'خط' : 'Line'}
             >
               <LineChart className="w-3.5 h-3.5 text-current" />
-              <span className="hidden sm:inline">{isArabic ? 'خط' : isFrench ? 'Ligne' : 'Line'}</span>
+              <span>{isArabic ? 'خط' : 'Line'}</span>
             </button>
           </div>
         </div>
+
+        {/* Row 3 (SMART FEATURE): Live Signal Target Proximity Bar */}
+        {signalTargetDistances && (
+          <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-slate-950/50 -mx-3 -mb-3 sm:-mx-4 sm:-mb-3.5 px-3 py-2 sm:px-4 rounded-b-2xl border-t border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <Target className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-slate-400 font-sans">{isArabic ? 'رادار المسافة للأهداف:' : 'Target Proximity:'}</span>
+              <span className="text-white font-bold">${formatCoinPrice(signalTargetDistances.ideal, symbol)}</span>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {signalTargetDistances.tp1 && (
+                <div className="flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] text-emerald-400 font-bold">TP1:</span>
+                  <span className="text-emerald-300 font-bold">${formatCoinPrice(signalTargetDistances.tp1, symbol)}</span>
+                  {signalTargetDistances.tp1Diff !== null && (
+                    <span className="text-[9px] text-emerald-400 font-mono">
+                      ({signalTargetDistances.tp1Diff >= 0 ? '+' : ''}{signalTargetDistances.tp1Diff.toFixed(2)}%)
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {signalTargetDistances.sl && (
+                <div className="flex items-center gap-1 bg-rose-950/40 border border-rose-500/30 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] text-rose-400 font-bold">SL:</span>
+                  <span className="text-rose-300 font-bold">${formatCoinPrice(signalTargetDistances.sl, symbol)}</span>
+                  {signalTargetDistances.slDiff !== null && (
+                    <span className="text-[9px] text-rose-400 font-mono">
+                      ({signalTargetDistances.slDiff >= 0 ? '+' : ''}{signalTargetDistances.slDiff.toFixed(2)}%)
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-md text-slate-300">
+                <span className="text-[10px] text-slate-400">R:R:</span>
+                <span className="text-brand-300 font-bold">1:{signalTargetDistances.rr}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 2. TECHNICAL INDICATORS CONTROL BAR (Collapsible Pills) */}
+      {/* ========================================================================= */}
+      {/* 2. TECHNICAL INDICATORS CONTROL BAR (Symmetrical Matrix & Smart Presets)   */}
+      {/* ========================================================================= */}
       {showIndicatorsBar && (
-        <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-900/70 border border-slate-800/80 rounded-2xl animate-in fade-in duration-200">
-          <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            {isArabic ? 'المؤشرات النشطة:' : isFrench ? 'Indicateurs:' : 'Active Indicators:'}
-          </span>
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 sm:p-3.5 shadow-lg flex flex-col gap-2.5 animate-in fade-in duration-200">
+          {/* Smart Preset Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-black text-white uppercase tracking-wider font-mono">
+                {isArabic ? 'لوحة المؤشرات الفنية المتوازية' : 'Technical Indicators Matrix'}
+              </span>
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+                {activeIndicatorsCount} / 8
+              </span>
+            </div>
 
-          {/* EMA 20 */}
-          <button
-            id="toggle-ema20"
-            onClick={() => setShowEma20(!showEma20)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showEma20
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            EMA 20
-          </button>
+            {/* Smart Presets (الشيء الذكي) */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400 font-mono mr-1 hidden sm:inline">
+                {isArabic ? 'توليفات ذكية:' : 'Presets:'}
+              </span>
+              <button
+                type="button"
+                onClick={handleApplyScalpPreset}
+                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/80 transition active:scale-95 cursor-pointer flex items-center gap-1"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>{isArabic ? 'سكالبينج' : 'Scalp'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyTrendPreset}
+                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/80 transition active:scale-95 cursor-pointer flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                <span>{isArabic ? 'سوينغ ومؤسسات' : 'SMC Trend'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleAllIndicators(true)}
+                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-slate-700 transition active:scale-95 cursor-pointer"
+              >
+                {isArabic ? 'تفعيل الكل' : 'All'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleAllIndicators(false)}
+                className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono bg-slate-800 hover:bg-slate-750 text-slate-400 border border-slate-700 transition active:scale-95 cursor-pointer"
+              >
+                {isArabic ? 'إيقاف' : 'Clear'}
+              </button>
+            </div>
+          </div>
 
-          {/* EMA 50 */}
-          <button
-            id="toggle-ema50"
-            onClick={() => setShowEma50(!showEma50)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showEma50
-                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-            EMA 50
-          </button>
+          {/* Symmetrical Parallel Indicator Toggles (Exact 4x2 Grid) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* 1. EMA 20 */}
+            <button
+              id="toggle-ema20"
+              onClick={() => setShowEma20(!showEma20)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showEma20
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span>EMA 20</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">{isArabic ? 'قصير' : 'Fast'}</span>
+            </button>
 
-          {/* EMA 200 */}
-          <button
-            id="toggle-ema200"
-            onClick={() => setShowEma200(!showEma200)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showEma200
-                ? 'bg-purple-500/15 border-purple-500/40 text-purple-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-purple-400" />
-            EMA 200
-          </button>
+            {/* 2. EMA 50 */}
+            <button
+              id="toggle-ema50"
+              onClick={() => setShowEma50(!showEma50)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showEma50
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                <span>EMA 50</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">{isArabic ? 'متوسط' : 'Mid'}</span>
+            </button>
 
-          {/* Bollinger Bands */}
-          <button
-            id="toggle-bollinger"
-            onClick={() => setShowBollinger(!showBollinger)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showBollinger
-                ? 'bg-sky-500/15 border-sky-500/40 text-sky-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-sky-400" />
-            BB (20,2)
-          </button>
+            {/* 3. EMA 200 */}
+            <button
+              id="toggle-ema200"
+              onClick={() => setShowEma200(!showEma200)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showEma200
+                  ? 'bg-purple-500/15 border-purple-500/40 text-purple-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+                <span>EMA 200</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">{isArabic ? 'رئيسي' : 'Major'}</span>
+            </button>
 
-          {/* Volume */}
-          <button
-            id="toggle-volume"
-            onClick={() => setShowVolume(!showVolume)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showVolume
-                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            {isArabic ? 'الحجم (Vol)' : 'Volume'}
-          </button>
+            {/* 4. Bollinger Bands */}
+            <button
+              id="toggle-bollinger"
+              onClick={() => setShowBollinger(!showBollinger)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showBollinger
+                  ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+                <span>BB (20,2)</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">{isArabic ? 'نطاق' : 'Band'}</span>
+            </button>
 
-          {/* Pivot / Support Resistance */}
-          <button
-            id="toggle-pivots"
-            onClick={() => setShowPivots(!showPivots)}
-            className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
-              showPivots
-                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-sm'
-                : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-indigo-400" />
-            {isArabic ? 'الدعوم والمقاومات (Pivots)' : 'Pivots S/R'}
-          </button>
+            {/* 5. Volume */}
+            <button
+              id="toggle-volume"
+              onClick={() => setShowVolume(!showVolume)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showVolume
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span>{isArabic ? 'الحجم' : 'Volume'}</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">VOL</span>
+            </button>
 
-          {/* AI Signal Targets */}
-          {activeSignal && (
+            {/* 6. Pivots S/R */}
+            <button
+              id="toggle-pivots"
+              onClick={() => setShowPivots(!showPivots)}
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
+                showPivots
+                  ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+                <span>{isArabic ? 'الدعوم' : 'Pivots'}</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">S/R</span>
+            </button>
+
+            {/* 7. AI Signal Targets */}
             <button
               id="toggle-signals"
               onClick={() => setShowSignalLevels(!showSignalLevels)}
-              className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
                 showSignalLevels
-                  ? 'bg-brand-500/15 border-brand-500/40 text-brand-300 shadow-sm'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
+                  ? 'bg-brand-500/15 border-brand-500/40 text-brand-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
               }`}
             >
-              <Sparkles className="w-3 h-3 text-brand-400" />
-              {isArabic ? 'أهداف الإشارة (TP/SL)' : isFrench ? 'Cibles Signal' : 'Signal Targets (TP/SL)'}
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                <span>{isArabic ? 'الأهداف' : 'TP / SL'}</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">AI</span>
             </button>
-          )}
 
-          {/* Active Bot Position */}
-          {activePosition && (
+            {/* 8. Active Bot Position */}
             <button
               id="toggle-positions"
               onClick={() => setShowPositionLevels(!showPositionLevels)}
-              className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+              className={`p-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-between shadow-sm ${
                 showPositionLevels
-                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm animate-pulse'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-500 hover:text-slate-300'
               }`}
             >
-              <Zap className="w-3 h-3 text-emerald-400" />
-              {isArabic ? 'صفقة البوت الحية' : isFrench ? 'Position Bot' : 'Bot Position'}
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{isArabic ? 'صفقة البوت' : 'Bot Pos'}</span>
+              </div>
+              <span className="text-[10px] font-normal text-slate-400">LIVE</span>
             </button>
-          )}
+          </div>
         </div>
       )}
 
-      {/* 3. COMPACT TOOLBAR DIRECTLY ABOVE THE CHART CANVAS (All Timeframes Visible + Small Buttons + Live OHLCV HUD) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-900/90 border border-slate-800/90 rounded-xl">
-        {/* All Timeframes as Compact Visible Small Buttons */}
+      {/* ========================================================================= */}
+      {/* 3. PARALLEL TIMEFRAMES BAR & LIVE OHLCV HUD TELEMETRY (نافذة الشارت)       */}
+      {/* ========================================================================= */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-3 py-2 bg-slate-900/90 border border-slate-800/90 rounded-xl">
+        {/* Left: Parallel Timeframe Buttons */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
           {timeframes.map(({ tf, label, tooltip }) => (
             <button
@@ -1051,10 +1253,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               key={tf}
               onClick={() => onTimeframeChange(tf)}
               title={tooltip}
-              className={`px-2 sm:px-2.5 py-1 text-[11px] font-bold font-mono rounded-lg transition-all cursor-pointer active:scale-95 shrink-0 ${
+              className={`px-2.5 py-1 text-xs font-bold font-mono rounded-lg transition-all cursor-pointer active:scale-95 shrink-0 ${
                 activeTimeframe === tf
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black shadow-md shadow-cyan-500/30 ring-1 ring-cyan-400'
-                  : 'bg-slate-950/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800/90'
+                  : 'bg-slate-950/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800/90'
               }`}
             >
               {label}
@@ -1062,46 +1264,50 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           ))}
         </div>
 
-        {/* Real-Time Candle Inspection Bar (Crosshair HUD) */}
-        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap text-xs font-mono text-slate-300">
-          <span className="text-slate-400 text-[11px]">
+        {/* Right: Real-Time Candle Inspection Bar (Crosshair HUD) */}
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap text-xs font-mono text-slate-300">
+          <span className="text-slate-400 text-[11px] font-sans">
             {hoveredCandle
-              ? (isArabic ? 'المحددة:' : isFrench ? 'Curseur:' : 'Selected:')
-              : (isArabic ? 'الحالية:' : isFrench ? 'Dernier:' : 'Live:')}
+              ? (isArabic ? 'المحددة:' : 'Selected:')
+              : (isArabic ? 'الحالية:' : 'Live:')}
           </span>
-          <span>
+          <span className="bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
             <strong className="text-slate-400">O:</strong>{' '}
             <span className="text-white">${formatCoinPrice(hoveredCandle?.open || latestCandle?.open || 0, symbol)}</span>
           </span>
-          <span>
+          <span className="bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
             <strong className="text-slate-400">H:</strong>{' '}
             <span className="text-emerald-400">${formatCoinPrice(hoveredCandle?.high || latestCandle?.high || 0, symbol)}</span>
           </span>
-          <span>
+          <span className="bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
             <strong className="text-slate-400">L:</strong>{' '}
             <span className="text-rose-400">${formatCoinPrice(hoveredCandle?.low || latestCandle?.low || 0, symbol)}</span>
           </span>
-          <span>
+          <span className="bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
             <strong className="text-slate-400">C:</strong>{' '}
             <span className="text-white">${formatCoinPrice(hoveredCandle?.close || latestCandle?.close || 0, symbol)}</span>
           </span>
-          <span>
-            <strong className="text-slate-400">Δ:</strong>{' '}
-            <span
-              className={
-                (hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0) >= 0
-                  ? 'text-emerald-400 font-bold'
-                  : 'text-rose-400 font-bold'
-              }
-            >
-              {(hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0) >= 0 ? '+' : ''}
-              {(hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0).toFixed(2)}%
-            </span>
+          <span className={`px-1.5 py-0.5 rounded font-bold border ${
+            (hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0) >= 0
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+          }`}>
+            {(hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0) >= 0 ? '+' : ''}
+            {(hoveredCandle?.changePct ?? latestCandle?.changePct ?? 0).toFixed(2)}%
           </span>
-          <span className="hidden sm:inline">
+          <span className="hidden sm:inline bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
             <strong className="text-slate-400">Vol:</strong>{' '}
             <span className="text-cyan-300">{(hoveredCandle?.volume ?? latestCandle?.volume ?? 0).toFixed(2)}</span>
           </span>
+
+          {/* Smart Candle Spread / Volatility Meter (الشيء الذكي) */}
+          {candleRangeInfo && (
+            <span className="hidden lg:flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 text-[11px]">
+              <span className="text-slate-400 font-sans">{isArabic ? 'اتساع:' : 'Range:'}</span>
+              <span>${candleRangeInfo.spreadDollar.toFixed(1)}</span>
+              <span className="text-cyan-400 text-[10px]">({candleRangeInfo.spreadPct.toFixed(2)}%)</span>
+            </span>
+          )}
         </div>
 
         {/* Indicators values on crosshair */}

@@ -624,6 +624,26 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     onUpdateConfig(newConfig);
   };
 
+  const handleActivateAllStrategies = () => {
+    const allIds: StrategyId[] = [
+      'MOMENTUM',
+      'SCALPER',
+      'BREAKOUT',
+      'MEAN_REVERSION',
+      'INSTITUTIONAL_SMC',
+      'SWING',
+      'MTF_CONFLUENCE',
+      'VWAP_VOLUME_DELTA',
+      'FUNDING_SQUEEZE',
+      'LIQUIDITY_HUNT',
+    ];
+    onUpdateConfig({ activePresets: allIds });
+  };
+
+  const handleDeactivateAllStrategies = () => {
+    onUpdateConfig({ activePresets: [] });
+  };
+
   const handleApplyStrategy = (strategyType: StrategyId) => {
     const isFutures = botConfig.marketType === 'FUTURES';
     
@@ -1686,32 +1706,29 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons Toolbar: Exact 2 Lines x 2 Columns (2 Rows, 2 Cols) */}
-          <div 
-            className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full"
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
-          >
-            {/* Line 1 - Column 1: Start / Stop Bot */}
+          {/* Action Buttons Toolbar: Symmetrical 4-Column Parallel Strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 w-full">
+            {/* 1. Start / Stop Bot */}
             <button
               id="btn-bot-toggle-main"
               onClick={onToggleBot}
-              className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border min-w-0 ${
+              className={`h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border shadow-md min-w-0 ${
                 botConfig.enabled
-                  ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                  ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500 shadow-rose-600/20'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-emerald-500 shadow-emerald-600/25'
               }`}
               title={botConfig.enabled ? (isArabic ? 'إيقاف البوت' : 'Stop Bot') : (isArabic ? 'تشغيل البوت التلقائي' : 'Start Bot')}
             >
               {botConfig.enabled ? (
                 <>
-                  <Pause className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <Pause className="w-4 h-4 fill-current shrink-0" />
                   <span className="truncate font-mono uppercase tracking-wide">
                     {isArabic ? 'إيقاف البوت' : isEn ? 'Stop Bot' : 'Arrêter Bot'}
                   </span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <Play className="w-4 h-4 fill-current shrink-0" />
                   <span className="truncate font-mono uppercase tracking-wide">
                     {isArabic ? 'تشغيل البوت' : isEn ? 'Start Bot' : 'Lancer Bot'}
                   </span>
@@ -1719,7 +1736,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               )}
             </button>
 
-            {/* Line 1 - Column 2: Emergency Close All */}
+            {/* 2. Emergency Close All */}
             <button
               id="btn-bot-close-all"
               onClick={() => {
@@ -1728,52 +1745,61 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 }
               }}
               disabled={displayPositions.length === 0}
-              className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors min-w-0 ${
+              className={`h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] min-w-0 ${
                 displayPositions.length > 0
-                  ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-200 border-rose-600 cursor-pointer'
-                  : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
+                  ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-200 border-rose-600 shadow-md shadow-rose-950/30 cursor-pointer'
+                  : 'bg-slate-800/60 text-slate-500 border-slate-700/60 cursor-not-allowed'
               }`}
               title={isArabic ? 'إغلاق وتصفية جميع الصفقات المفتوحة فورياً' : isEn ? 'Emergency Close All Positions' : 'Clôturer d\'urgence toutes les positions'}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span className="truncate font-mono flex items-center gap-1">
-                <span>{isArabic ? `إغلاق (${displayPositions.length})` : `Close (${displayPositions.length})`}</span>
+              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="truncate font-mono flex items-center gap-1.5">
+                <span>{isArabic ? 'إغلاق الصفقات' : 'Close All'}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                  displayPositions.length > 0 ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-700 text-slate-400'
+                }`}>
+                  {displayPositions.length}
+                </span>
               </span>
             </button>
 
-            {/* Line 2 - Column 1: Binance API Connection */}
+            {/* 3. Binance API Connection */}
             {onOpenBinanceModal ? (
               <button
                 id="btn-bot-binance-modal"
                 onClick={onOpenBinanceModal}
-                className={`h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-w-0 ${
+                className={`h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer min-w-0 shadow-sm ${
                   executionMode === 'BINANCE_LIVE'
-                    ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600'
-                    : 'bg-slate-800 hover:bg-slate-750 text-amber-300 border-slate-700'
+                    ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600/80'
+                    : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-700'
                 }`}
                 title={isArabic ? 'إعدادات ربط Binance API' : isEn ? 'Binance API Connection' : 'Connexion API Binance'}
               >
-                <Key className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <Key className={`w-4 h-4 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-emerald-400' : 'text-amber-400'}`} />
                 <span className="truncate font-mono flex items-center gap-1">
                   <span>{executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}</span>
                 </span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               </button>
             ) : (
-              <div className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-[11px] sm:text-xs font-mono text-slate-500 min-w-0">
+              <div className="h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-xs font-mono text-slate-500 min-w-0">
                 <span className="truncate">Binance Local</span>
               </div>
             )}
 
-            {/* Line 2 - Column 2: Leverage & Bot Config */}
+            {/* 4. Leverage & Bot Config */}
             <button
               id="btn-bot-config-modal"
               onClick={() => setShowConfigModal(true)}
-              className="h-9 sm:h-10 px-2 sm:px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg sm:rounded-xl border border-slate-700 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-w-0"
+              className="h-10 sm:h-11 px-2.5 sm:px-3 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-xl border border-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer min-w-0 shadow-sm"
               title={isArabic ? 'إعدادات الرافعة وإدارة المخاطر' : isEn ? 'Bot Settings & Leverage' : 'Paramètres & Levier du Bot'}
             >
-              <Sliders className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <Sliders className="w-4 h-4 text-cyan-400 shrink-0" />
               <span className="truncate font-mono">
                 {isArabic ? (botConfig.marketType === 'SPOT' ? 'إعدادات البوت' : 'الرافعة والإعدادات') : 'Config'}
+              </span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+                {botConfig.marketType === 'SPOT' ? '1x' : `${botConfig.leverage || 3}x`}
               </span>
             </button>
           </div>
@@ -2101,8 +2127,43 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           </div>
         )}
         
-        {/* Unified Strategy Cards (Exact Market Diagnostic Banner Layout & Aesthetics) */}
-        <div className="space-y-3">
+        {/* Quick Bulk Strategy Controls (Parallel Symmetrical Toolbar) */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono">
+              <span className="text-slate-400">{isArabic ? 'المفعلة:' : 'Active:'}</span>
+              <span className={`font-bold ${activePresetsList.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {activePresetsList.length} / 10
+              </span>
+            </div>
+            <span className="text-xs text-slate-400 hidden sm:inline font-sans">
+              {isArabic ? 'تصفيف متوازٍ ومتناسق لجميع الاستراتيجيات الـ 10' : 'Symmetric Parallel 10-Strategy Matrix'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleActivateAllStrategies}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold font-mono bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/60 transition active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-sm"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isArabic ? 'تفعيل الكل (10)' : 'Activate All (10)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeactivateAllStrategies}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold font-mono bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-sm"
+            >
+              <X className="w-3.5 h-3.5 text-slate-400" />
+              <span>{isArabic ? 'إيقاف الكل' : 'Standby All'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Symmetrical Parallel 2-Column Strategies Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {strategiesList.map((strat) => {
             const isActive = activePresetsList.includes(strat.id);
             const StratIcon = strat.icon || Shield;
@@ -2127,141 +2188,130 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             return (
               <div
                 key={strat.id}
-                className={`rounded-xl p-4 transition-colors duration-150 border relative overflow-hidden shadow-md ${
+                className={`rounded-2xl p-4 transition-all duration-200 border relative overflow-hidden shadow-md flex flex-col justify-between ${
                   isActive
-                    ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/40 border-emerald-500/40'
+                    ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 border-emerald-500/50 shadow-emerald-950/20'
                     : isTopMatch
-                    ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/40 border-cyan-500/40'
-                    : 'bg-gradient-to-r from-slate-950 via-slate-900 to-slate-900/60 border-slate-800'
+                    ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30 border-cyan-500/50 shadow-cyan-950/20'
+                    : 'bg-[#0f172a] hover:bg-slate-900/80 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                {/* Ambient Top Glow (Lightweight CSS Gradient without heavy blur filter) */}
+                {/* Ambient Corner Glow */}
                 <div
-                  className={`absolute top-0 right-0 w-48 h-24 pointer-events-none rounded-full bg-gradient-to-bl ${
-                    isActive ? 'from-emerald-500/15 to-transparent' : isTopMatch ? 'from-cyan-500/15 to-transparent' : 'from-slate-700/10 to-transparent'
+                  className={`absolute top-0 right-0 w-36 h-20 pointer-events-none rounded-full bg-gradient-to-bl ${
+                    isActive ? 'from-emerald-500/15 to-transparent' : isTopMatch ? 'from-cyan-500/15 to-transparent' : 'from-slate-700/5 to-transparent'
                   }`}
                 />
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-                  {/* Left: Strategy Diagnostics Summary & Parameters */}
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Main Strategy Pill */}
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border flex items-center gap-1.5 ${
-                          isActive
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : isTopMatch
-                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                            : 'bg-slate-800/80 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        <StratIcon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-cyan-400'}`} />
-                        <span>{isArabic ? 'استراتيجية:' : 'Strategy:'}</span>
-                        <span className="text-white font-bold">{strat.title}</span>
-                      </span>
-
-                      {/* Parameter Badges Matching Market Diagnostics */}
-                      {currentTags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-
-                      {/* Live Market Match Fit Score */}
-                      <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                        {isArabic ? 'توافق السوق:' : 'Fit:'}{' '}
-                        <span
-                          className={`font-bold ${
-                            isActive ? 'text-emerald-300' : isTopMatch || scorePercent >= 80 ? 'text-cyan-300' : 'text-slate-300'
-                          }`}
-                        >
-                          {scorePercent}%
-                        </span>
-                      </span>
-                    </div>
-
-                    {/* Middle Row: Status Indicator & AI Fit Description */}
-                    <div className="flex items-center gap-2 text-xs text-slate-300 flex-wrap">
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${
-                          isActive ? 'bg-emerald-400' : isTopMatch ? 'bg-cyan-400' : 'bg-slate-500'
-                        }`}
-                      />
-                      <span className="text-slate-400">
-                        {isArabic ? 'حالة التداول:' : 'Status:'}
-                      </span>
-                      <span
-                        className={`font-bold px-2 py-0.5 rounded font-mono border ${
-                          isActive
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : 'bg-slate-800/90 text-slate-400 border-slate-700'
-                        }`}
-                      >
-                        {isActive
-                          ? isArabic
-                            ? '● مفعلة وتتداول'
-                            : '● ACTIVE'
-                          : isArabic
-                          ? '○ معطلة (استعداد)'
-                          : '○ STANDBY'}
-                      </span>
-
-                      {isTopMatch && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 shadow-sm">
-                          <Sparkles className="w-3 h-3 text-cyan-300" />
-                          <span>{isArabic ? 'الأنسب لبيئة السوق حالياً' : 'AI Market Top Pick'}</span>
-                        </span>
-                      )}
-
-                      {/* Criteria Tags */}
-                      {criteriaTags.length > 0 && (
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {criteriaTags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-800/90 text-cyan-300 border border-slate-700/80"
-                            >
-                              ✓ {tag}
-                            </span>
-                          ))}
+                <div className="space-y-3 relative z-10">
+                  {/* Top Bar: Icon, Name, and Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`p-2 rounded-xl shrink-0 ${
+                        isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-300 border border-slate-700'
+                      }`}>
+                        <StratIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-black text-white truncate tracking-tight">{strat.title}</h4>
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                          <span>{botConfig.marketType === 'SPOT' ? 'SPOT 1x' : `FUTURES ${botConfig.leverage || 3}x`}</span>
+                          <span>•</span>
+                          <span className="text-cyan-300 font-bold">{botConfig.timeframe || 'AUTO'}</span>
                         </div>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Strategy Description */}
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      {strat.desc}
-                    </p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isTopMatch && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-cyan-300" />
+                          <span className="hidden sm:inline">{isArabic ? 'الأنسب' : 'TOP'}</span>
+                        </span>
+                      )}
+                      <span
+                        className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                          isActive
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {isActive ? (isArabic ? 'مفعلة' : 'ACTIVE') : (isArabic ? 'استعداد' : 'STANDBY')}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Right: Quick Action Button (Matching Market Diagnostic Button) */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyStrategy(strat.id)}
-                      className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs transition-colors duration-150 flex items-center justify-center gap-2 active:scale-95 cursor-pointer font-sans shadow-md ${
-                        isActive
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-rose-500 hover:to-rose-600 text-slate-950 hover:text-white'
-                          : isTopMatch
-                          ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950'
-                          : 'bg-gradient-to-r from-slate-800 to-slate-700 hover:from-cyan-600 hover:to-emerald-600 text-slate-200 hover:text-slate-950 border border-slate-700'
-                      }`}
-                    >
-                      <Power className={`w-4 h-4 ${isActive ? 'text-slate-950' : isTopMatch ? 'text-slate-950' : 'text-cyan-400'}`} />
-                      <span>
-                        {isActive
-                          ? isArabic ? 'الاستراتيجية مفعلة (إيقاف)' : 'Active (Disable)'
-                          : isArabic ? 'تفعيل الاستراتيجية فورياً' : 'Activate Strategy'}
+                  {/* Market Fit Match Bar */}
+                  <div className="space-y-1 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400 font-sans">{isArabic ? 'توافق المؤشرات وظروف السوق:' : 'Market Fit Confluence:'}</span>
+                      <span className={`font-mono font-bold ${isActive ? 'text-emerald-400' : isTopMatch ? 'text-cyan-400' : 'text-slate-300'}`}>
+                        {scorePercent}%
                       </span>
-                      <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[10px]">
-                        {isActive ? (isArabic ? 'مفعلة' : 'ON') : `${scorePercent}%`}
-                      </span>
-                    </button>
+                    </div>
+                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isActive
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            : isTopMatch
+                            ? 'bg-gradient-to-r from-cyan-500 to-emerald-400'
+                            : 'bg-slate-600'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(10, scorePercent))}%` }}
+                      />
+                    </div>
                   </div>
+
+                  {/* Parameter Tags & Criteria Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {currentTags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/80"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {criteriaTags.slice(0, 2).map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] font-mono text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded-md border border-cyan-800/50"
+                      >
+                        ✓ {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-[11px] text-slate-400 leading-relaxed min-h-[32px] line-clamp-2">
+                    {strat.desc}
+                  </p>
+                </div>
+
+                {/* Symmetrical Bottom Action Button */}
+                <div className="pt-3 mt-3 border-t border-slate-800/80 relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyStrategy(strat.id)}
+                    className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                      isActive
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-emerald-950/30'
+                        : isTopMatch
+                        ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 shadow-cyan-950/30 font-black'
+                        : 'bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-200 border border-slate-700'
+                    }`}
+                  >
+                    <Power className={`w-3.5 h-3.5 ${isActive ? 'text-white' : isTopMatch ? 'text-slate-950' : 'text-cyan-400'}`} />
+                    <span>
+                      {isActive
+                        ? isArabic ? 'الاستراتيجية مفعلة (انقر للإيقاف)' : 'Active (Click to Disable)'
+                        : isArabic ? 'تفعيل هذه الاستراتيجية' : 'Activate Strategy'}
+                    </span>
+                    <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[10px] ml-1">
+                      {isActive ? (isArabic ? 'مفعلة' : 'ON') : `${scorePercent}%`}
+                    </span>
+                  </button>
                 </div>
               </div>
             );
