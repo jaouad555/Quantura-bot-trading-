@@ -582,7 +582,7 @@ export const App: React.FC = () => {
       .catch(console.error);
   }, [fetchLiveBinanceBalance]);
 
-  // Periodic live account, balances & real positions reconciliation every 5s
+  // Periodic live account, balances & real positions reconciliation every 1s
   useEffect(() => {
     fetchLiveBinanceBalance();
     if (executionMode === 'BINANCE_TESTNET' || executionMode === 'BINANCE_LIVE') {
@@ -593,7 +593,7 @@ export const App: React.FC = () => {
       if (executionModeRef.current === 'BINANCE_TESTNET' || executionModeRef.current === 'BINANCE_LIVE') {
         syncBinanceLivePositions();
       }
-    }, 5000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [fetchLiveBinanceBalance, syncBinanceLivePositions, executionMode]);
 
