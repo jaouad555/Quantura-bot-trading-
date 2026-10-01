@@ -787,7 +787,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (executionMode === 'BINANCE_LIVE' && onOpenBinanceModal) {
+                if ((executionMode === 'BINANCE_LIVE' || executionMode === 'BINANCE_TESTNET') && onOpenBinanceModal) {
                   onOpenBinanceModal();
                 } else if (onOpenCustomBalanceModal) {
                   onOpenCustomBalanceModal();
