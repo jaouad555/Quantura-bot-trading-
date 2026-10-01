@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wallet, 
   X, 
   Check, 
   DollarSign, 
-  ArrowUpRight,
-  ArrowDownRight
+  ArrowUpRight, 
+  ArrowDownRight,
+  TrendingUp,
+  Zap,
+  Coins
 } from 'lucide-react';
-import { Language, PaperWallet, ActiveBotPosition } from '../types';
+import { Language, PaperWallet, ActiveBotPosition, MarketType } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 
 interface CustomBalanceModalProps {
@@ -15,6 +18,7 @@ interface CustomBalanceModalProps {
   onClose: () => void;
   language: Language;
   paperWallet: PaperWallet;
+  marketType?: MarketType;
   onUpdateBalance: (newBalance: number, resetHistory?: boolean) => void;
   activeBotPositions?: ActiveBotPosition[];
 }
@@ -24,12 +28,14 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   onClose,
   language,
   paperWallet,
+  marketType = 'FUTURES',
   onUpdateBalance,
   activeBotPositions,
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
 
+  const [activeMarket, setActiveMarket] = useState<MarketType>(marketType);
   const [inputVal, setInputVal] = useState<string>(paperWallet.balance.toString());
   const [resetPnL, setResetPnL] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,13 +43,14 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   // Sync state on open
   useEffect(() => {
     if (isOpen) {
+      setActiveMarket(marketType);
       setInputVal(paperWallet.balance.toString());
       setResetPnL(false);
       setError(null);
     }
-  }, [isOpen, paperWallet.balance]);
+  }, [isOpen, paperWallet.balance, marketType]);
 
-  // Handle ESC key to close modal smoothly
+  // Handle ESC key
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -90,7 +97,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   if (!isOpen) return null;
 
   const currentNum = parseFloat(inputVal) || 0;
-  const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions);
+  const metrics = calculatePortfolioMetrics(paperWallet, activeBotPositions, undefined, undefined, false, null, activeMarket, 'PAPER');
   const inTradeMargin = metrics.inTradeMargin;
   const floatingPnl = metrics.floatingPnl;
   const totalEquity = metrics.totalEquity;
@@ -141,11 +148,40 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit} className="p-3.5 space-y-3 overflow-y-auto no-scrollbar flex-1">
+          {/* Market Type Selector (Futures vs Spot) */}
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveMarket('FUTURES')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeMarket === 'FUTURES'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-cyan-400" />
+              <span>FUTURES USDT-M</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMarket('SPOT')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeMarket === 'SPOT'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Coins className="w-3.5 h-3.5 text-emerald-400" />
+              <span>SPOT MARKET</span>
+            </button>
+          </div>
+
           {/* Portfolio Equity Overview Card */}
           <div className="bg-slate-950/80 p-2.5 rounded-lg border border-cyan-500/30 font-mono space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-cyan-300 font-sans font-medium">
-                {isArabic ? 'إجمالي قيمة المحفظة (Total Equity):' : isEn ? 'Total Portfolio Equity:' : 'Valeur Totale du Portefeuille :'}
+                {isArabic ? `إجمالي قيمة محفظة ${activeMarket} (Total Equity):` : `Total ${activeMarket} Portfolio Equity:`}
               </span>
               <span className="text-sm font-bold text-cyan-300">
                 ${totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
@@ -155,11 +191,11 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
             <div className="grid grid-cols-2 gap-1.5 text-[10px] pt-1.5 border-t border-slate-800/80">
               <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
                 <span className="text-slate-400 block">{isArabic ? 'السيولة المتاحة (Free):' : 'Free Cash:'}</span>
-                <span className="text-emerald-300 font-bold">${paperWallet.balance.toFixed(2)}</span>
+                <span className="text-emerald-300 font-bold">${metrics.freeCash.toFixed(2)}</span>
               </div>
               <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                <span className="text-slate-400 block">{isArabic ? 'في صفقات البوت:' : 'In Trades:'}</span>
-                <span className="text-amber-300 font-bold">${inTradeMargin.toFixed(2)}</span>
+                <span className="text-slate-400 block">{activeMarket === 'FUTURES' ? (isArabic ? 'في صفقات الهامش:' : 'In Margin:') : (isArabic ? 'قيمة الأصول المشتراة:' : 'Spot Holdings:')}</span>
+                <span className="text-amber-300 font-bold">${activeMarket === 'FUTURES' ? inTradeMargin.toFixed(2) : metrics.spotHoldingsValue.toFixed(2)}</span>
               </div>
               <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
                 <span className="text-slate-400 block">{isArabic ? 'أرباح مفتوحة:' : 'Unrealized PnL:'}</span>
@@ -204,7 +240,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
           {/* Amount Input */}
           <div>
             <label className="block text-[11px] font-medium text-slate-300 mb-1">
-              {isArabic ? 'المبلغ الجديد (USDT):' : isEn ? 'New Balance (USDT):' : 'Nouveau Solde (USDT) :'}
+              {isArabic ? `المبلغ الجديد لمحفظة ${activeMarket} (USDT):` : `New ${activeMarket} Balance (USDT):`}
             </label>
 
             <div className="relative">
@@ -221,7 +257,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
                   setError(null);
                 }}
                 placeholder="10000"
-                className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 focus:border-brand-500 text-white rounded-lg pl-6 rtl:pl-14 pr-14 rtl:pr-6 py-1.5 text-xs font-mono font-bold outline-none transition"
+                className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 focus:border-cyan-500 text-white rounded-lg pl-6 rtl:pl-14 pr-14 rtl:pr-6 py-1.5 text-xs font-mono font-bold outline-none transition"
                 autoFocus
               />
               <div className="absolute inset-y-0 right-0 rtl:right-auto rtl:left-0 pr-2.5 rtl:pr-0 rtl:pl-2.5 flex items-center pointer-events-none text-[10px] font-mono font-bold text-slate-400">
@@ -286,7 +322,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
                     onClick={() => handleApplyPreset(preset)}
                     className={`py-1 rounded border font-semibold transition active:scale-95 cursor-pointer text-center ${
                       isSelected
-                        ? 'bg-brand-500 text-slate-950 border-brand-400 font-bold shadow-xs'
+                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-xs'
                         : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
                     }`}
                   >
@@ -304,7 +340,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
                 type="checkbox"
                 checked={resetPnL}
                 onChange={(e) => setResetPnL(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-brand-500 focus:ring-0 cursor-pointer accent-brand-500"
+                className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-0 cursor-pointer accent-cyan-500"
               />
               <span className="text-[10px] text-slate-400 hover:text-slate-300 leading-tight">
                 {isArabic 
@@ -327,7 +363,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex-1 py-1.5 bg-brand-500 hover:bg-brand-400 text-slate-950 rounded-lg text-xs font-bold transition shadow-sm flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+              className="flex-1 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold transition shadow-sm flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
             >
               <Check className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>{isArabic ? 'تطبيق الرصيد' : isEn ? 'Apply' : 'Appliquer'}</span>

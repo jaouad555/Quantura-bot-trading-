@@ -137,6 +137,7 @@ export interface TradeProposal {
   accountEquity?: number;
   availableBalance?: number;
   isPaper?: boolean;
+  executionMode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
 }
 
 export interface ActivePositionSnapshot {
@@ -300,7 +301,7 @@ export interface PersistedPosition {
   strategyName: string;
   strategyStatus?: string;
   confidence?: number;
-  mode?: 'BINANCE_LIVE' | 'PAPER';
+  mode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
   openedAt: number;
   lastAction?: string;
   isTrailingActive?: boolean;

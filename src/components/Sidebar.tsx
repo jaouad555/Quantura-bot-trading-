@@ -27,7 +27,7 @@ import {
   HelpCircle,
   Settings,
 } from 'lucide-react';
-import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG, BinanceApiConfig } from '../types';
+import { Language, PaperWallet, ActiveBotPosition, APP_VERSION_TAG, BinanceApiConfig, TradingExecutionMode } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { 
@@ -53,7 +53,7 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   botEnabled?: boolean;
-  executionMode?: 'PAPER' | 'BINANCE_LIVE';
+  executionMode?: TradingExecutionMode;
   binanceConfig?: BinanceApiConfig;
   paperWallet?: PaperWallet;
   activeBotPositions?: ActiveBotPosition[];
@@ -456,8 +456,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
                   Binance Live
                 </span>
-              ) : (
+              ) : executionMode === 'BINANCE_TESTNET' ? (
                 <span className="text-amber-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                  Binance Testnet
+                </span>
+              ) : (
+                <span className="text-emerald-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                   Paper Trading
                 </span>
@@ -474,7 +479,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               undefined, 
               undefined, 
               isLive, 
-              binanceConfig?.accountInfo
+              binanceConfig?.accountInfo,
+              'FUTURES',
+              executionMode
             );
             return (
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2">

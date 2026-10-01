@@ -5,6 +5,7 @@ import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { formatTime, getTimezoneLabel } from '../utils/timezone';
 import { TradingPair, RESPECTED_TRADING_PAIRS, formatCoinPrice } from '../utils/tradingPairs';
+import { RiskBotAvatar } from './RiskBotAvatar';
 import {
   Radar,
   Activity,
@@ -75,6 +76,7 @@ interface HeaderProps {
   isDeveloperMode: boolean;
   binanceConfig?: BinanceApiConfig;
   executionMode?: TradingExecutionMode;
+  onToggleExecutionMode?: (mode: TradingExecutionMode) => void;
   paperWallet?: PaperWallet;
   marketType?: MarketType;
   onToggleMarketType?: (marketType: MarketType) => void;
@@ -119,6 +121,7 @@ export const Header: React.FC<HeaderProps> = ({
   isDeveloperMode,
   binanceConfig,
   executionMode = 'PAPER',
+  onToggleExecutionMode,
   paperWallet,
   activeBotPositions,
   marketType = 'FUTURES',
@@ -239,25 +242,27 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const portfolioMetrics = React.useMemo(() => {
-    const isLive = executionMode === 'BINANCE_LIVE';
     const res = calculatePortfolioMetrics(
       paperWallet, 
       activeBotPositions, 
       ticker?.price, 
       selectedSymbol,
-      isLive,
-      binanceConfig?.accountInfo
+      executionMode === 'BINANCE_LIVE',
+      binanceConfig?.accountInfo,
+      marketType,
+      executionMode
     );
     const totalNetPnl = res.realizedPnl + res.floatingPnl;
     return {
       totalPortfolioEquity: res.totalEquity,
       freeCash: res.freeCash,
       inTradeMargin: res.inTradeMargin,
+      spotHoldingsValue: res.spotHoldingsValue,
       floatingPnl: res.floatingPnl,
       realizedPnl: res.realizedPnl,
       totalNetPnl: Math.round(totalNetPnl * 100) / 100,
     };
-  }, [paperWallet, activeBotPositions, ticker?.price, selectedSymbol, executionMode, binanceConfig]);
+  }, [paperWallet, activeBotPositions, ticker?.price, selectedSymbol, executionMode, binanceConfig, marketType]);
 
   const handlePanicClick = () => {
     if (!panicConfirmState) {
@@ -730,6 +735,53 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Connection Status Badge */}
           {getConnectionBadge()}
 
+          {/* 3-Way Mode Switcher: PAPER vs TESTNET vs LIVE */}
+          {onToggleExecutionMode && (
+            <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-0.5 shrink-0 shadow-inner">
+              <button
+                type="button"
+                onClick={() => onToggleExecutionMode('PAPER')}
+                className={`h-7 px-2 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                  executionMode === 'PAPER'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title={isArabic ? 'وضع المحاكاة التجريبية (Paper Trading)' : 'Simulated Paper Trading Mode'}
+              >
+                <span>🧪</span>
+                <span className="hidden sm:inline">PAPER</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onToggleExecutionMode('BINANCE_TESTNET')}
+                className={`h-7 px-2 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                  executionMode === 'BINANCE_TESTNET'
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title={isArabic ? 'شبكة اختبار بايننس الرسمية (Binance Testnet)' : 'Official Binance Testnet Mode'}
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline">TESTNET</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onToggleExecutionMode('BINANCE_LIVE')}
+                className={`h-7 px-2 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                  executionMode === 'BINANCE_LIVE'
+                    ? 'bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-xs animate-pulse'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title={isArabic ? 'وضع التداول الحقيقي المباشر (Binance Live API)' : 'Real Live Binance Trading Mode'}
+              >
+                <span>🚀</span>
+                <span className="hidden sm:inline">LIVE</span>
+              </button>
+            </div>
+          )}
+
           {/* Paper Wallet / Binance Live Real Equity Balance Button */}
           {onOpenCustomBalanceModal && (
             <button
@@ -744,6 +796,8 @@ export const Header: React.FC<HeaderProps> = ({
               className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
                 executionMode === 'BINANCE_LIVE'
                   ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+                  : executionMode === 'BINANCE_TESTNET'
+                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
                   : portfolioMetrics.totalNetPnl > 0
                   ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                   : portfolioMetrics.totalNetPnl < 0
@@ -755,16 +809,20 @@ export const Header: React.FC<HeaderProps> = ({
                   ? (isArabic
                       ? `رصيد بايننس الحقيقي (Live): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)})`
                       : `Binance Live Real Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Margin: $${portfolioMetrics.inTradeMargin.toFixed(2)})`)
+                  : executionMode === 'BINANCE_TESTNET'
+                  ? (isArabic
+                      ? `رصيد شبكة الاختبار (Testnet): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT`
+                      : `Binance Testnet Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT`)
                   : (isArabic
-                      ? `إجمالي قيمة المحفظة التجريبية (Paper): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
-                      : `Total Paper Portfolio Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`)
+                      ? `إجمالي قيمة المحفظة التجريبية (${marketType}): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
+                      : `Total Paper Portfolio Equity (${marketType}): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`)
               }
             >
-              <Wallet className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : 'text-emerald-400'}`} strokeWidth={2} />
+              <Wallet className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : executionMode === 'BINANCE_TESTNET' ? 'text-amber-400' : 'text-emerald-400'}`} strokeWidth={2} />
               <span className={`text-[8px] font-bold px-1 py-0.2 rounded uppercase ${
-                executionMode === 'BINANCE_LIVE' ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-300'
+                executionMode === 'BINANCE_LIVE' ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40' : executionMode === 'BINANCE_TESTNET' ? 'bg-amber-500/30 text-amber-200 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300'
               }`}>
-                {executionMode === 'BINANCE_LIVE' ? 'LIVE' : 'PAPER'}
+                {executionMode === 'BINANCE_LIVE' ? 'LIVE' : executionMode === 'BINANCE_TESTNET' ? 'TESTNET' : 'PAPER'}
               </span>
               <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
@@ -1023,11 +1081,11 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-header-risk-modal"
               type="button"
               onClick={onOpenRiskModal}
-              className="h-8 px-2 sm:px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95"
-              title={isArabic ? 'محرك إدارة المخاطر المؤسسي' : 'Quantura Risk Management Engine'}
+              className="h-8 px-2 sm:px-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm"
+              title={isArabic ? 'روبوت إدارة المخاطر المؤسسي (Quantura Risk Engine)' : 'Quantura Risk Management Robot'}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2} />
-              <span className="hidden md:inline">{isArabic ? 'المخاطر' : 'Risk'}</span>
+              <RiskBotAvatar size="xs" language={language} className="pointer-events-none" />
+              <span className="hidden md:inline">{isArabic ? 'روبوت المخاطر' : 'Risk Bot'}</span>
             </button>
           )}
 

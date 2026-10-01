@@ -3,12 +3,13 @@ import {
   X, AlertTriangle, RefreshCw, ShieldCheck, 
   TrendingDown, Anchor, Activity, Sliders,
   Unlock, AlertOctagon, Flame, Layers, Shield,
-  RotateCcw, CheckCircle2, Sparkles, Info
+  RotateCcw, CheckCircle2, Sparkles, Info, Bot
 } from 'lucide-react';
 import { 
   AutoBotConfig, Language, BinanceApiConfig, PaperWallet, TradingExecutionMode,
   FrontendRiskEngineConfig, RiskEngineMetrics, RiskAuditLogEntry, RiskLockStatus 
 } from '../types';
+import { RiskBotAvatar } from './RiskBotAvatar';
 
 interface RiskManagementModalProps {
   isOpen: boolean;
@@ -222,14 +223,20 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
         
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/70">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shadow-inner ${
-              metrics?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' 
-                ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse' 
-                : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-            }`}>
-              {metrics?.emergencyStop ? <AlertOctagon className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-            </div>
+          <div className="flex items-center gap-3">
+            {/* Dynamic Robot Emotions Icon for Risk Engine - Styled like Terminal Robot */}
+            <RiskBotAvatar
+              riskScore={currentRiskScore}
+              status={metrics?.riskLockStatus || riskConfig?.riskLockStatus}
+              emergencyStop={metrics?.emergencyStop}
+              circuitBreakerActive={Boolean(metrics?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' || metrics?.riskLockStatus === 'EMERGENCY')}
+              antiMartingaleActive={antiMartingale}
+              dailyLossPercent={metrics?.dailyLossPercent}
+              drawdownPercent={metrics?.currentDrawdownPercent}
+              maxDrawdownLimit={parseFloat(maxDrawdown) || 10}
+              size="md"
+              language={language}
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-white font-sans tracking-tight">
@@ -240,7 +247,7 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  {isArabic ? 'حماية فورية' : 'Zero-Latency Defense'}
+                  {isArabic ? 'روبوت الحماية الفورية' : 'Risk Emotion AI'}
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -393,8 +400,8 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-slate-700/80 transition-all shadow-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-cyan-400" />
-                      {isArabic ? 'مؤشر المخاطر التراكمي' : 'Quantitative Risk Score'}
+                      <Bot className="w-3.5 h-3.5 text-cyan-400" />
+                      {isArabic ? 'مؤشر عواطف ومخاطر الروبوت' : 'Robot Risk Emotion Index'}
                     </span>
                     <span className="font-mono text-[10px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                       0 - 100

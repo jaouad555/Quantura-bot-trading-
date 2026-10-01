@@ -564,7 +564,7 @@ export interface ActiveBotPosition {
   strategyStatus?: 'ACTIVE' | 'INACTIVE';
   realizedPnlUsdt: number;
   pnlHistory: number[];
-  mode?: 'PAPER' | 'BINANCE_LIVE';
+  mode?: TradingExecutionMode;
   // Futures / Leverage Mechanics
   marketType?: 'SPOT' | 'FUTURES';
   leverage?: number; // e.g. 10x
@@ -607,7 +607,7 @@ export interface AutoTradeLog {
   pnlUsdt?: number;
   pnlPercent?: number;
   reason: string;
-  mode?: 'PAPER' | 'BINANCE_LIVE';
+  mode?: TradingExecutionMode;
   marketType?: 'SPOT' | 'FUTURES';
   leverage?: number;
   strategyId?: string;
@@ -637,14 +637,46 @@ export interface PaperTradeClosedRecord {
   time: number;
 }
 
+export interface SpotHolding {
+  symbol: string;
+  asset: string;
+  qty: number;
+  avgBuyPrice: number;
+  totalCostUsdt: number;
+  lastUpdated: number;
+}
+
+export interface PaperSpotWallet {
+  usdtBalance: number;
+  holdings: Record<string, SpotHolding>;
+  realizedPnlUsdt: number;
+  totalFeesPaidUsdt: number;
+  tradeCount: number;
+}
+
+export interface PaperFuturesWallet {
+  marginBalanceUsdt: number;
+  availableBalanceUsdt: number;
+  inTradeMarginUsdt: number;
+  realizedPnlUsdt: number;
+  totalFundingFeesPaidUsdt: number;
+  totalTradingFeesPaidUsdt: number;
+  tradeCount: number;
+}
+
 export interface PaperWallet {
   balance: number;
   realizedPnl: number;
+  spotBalance?: number;
+  futuresBalance?: number;
+  spotHoldings?: Record<string, number>;
+  spotWallet?: PaperSpotWallet;
+  futuresWallet?: PaperFuturesWallet;
   openPosition: PaperTradePosition | null;
   history: PaperTradeClosedRecord[];
 }
 
-export type TradingExecutionMode = 'PAPER' | 'BINANCE_LIVE';
+export type TradingExecutionMode = 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE';
 
 export interface BinanceAccountBalance {
   asset: string;
