@@ -429,16 +429,19 @@ async function processTradingSignal(
     const positions = posStr ? JSON.parse(posStr) : [];
     
     // Risk Management Checks
+    const marketType = config.marketType || 'FUTURES';
     const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
     const currentModePositions = positions.filter((p: any) => {
       const pMode = p.mode || 'PAPER';
-      return pMode === mode;
+      const pMarket = p.marketType || 'FUTURES';
+      return pMode === mode && pMarket === marketType;
     });
     
     // Max Trades limit
     const maxTrades = Math.max(1, config.maxOpenTrades || 3);
     if (currentModePositions.length >= maxTrades) {
       console.log(`[RISK BLOCKED] ${symUpper} max trades reached (${currentModePositions.length}/${maxTrades})`);
+      sendServerTelegramNotification(`❌ <b>Trade Blocked</b>\nSymbol: <b>${symUpper}</b>\nReason: MAX_OPEN_TRADES_REACHED (${currentModePositions.length}/${maxTrades})\nMode: <b>${mode}</b> | Type: <b>${marketType}</b>`);
       return;
     }
     
@@ -727,13 +730,21 @@ async function processTradingSignal(
     const freshPosStr = await kv.get('btc_active_bot_positions');
     const freshPositions = freshPosStr ? JSON.parse(freshPosStr) : [];
     
+    // Filter by mode and marketType to check for duplicate and capacity
+    const freshCurrentModePositions = freshPositions.filter((p: any) => {
+      const pMode = p.mode || 'PAPER';
+      const pMarket = p.marketType || 'FUTURES';
+      return pMode === mode && pMarket === marketType;
+    });
+
     // Final duplicate and capacity guard right before writing
-    if (freshPositions.some((p: any) => p.symbol && p.symbol.toUpperCase() === symUpper)) {
+    if (freshCurrentModePositions.some((p: any) => p.symbol && p.symbol.toUpperCase() === symUpper)) {
       console.log(`[DEDUPLICATION ABORT] ${symUpper} already inserted by another worker.`);
       return;
     }
-    if (freshPositions.length >= maxTrades) {
-      console.log(`[CAPACITY ABORT] Portfolio max trades reached (${freshPositions.length}/${maxTrades}).`);
+    if (freshCurrentModePositions.length >= maxTrades) {
+      console.log(`[CAPACITY ABORT] Portfolio max trades reached (${freshCurrentModePositions.length}/${maxTrades}).`);
+      sendServerTelegramNotification(`❌ <b>Trade Blocked (Final Check)</b>\nSymbol: <b>${symUpper}</b>\nReason: MAX_OPEN_TRADES_REACHED (${freshCurrentModePositions.length}/${maxTrades})\nMode: <b>${mode}</b> | Type: <b>${marketType}</b>`);
       return;
     }
 
