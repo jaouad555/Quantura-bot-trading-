@@ -2128,8 +2128,15 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
 
   const kvTestnet = await kv.get('app_binance_use_testnet');
   const kvMarketType = await kv.get('app_binance_market_type');
-  const useTestnet = headerTestnet || bodyTestnet || (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet));
-  const marketType = headerMarketType || bodyMarketType || (kvMarketType as any) || dbMarketType || envCreds.marketType || 'SPOT';
+  const kvMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || '';
+  const reqMode = (req.query?.executionMode as string) || (req.headers['x-execution-mode'] as string) || (req.body?.executionMode as string) || '';
+  const effectiveMode = reqMode || kvMode;
+
+  const isTestnetMode = effectiveMode === 'BINANCE_TESTNET' || bodyTestnet || headerTestnet;
+  const isLiveMode = effectiveMode === 'BINANCE_LIVE';
+
+  const useTestnet = isTestnetMode ? true : (isLiveMode ? false : (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet)));
+  const marketType = headerMarketType || bodyMarketType || (kvMarketType as any) || dbMarketType || envCreds.marketType || 'FUTURES';
 
   return { apiKey, apiSecret, useTestnet, marketType: marketType as any };
 }
@@ -2679,6 +2686,7 @@ app.post('/api/binance/order', async (req, res) => {
     return res.json({
       success: true,
       order: data,
+      orderId: data.orderId || data.clientOrderId,
       riskEvaluation,
     });
   } catch (error: any) {

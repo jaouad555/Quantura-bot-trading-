@@ -32,6 +32,7 @@ interface CustomBalanceModalProps {
   activeBotPositions?: ActiveBotPosition[];
   onOpenBinanceModal?: () => void;
   onToggleExecutionMode?: (mode: TradingExecutionMode) => void;
+  onSyncBinancePositions?: () => Promise<void> | void;
 }
 
 export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
@@ -46,6 +47,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   activeBotPositions,
   onOpenBinanceModal,
   onToggleExecutionMode,
+  onSyncBinancePositions,
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
@@ -54,6 +56,7 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   const [inputVal, setInputVal] = useState<string>(paperWallet.balance.toString());
   const [resetPnL, setResetPnL] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Sync state on open
   useEffect(() => {
@@ -216,13 +219,13 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
               </div>
             </div>
 
-            {/* Testnet Balances Cards */}
+            {/* Testnet Balances Cards (4-way comprehensive balance metrics) */}
             <div className="grid grid-cols-2 gap-2.5">
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
                 <span className="text-[10px] text-slate-400 block font-sans">
                   {isArabic ? 'الرصيد المتاح (Free USDT):' : 'Available Free Cash:'}
                 </span>
-                <span className="text-base font-black text-amber-400">
+                <span className="text-base font-black text-amber-400 font-mono">
                   ${testnetFreeUsdt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-[9px] text-slate-500 block mt-0.5">Binance Testnet</span>
@@ -230,10 +233,32 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
 
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
                 <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'إجمالي قيمة المحفظة (Equity):' : 'Total Portfolio Equity:'}
+                  {isArabic ? 'في الصفقات (In Trades):' : 'In-Trade Margin:'}
                 </span>
-                <span className="text-base font-black text-white">
-                  ${testnetTotalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-base font-black text-cyan-400 font-mono">
+                  ${inTradeMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-[9px] text-slate-500 block mt-0.5">
+                  {(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === 'BINANCE_TESTNET').length} {isArabic ? 'صفقات نشطة' : 'open trades'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                <span className="text-[10px] text-slate-400 block font-sans">
+                  {isArabic ? 'أرباح الصفقات (Floating PnL):' : 'Unrealized PnL:'}
+                </span>
+                <span className={`text-base font-black font-mono ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-[9px] text-slate-500 block mt-0.5">Mark Price Live</span>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                <span className="text-[10px] text-slate-400 block font-sans">
+                  {isArabic ? 'إجمالي المحفظة (Equity):' : 'Total Equity:'}
+                </span>
+                <span className="text-base font-black text-white font-mono">
+                  ${totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-[9px] text-slate-500 block mt-0.5">{marketType} Account</span>
               </div>
@@ -243,9 +268,9 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
             <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-[11px]">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">{isArabic ? 'الشبكة النشطة:' : 'Active Network:'}</span>
-                <span className="text-amber-400 font-bold flex items-center gap-1">
+                <span className="text-amber-400 font-bold flex items-center gap-1 font-mono text-[10px]">
                   <Server className="w-3 h-3" />
-                  <span>testnet.binance.vision</span>
+                  <span>{marketType === 'FUTURES' ? 'testnet.binancefuture.com' : 'testnet.binance.vision'}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -262,6 +287,29 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-1 font-sans">
+              {onSyncBinancePositions && (
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={async () => {
+                    setIsSyncing(true);
+                    try {
+                      await onSyncBinancePositions();
+                    } finally {
+                      setIsSyncing(false);
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition flex items-center justify-center gap-2 cursor-pointer text-xs active:scale-[0.99]"
+                >
+                  <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>
+                    {isSyncing 
+                      ? (isArabic ? 'جارٍ المزامنة مع بايننس Testnet...' : 'Syncing with Binance Testnet...') 
+                      : (isArabic ? 'مزامنة فورية للصفقات والأرصدة مع بايننس' : 'Instant Sync with Binance Testnet')}
+                  </span>
+                </button>
+              )}
+
               {onOpenBinanceModal && (
                 <button
                   type="button"

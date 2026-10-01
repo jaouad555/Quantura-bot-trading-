@@ -120,6 +120,8 @@ export function calculatePortfolioMetrics(
   let freeCash = 0;
   let realizedPnl = 0;
   let totalEquity = 0;
+  let effectiveInTradeMargin = inTradeMargin;
+  let effectiveFloatingPnl = floatingPnl;
   let spotHoldingsValue = 0;
   const holdingsSummary: Record<string, { qty: number; valueUsdt: number; avgCost: number; pnlUsdt: number; pnlPercent: number }> = {};
 
@@ -129,13 +131,16 @@ export function calculatePortfolioMetrics(
     freeCash = Math.max(0, rawFree);
 
     if (marketType === 'FUTURES') {
-      if (rawTotalEquity > 0) {
-        const apiUnrealized = Number(binanceAccountInfo.unrealizedProfit) || 0;
-        const livePnlDelta = floatingPnl - apiUnrealized;
-        totalEquity = Math.max(0, rawTotalEquity + livePnlDelta);
-      } else {
-        totalEquity = Math.max(0, freeCash + inTradeMargin + floatingPnl);
-      }
+      const apiInTradeMargin = Number(binanceAccountInfo.inTradeMargin) || 0;
+      const apiUnrealized = Number(binanceAccountInfo.unrealizedProfit) || 0;
+
+      // In real Binance Futures (Testnet & Live):
+      // 1. inTradeMargin is authoritatively reported by Binance totalInitialMargin
+      effectiveInTradeMargin = apiInTradeMargin > 0 ? apiInTradeMargin : inTradeMargin;
+      // 2. floatingPnl is authoritatively reported by Binance totalUnrealizedProfit
+      effectiveFloatingPnl = apiUnrealized !== 0 ? apiUnrealized : floatingPnl;
+      // 3. totalEquity is the true total margin balance on Binance (Wallet Balance + Floating PnL)
+      totalEquity = rawTotalEquity > 0 ? rawTotalEquity : Math.max(0, freeCash + effectiveInTradeMargin + effectiveFloatingPnl);
     } else {
       // SPOT Live / Testnet: Calculate coin balances
       let cryptoVal = 0;
@@ -202,21 +207,21 @@ export function calculatePortfolioMetrics(
     }
   }
 
-  const netPnlCombined = floatingPnl + realizedPnl;
+  const netPnlCombined = effectiveFloatingPnl + realizedPnl;
   const baselineCapital = isExchange 
-    ? Math.max(10, totalEquity - floatingPnl) 
+    ? Math.max(10, totalEquity - effectiveFloatingPnl) 
     : Math.max(10, freeCash + inTradeMargin + spotHoldingsValue - netPnlCombined);
 
   const floatingPnlPercent = baselineCapital > 0 ? (netPnlCombined / baselineCapital) * 100 : 0;
-  const marginLevelPercent = inTradeMargin > 0 ? (totalEquity / inTradeMargin) * 100 : undefined;
+  const marginLevelPercent = effectiveInTradeMargin > 0 ? (totalEquity / effectiveInTradeMargin) * 100 : undefined;
 
   return {
     totalEquity: Math.round(totalEquity * 100) / 100,
     totalPortfolioEquity: Math.round(totalEquity * 100) / 100,
     freeCash: Math.round(freeCash * 100) / 100,
-    inTradeMargin: Math.round(inTradeMargin * 100) / 100,
+    inTradeMargin: Math.round(effectiveInTradeMargin * 100) / 100,
     spotHoldingsValue: Math.round(spotHoldingsValue * 100) / 100,
-    floatingPnl: Math.round(floatingPnl * 100) / 100,
+    floatingPnl: Math.round(effectiveFloatingPnl * 100) / 100,
     realizedPnl: Math.round(realizedPnl * 100) / 100,
     totalNetPnl: Math.round(netPnlCombined * 100) / 100,
     floatingPnlPercent: Math.round(floatingPnlPercent * 100) / 100,

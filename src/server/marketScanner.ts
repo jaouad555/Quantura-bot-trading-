@@ -621,7 +621,7 @@ async function processTradingSignal(
     console.log(`---------------------------------------------------------\n`);
 
     const notional = margin * lev;
-    const quantity = notional / currentPrice;
+    let quantity = notional / currentPrice;
 
     let binanceOrderId = null;
     if (isExchangeMode) {
@@ -648,6 +648,9 @@ async function processTradingSignal(
         return;
       }
       binanceOrderId = orderRes.orderId;
+      if (orderRes.executedQty && parseFloat(orderRes.executedQty) > 0) {
+        quantity = parseFloat(orderRes.executedQty);
+      }
     } else {
       const freshWalletStr = await kv.get('btc_paper_wallet');
       let freshWallet = freshWalletStr ? JSON.parse(freshWalletStr) : { balance: 1000, realizedPnl: 0 };

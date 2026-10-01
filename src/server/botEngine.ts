@@ -775,9 +775,13 @@ const getBinanceConfig = async () => {
   const effectiveKey = dbKey || envCreds.apiKey;
   const effectiveSecret = dbSecret || envCreds.apiSecret;
 
-  const useTestnet = kvTestnet !== null
-    ? (kvTestnet === 'true')
-    : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet);
+  const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || '';
+  const isTestnetMode = mode === 'BINANCE_TESTNET';
+  const isLiveMode = mode === 'BINANCE_LIVE';
+
+  const useTestnet = isTestnetMode
+    ? true
+    : (isLiveMode ? false : (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet)));
 
   const marketType = ((kvMarketType as any) || dbMarketType || envCreds.marketType || 'FUTURES') as 'SPOT' | 'FUTURES';
 

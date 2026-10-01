@@ -384,6 +384,21 @@ export const App: React.FC = () => {
     setExecutionMode(mode);
     try {
       apiStorage.setItem('trading_execution_mode', mode);
+      apiStorage.setItem('app_execution_mode', mode);
+      const isTestnet = mode === 'BINANCE_TESTNET';
+      if (mode === 'BINANCE_TESTNET' || mode === 'BINANCE_LIVE') {
+        apiStorage.setItem('app_binance_use_testnet', isTestnet ? 'true' : 'false');
+        fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'app_binance_use_testnet', value: isTestnet ? 'true' : 'false' }),
+        }).catch(() => {});
+      }
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'trading_execution_mode', value: mode }),
+      }).catch(() => {});
     } catch {}
   }, []);
 
@@ -394,14 +409,15 @@ export const App: React.FC = () => {
   const fetchLiveBinanceBalance = useCallback(async () => {
     try {
       const currentMt = botConfigRef.current?.marketType || 'FUTURES';
-      const res = await fetch(`/api/binance/account?marketType=${currentMt}`);
+      const isTestnet = executionModeRef.current === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
+      const res = await fetch(`/api/binance/account?marketType=${currentMt}&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${executionModeRef.current}`);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         const canTradeStatus = data.canTrade === true;
         setBinanceConfig(prev => ({
           ...prev,
           isConnected: true,
-          useTestnet: data.useTestnet !== undefined ? data.useTestnet : prev.useTestnet,
+          useTestnet: data.useTestnet !== undefined ? data.useTestnet : (executionModeRef.current === 'BINANCE_TESTNET' ? true : prev.useTestnet),
           marketType: data.marketType || prev.marketType || currentMt,
           accountInfo: {
             balances: data.balances || [],
@@ -440,7 +456,7 @@ export const App: React.FC = () => {
                 price: tickerRef.current?.price || 0,
                 amountUsdt: 0,
                 reason: diagMsg,
-                mode: 'BINANCE_LIVE',
+                mode: executionModeRef.current,
               },
               ...(prev || []).slice(0, 49)
             ]);
@@ -459,6 +475,88 @@ export const App: React.FC = () => {
       return data;
     } catch (err) {
       console.warn('Error polling Binance live balance:', err);
+    }
+  }, []);
+
+  // Synchronize live open positions directly from Binance Futures (Testnet & Live)
+  const syncBinanceLivePositions = useCallback(async () => {
+    const execMode = executionModeRef.current;
+    if (execMode !== 'BINANCE_TESTNET' && execMode !== 'BINANCE_LIVE') {
+      return;
+    }
+    const isTestnet = execMode === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
+    const currentMt = botConfigRef.current?.marketType || 'FUTURES';
+    if (currentMt !== 'FUTURES') return;
+
+    try {
+      const res = await fetch(`/api/binance/futures/positions?useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`);
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      if (!data || !data.success) return;
+
+      const rawPositions: any[] = data.positions || [];
+
+      const realPositions: ActiveBotPosition[] = rawPositions.map((p: any) => {
+        const amt = parseFloat(p.positionAmt || '0');
+        const isLong = amt > 0;
+        const entryPrice = parseFloat(p.entryPrice || '0') || 1;
+        const markPrice = parseFloat(p.markPrice || '0') || entryPrice;
+        const qty = Math.abs(amt);
+        const lev = parseInt(p.leverage || '10') || 10;
+        const margin = parseFloat(p.isolatedMargin || p.positionInitialMargin || '0') || ((qty * entryPrice) / lev);
+        const notional = Math.round(qty * markPrice * 100) / 100;
+        const unRealizedPnl = Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
+        const liqPrice = parseFloat(p.liquidationPrice || '0');
+
+        const defaultSl = isLong ? entryPrice * 0.98 : entryPrice * 1.02;
+        const defaultTp1 = isLong ? entryPrice * 1.03 : entryPrice * 0.97;
+        const defaultTp2 = isLong ? entryPrice * 1.06 : entryPrice * 0.94;
+        const defaultTp3 = isLong ? entryPrice * 1.10 : entryPrice * 0.90;
+
+        return {
+          id: `binance-pos-${p.symbol.toUpperCase()}-${execMode}`,
+          symbol: p.symbol.toUpperCase(),
+          decision: isLong ? 'LONG' : 'SHORT',
+          entryPrice,
+          currentPrice: markPrice,
+          initialAmountUsdt: Math.round(margin * 100) / 100,
+          remainingAmountUsdt: Math.round(margin * 100) / 100,
+          initialAmountBtc: qty,
+          remainingAmountBtc: qty,
+          tp1: defaultTp1,
+          tp2: defaultTp2,
+          tp3: defaultTp3,
+          stopLoss: defaultSl,
+          initialStopLoss: defaultSl,
+          tp1Hit: false,
+          tp2Hit: false,
+          tp3Hit: false,
+          rebuysCount: 0,
+          openedAt: p.updateTime || Date.now(),
+          lastAction: `Binance ${isTestnet ? 'Testnet' : 'Live'} Reconciled`,
+          realizedPnlUsdt: 0,
+          pnlHistory: [unRealizedPnl],
+          marginUsdt: Math.round(margin * 100) / 100,
+          positionSizeUsdt: notional,
+          leverage: lev,
+          liquidationPrice: liqPrice > 0 ? liqPrice : undefined,
+          marketType: 'FUTURES',
+          marginMode: p.marginType === 'isolated' ? 'ISOLATED' : 'CROSS',
+          unrealizedPnlUsdt: unRealizedPnl,
+          roePercent: margin > 0 ? Math.round((unRealizedPnl / margin) * 1000) / 10 : 0,
+          mode: execMode,
+          strategyName: 'Binance Live Position',
+        };
+      });
+
+      // Two-way reconciliation: Replace positions for current exchange mode with real Binance positions,
+      // while preserving other modes (e.g. PAPER).
+      updateBotPositionsSync((prev) => {
+        const otherModes = prev.filter(p => (p.mode || 'PAPER') !== execMode);
+        return [...realPositions, ...otherModes];
+      });
+    } catch (e) {
+      console.error('Binance position sync error:', e);
     }
   }, []);
 
@@ -484,14 +582,20 @@ export const App: React.FC = () => {
       .catch(console.error);
   }, [fetchLiveBinanceBalance]);
 
-  // Periodic live account & permissions polling every 5s
+  // Periodic live account, balances & real positions reconciliation every 5s
   useEffect(() => {
     fetchLiveBinanceBalance();
+    if (executionMode === 'BINANCE_TESTNET' || executionMode === 'BINANCE_LIVE') {
+      syncBinanceLivePositions();
+    }
     const interval = setInterval(() => {
       fetchLiveBinanceBalance();
+      if (executionModeRef.current === 'BINANCE_TESTNET' || executionModeRef.current === 'BINANCE_LIVE') {
+        syncBinanceLivePositions();
+      }
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchLiveBinanceBalance]);
+  }, [fetchLiveBinanceBalance, syncBinanceLivePositions, executionMode]);
 
 
   const [isBinanceModalOpen, setIsBinanceModalOpen] = useState(false);
@@ -3564,6 +3668,7 @@ export const App: React.FC = () => {
                 binanceConfig={binanceConfig}
                 onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
                 onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
+                onSyncBinancePositions={syncBinanceLivePositions}
                 onToggleBot={handleToggleBot}
                 onUpdateConfig={handleUpdateBotConfig}
                 onManualClosePosition={(posId) => {
@@ -3913,14 +4018,23 @@ export const App: React.FC = () => {
           onFullReset={handleFullReset}
         />
 
-        {/* Custom Paper Balance Management Modal */}
+        {/* Custom Paper & Exchange Balance Management Modal */}
         <CustomBalanceModal
           isOpen={isCustomBalanceModalOpen}
           onClose={() => setIsCustomBalanceModalOpen(false)}
           language={language}
           paperWallet={paperWallet}
+          marketType={botConfig.marketType || 'FUTURES'}
+          executionMode={executionMode}
+          binanceConfig={binanceConfig}
           onUpdateBalance={handleUpdateCustomBalance}
           activeBotPositions={activeBotPositions}
+          onOpenBinanceModal={() => {
+            setIsCustomBalanceModalOpen(false);
+            setIsBinanceModalOpen(true);
+          }}
+          onToggleExecutionMode={handleSetExecutionMode}
+          onSyncBinancePositions={syncBinanceLivePositions}
         />
 
         {/* Binance Real API Trading Connection Modal */}
