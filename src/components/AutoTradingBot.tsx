@@ -1040,6 +1040,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   ], [isArabic, botConfig.marketType]);
 
   const isLiveMode = executionMode === 'BINANCE_LIVE';
+  const isTestnetMode = executionMode === 'BINANCE_TESTNET';
+  const isExchangeMode = isLiveMode || isTestnetMode;
   
   // Safe normalized activePresets list (guarantees Array even if stored as object or undefined)
   const activePresetsList: StrategyId[] = useMemo(() => {
@@ -1052,9 +1054,15 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     return [];
   }, [botConfig.activePresets]);
 
-  const filteredPositions = (activePositions || []).filter(p => isLiveMode ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+  const filteredPositions = (activePositions || []).filter(p => {
+    const pMode = p.mode || 'PAPER';
+    return pMode === executionMode;
+  });
   const displayPositions = filteredPositions;
-  const displayLogs = (logs || []).filter(l => isLiveMode ? l.mode === 'BINANCE_LIVE' : (!l.mode || l.mode === 'PAPER'));
+  const displayLogs = (logs || []).filter(l => {
+    const lMode = l.mode || 'PAPER';
+    return lMode === executionMode;
+  });
   const maxTradesLimit = Math.max(1, botConfig?.maxOpenTrades || 3);
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;
   const isOverMaxTrades = displayPositions.length > maxTradesLimit;
@@ -1065,7 +1073,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     currentPrice, 
     selectedSymbol, 
     isLiveMode, 
-    binanceConfig?.accountInfo
+    binanceConfig?.accountInfo,
+    botConfig.marketType || 'FUTURES',
+    executionMode
   );
   const floatingPnl = Number(metrics.floatingPnl) || 0;
   const totalEquity = Number(metrics.totalEquity) || 0;
@@ -1770,16 +1780,20 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                 onClick={onOpenBinanceModal}
                 className={`h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer min-w-0 shadow-sm ${
                   executionMode === 'BINANCE_LIVE'
-                    ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600/80'
-                    : 'bg-slate-800 hover:bg-slate-750 text-slate-200 border-slate-700'
+                    ? 'bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border-rose-600/80'
+                    : executionMode === 'BINANCE_TESTNET'
+                    ? 'bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border-amber-600/80'
+                    : 'bg-slate-850 hover:bg-slate-800 text-slate-200 border-slate-700'
                 }`}
                 title={isArabic ? 'إعدادات ربط Binance API' : isEn ? 'Binance API Connection' : 'Connexion API Binance'}
               >
-                <Key className={`w-4 h-4 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <Key className={`w-4 h-4 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : executionMode === 'BINANCE_TESTNET' ? 'text-amber-400' : 'text-emerald-400'}`} />
                 <span className="truncate font-mono flex items-center gap-1">
-                  <span>{executionMode === 'BINANCE_LIVE' ? 'Binance Live' : 'Binance API'}</span>
+                  <span>
+                    {executionMode === 'BINANCE_LIVE' ? 'Binance Live' : executionMode === 'BINANCE_TESTNET' ? 'Binance Testnet' : 'Paper Sim'}
+                  </span>
                 </span>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'bg-rose-400 animate-pulse' : executionMode === 'BINANCE_TESTNET' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
               </button>
             ) : (
               <div className="h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-xs font-mono text-slate-500 min-w-0">

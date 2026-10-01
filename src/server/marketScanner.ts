@@ -125,7 +125,7 @@ export async function scanAllPairs() {
     });
 
     const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
-    const isLive = mode === 'BINANCE_LIVE';
+    const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
     const marketType = config.marketType || 'FUTURES';
 
     scannerState.lastGlobalScan = Date.now();
@@ -133,7 +133,7 @@ export async function scanAllPairs() {
     // Concurrency control: scan sequentially with 2.5s delay to respect Binance API limits
     for (const symbol of enabledPairs) {
       if (scannerState.status !== 'RUNNING') break;
-      await analyzeSymbol(symbol, config, isLive, marketType, allowedToExecute, activeStrategies);
+      await analyzeSymbol(symbol, config, mode, marketType, allowedToExecute, activeStrategies);
       await new Promise(r => setTimeout(r, 2500)); // 2.5s safe stagger
     }
 
@@ -145,7 +145,7 @@ export async function scanAllPairs() {
 async function analyzeSymbol(
   symbol: string,
   config: any,
-  isLive: boolean,
+  mode: string,
   marketType: string,
   allowedToExecute: string[],
   activeStrategies: StrategyDefinition[]
@@ -339,7 +339,7 @@ async function analyzeSymbol(
         const minConfidence = config.minConfidence || 65;
         if (isBotTradingEnabled && stratSignal.confidence >= minConfidence && (stratSignal.decision === 'LONG' || stratSignal.decision === 'SHORT')) {
           if (isAllowedToTrade) {
-            await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, isLive, data.orderBook, data.ticker);
+            await processTradingSignal(normSymbol, stratSignal, data.ticker.price, config, mode, data.orderBook, data.ticker);
           }
         }
       }
@@ -361,7 +361,7 @@ async function processTradingSignal(
   signal: StrategySignal,
   currentPrice: number,
   config: any,
-  isLive: boolean,
+  mode: string,
   orderBook?: any,
   ticker?: any
 ) {
@@ -429,7 +429,11 @@ async function processTradingSignal(
     const positions = posStr ? JSON.parse(posStr) : [];
     
     // Risk Management Checks
-    const currentModePositions = positions.filter((p: any) => isLive ? p.mode === 'BINANCE_LIVE' : (!p.mode || p.mode === 'PAPER'));
+    const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
+    const currentModePositions = positions.filter((p: any) => {
+      const pMode = p.mode || 'PAPER';
+      return pMode === mode;
+    });
     
     // Max Trades limit
     const maxTrades = Math.max(1, config.maxOpenTrades || 3);
@@ -467,10 +471,10 @@ async function processTradingSignal(
     let totalEquity = 0;
     let availableBalance = 0;
 
-    if (isLive) {
+    if (isExchangeMode) {
       const realAcc = await fetchRealBinanceAccountDirect();
       if (!realAcc.success || !realAcc.canTrade || realAcc.freeUsdt <= 0 || realAcc.totalUsdtEquity <= 0) {
-        console.log(`[TRADE BLOCKED] ${symUpper} LIVE Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
+        console.log(`[TRADE BLOCKED] ${symUpper} ${mode} Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
         return;
       }
       totalEquity = realAcc.totalUsdtEquity;
@@ -579,7 +583,7 @@ async function processTradingSignal(
       quantity: (margin * lev) / currentPrice,
       orderType: 'MARKET' as const,
       timestamp: Date.now(),
-      isPaper: !isLive,
+      isPaper: !isExchangeMode,
       marketData: {
         currentPrice: currentPrice,
         bidPrice: bestBid,
@@ -613,30 +617,30 @@ async function processTradingSignal(
     console.log(`SIGNAL: ${signal.decision} | SCORE: ${signal.confidence} | STRATEGY: ${signal.strategyName}`);
     console.log(`SL: $${safeSl} | TP1: $${safeTp1} | TP2: $${safeTp2} | TP3: $${safeTp3} | RR: 1:${((Math.abs(safeTp1 - currentPrice) / Math.max(0.01, Math.abs(currentPrice - safeSl)))).toFixed(2)}`);
     console.log(`ENTRY QUALITY: VALID | DECISION: ${signal.decision}`);
-    console.log(`MARGIN: $${margin} | LEVERAGE: ${lev}x | NOTIONAL: $${(margin * lev).toFixed(2)} | MODE: ${isLive ? 'BINANCE_LIVE' : 'PAPER'}`);
+    console.log(`MARGIN: $${margin} | LEVERAGE: ${lev}x | NOTIONAL: $${(margin * lev).toFixed(2)} | MODE: ${mode}`);
     console.log(`---------------------------------------------------------\n`);
 
     const notional = margin * lev;
     const quantity = notional / currentPrice;
 
     let binanceOrderId = null;
-    if (isLive) {
+    if (isExchangeMode) {
       const orderSide = isLong ? 'BUY' : 'SELL';
       const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false);
       if (!orderRes.success || !orderRes.orderId) {
-        console.error(`[EXECUTION] ${symbol} LIVE ORDER FAILED:`, orderRes.error);
+        console.error(`[EXECUTION] ${symbol} ${mode} ORDER FAILED:`, orderRes.error);
         const errorMsg = orderRes.error || 'Unknown Binance Error';
         const binanceCode = orderRes.binanceCode ? ` (Code: ${orderRes.binanceCode})` : '';
         
         sendServerTelegramNotification(
-          `⚠️ <b>Binance Order Execution Warning</b>\n\n` +
+          `⚠️ <b>Binance Order Execution Warning (${mode})</b>\n\n` +
           `🔹 Pair: <b>${symbol}</b> (${signal.decision})\n` +
           `❌ Reason: <b>${errorMsg}${binanceCode}</b>\n` +
-          `ℹ️ Mode: Live/Testnet\n` +
+          `ℹ️ Mode: ${mode}\n` +
           `📍 Action: Check API keys and account balance.`
         );
         recordPushAlertDirect({
-          title: `[${symbol}] Binance Live Order Failed ⚠️`,
+          title: `[${symbol}] Binance ${mode} Order Failed ⚠️`,
           body: `Order rejected: ${errorMsg}${binanceCode}`,
           type: 'SYSTEM',
           symbol: symbol,
@@ -689,7 +693,7 @@ async function processTradingSignal(
       strategyName: signal.strategyName,
       strategyStatus: 'ACTIVE',
       confidence: signal.confidence,
-      mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
+      mode: mode,
       binanceOrderId: binanceOrderId,
       lastAction: isFutures ? `Futures ${lev}x ${signal.decision} Opened (${signal.strategyName})` : `Spot Buy Executed (${signal.strategyName})`,
       isTrailingActive: false,
@@ -708,7 +712,7 @@ async function processTradingSignal(
       leverage: lev,
       pnlUsdt: 0,
       reason: `[${signal.strategyName}] الهامش: $${margin.toFixed(2)} (${config.tradeAllocationPercent || 25}%) | حجم العقد: $${notional.toFixed(2)} (${lev}x)`,
-      mode: isLive ? 'BINANCE_LIVE' : 'PAPER',
+      mode: mode,
       strategyId: signal.strategyId,
       strategyName: signal.strategyName,
     };
@@ -740,14 +744,14 @@ async function processTradingSignal(
     // Reset rejection counter on successful position creation
     resetSignalRejection(symUpper, signal.strategyId);
     
-    if (!isLive) {
+    if (!isExchangeMode) {
       await reconcilePaperWalletDirect();
     }
     
     // Dispatch instant Telegram Notification
     const sideEmoji = signal.decision === 'LONG' ? '🟢' : '🔴';
     sendServerTelegramNotification(
-      `🤖 <b>New Position Opened (${isLive ? 'LIVE' : 'PAPER'})</b>\n\n` +
+      `🤖 <b>New Position Opened (${isExchangeMode ? mode : 'PAPER'})</b>\n\n` +
       `${sideEmoji} Pair: <b>${symUpper}</b> (${signal.decision})\n` +
       `⚡ Strategy: <b>${signal.strategyName}</b> (${signal.confidence}% Confidence)\n` +
       `💵 Entry Price: $${currentPrice.toLocaleString()}\n` +

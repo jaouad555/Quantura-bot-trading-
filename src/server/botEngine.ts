@@ -1322,7 +1322,7 @@ export const startBotEngine = () => {
           roeMetrics.netROE <= -99.0
         );
 
-        const isPosLive = pos.mode === 'BINANCE_LIVE';
+        const isPosLive = pos.mode === 'BINANCE_LIVE' || pos.mode === 'BINANCE_TESTNET';
 
         if (isLiquidated) {
           console.warn(`[SERVER ENGINE] 🚨 LIQUIDATION TRIGGERED for ${pos.symbol} at ${currentP} (Entry: ${pos.entryPrice}, Liq: ${pos.liquidationPrice})`);
@@ -1365,7 +1365,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: -100,
             reason: `Liquidation threshold reached (-100% Margin Depleted)`,
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+            mode: pos.mode || 'PAPER',
           });
 
           historyToAdd.push({
@@ -1385,7 +1385,7 @@ export const startBotEngine = () => {
             profitUsdt: totalTradePnl,
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+            mode: pos.mode || 'PAPER',
           });
 
           try {
@@ -1490,7 +1490,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: roeMetrics.netROE,
             reason: `TP1 achieved (50% closed at ${currentP}, SL secured at fee-aware breakeven)`,
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+            mode: pos.mode || 'PAPER',
           });
         }
         
@@ -1557,7 +1557,7 @@ export const startBotEngine = () => {
             pnlUsdt: tranchePnl,
             pnlPercent: roeMetrics.netROE,
             reason: `TP2 achieved (50% remaining closed at ${currentP}, SL advanced to TP1)`,
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+            mode: pos.mode || 'PAPER',
           });
         }
         
@@ -1624,7 +1624,7 @@ export const startBotEngine = () => {
             pnlUsdt: Math.round(tranchePnl * 100) / 100,
             pnlPercent: Math.round(roeMetrics.netROE * 100) / 100,
             reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER'
+            mode: pos.mode || 'PAPER'
           });
 
           const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || pos.remainingAmountUsdt || 10;
@@ -1647,7 +1647,7 @@ export const startBotEngine = () => {
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
             pnlHistory: pos.pnlHistory,
-            mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+            mode: pos.mode || 'PAPER',
           });
 
           // Enforce 20 minutes cooldown on this symbol to prevent repeated immediate re-entry
@@ -1795,9 +1795,9 @@ export const closePositionDirect = async (
     const totalTradePnl = (pos.realizedPnlUsdt || 0) + tranchePnl;
 
     const binanceConfig = await getBinanceConfig();
-    const isPosLive = pos.mode === 'BINANCE_LIVE';
+    const isPosExchange = pos.mode === 'BINANCE_LIVE' || pos.mode === 'BINANCE_TESTNET';
 
-    if (isPosLive) {
+    if (isPosExchange) {
       if (binanceConfig.isConnected) {
         await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP, lev, true);
       }
@@ -1836,7 +1836,7 @@ export const closePositionDirect = async (
       confidence: pos.confidence || 75,
       strategyName: pos.strategyName,
       pnlHistory: pos.pnlHistory,
-      mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+      mode: pos.mode || 'PAPER',
     };
     const seenHistIds = new Set<string>();
     const deduplicatedHist = [historyItem, ...history].filter((h: any) => {
@@ -1847,7 +1847,7 @@ export const closePositionDirect = async (
     });
     await kv.set('btc_trade_history', JSON.stringify(deduplicatedHist.slice(0, 500)));
 
-    if (!isPosLive) {
+    if (!isPosExchange) {
       await reconcilePaperWalletDirect();
     }
 
@@ -1865,7 +1865,7 @@ export const closePositionDirect = async (
       pnlUsdt: Math.round(tranchePnl * 100) / 100,
       pnlPercent: Math.round(roePercent * 100) / 100,
       reason,
-      mode: isPosLive ? 'BINANCE_LIVE' : 'PAPER',
+      mode: pos.mode || 'PAPER',
       marketType: pos.marketType,
       leverage: lev,
     };
