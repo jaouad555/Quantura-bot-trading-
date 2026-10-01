@@ -78,4 +78,16 @@ export class AuditTrail {
       approvalRatePercent: approvalRate
     };
   }
+
+  /**
+   * Clear all audit records and purge from storage
+   */
+  public static async clear(): Promise<void> {
+    this.inMemoryLogs = [];
+    try {
+      await kv.delete('risk_audit_log_entries');
+    } catch {
+      // non-fatal
+    }
+  }
 }

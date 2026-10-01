@@ -2484,6 +2484,15 @@ app.get('/api/risk/audit-logs', async (req, res) => {
   }
 });
 
+app.delete('/api/risk/audit-logs', async (req, res) => {
+  try {
+    await AuditTrail.clear();
+    return res.json({ success: true, message: 'All risk audit logs successfully wiped and reset to zero.' });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to clear risk audit logs' });
+  }
+});
+
 app.post('/api/risk/record-outcome', async (req, res) => {
   try {
     const { pnlUsdt, feeUsdt, symbol, strategyName, durationMs } = req.body;

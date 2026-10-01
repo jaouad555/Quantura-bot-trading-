@@ -3897,8 +3897,14 @@ export const App: React.FC = () => {
           language={language}
           onSaveConfig={(newConfig) => {
             setBinanceConfig(newConfig);
-            if (newConfig.isLiveModeEnabled !== undefined) {
-              handleSetExecutionMode(newConfig.isLiveModeEnabled ? 'BINANCE_LIVE' : 'PAPER');
+            if (newConfig.executionMode) {
+              handleSetExecutionMode(newConfig.executionMode);
+            } else if (newConfig.isLiveModeEnabled) {
+              handleSetExecutionMode('BINANCE_LIVE');
+            } else if (newConfig.useTestnet) {
+              handleSetExecutionMode('BINANCE_TESTNET');
+            } else if (newConfig.isLiveModeEnabled === false) {
+              handleSetExecutionMode('PAPER');
             }
           }}
           onToggleExecutionMode={(mode) => handleSetExecutionMode(mode)}

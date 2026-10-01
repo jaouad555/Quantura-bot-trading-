@@ -3,7 +3,8 @@ import {
   X, AlertTriangle, RefreshCw, ShieldCheck, 
   TrendingDown, Anchor, Activity, Sliders,
   Unlock, AlertOctagon, Flame, Layers, Shield,
-  RotateCcw, CheckCircle2, Sparkles, Info, Bot
+  RotateCcw, CheckCircle2, Sparkles, Info, Bot,
+  Trash2
 } from 'lucide-react';
 import { 
   AutoBotConfig, Language, BinanceApiConfig, PaperWallet, TradingExecutionMode,
@@ -172,13 +173,18 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
     try {
       setIsResetting(true);
       setErrorMessage(null);
-      const res = await fetch('/api/risk/reset-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      if (res.ok) {
+      const [res] = await Promise.all([
+        fetch('/api/risk/reset-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        }),
+        fetch('/api/risk/audit-logs', { method: 'DELETE' }).catch(() => null)
+      ]);
+      if (res && res.ok) {
         setResetSuccessNotice(true);
+        setAuditLogs([]);
+        setAuditStats({ totalEvaluations: 0, approvedCount: 0, rejectedCount: 0, approvalRatePercent: 100 });
         setTimeout(() => setResetSuccessNotice(false), 4500);
       }
       await fetchRiskData();
@@ -187,6 +193,22 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
       setErrorMessage(err.message || 'Failed to reset risk engine');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  // Clear Audit Trail Logs
+  const handleClearAuditLogs = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/risk/audit-logs', { method: 'DELETE' });
+      if (res.ok) {
+        setAuditLogs([]);
+        setAuditStats({ totalEvaluations: 0, approvedCount: 0, rejectedCount: 0, approvalRatePercent: 100 });
+      }
+    } catch (err: any) {
+      console.error('Failed to clear audit trail logs:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -763,6 +785,26 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
           {activeTab === 'AUDIT' && (
             <div className="space-y-4">
               
+              {/* Header with Clear Button */}
+              <div className="flex items-center justify-between bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-slate-200 font-mono">
+                    {isArabic ? 'سجلات فحص ومطابقة إشارات العملات (Pre-Trade Defense)' : 'Pre-Trade Defense Audit Logs'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearAuditLogs}
+                  disabled={isLoading || auditLogs.length === 0}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-white transition flex items-center gap-1.5 disabled:opacity-40 cursor-pointer font-sans"
+                  title={isArabic ? 'محو كل السجلات وتصفير السجل للبدء من جديد' : 'Wipe all audit entries and start fresh'}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isArabic ? 'محو كل السجلات وتصفير التدقيق' : 'Clear All Audit Logs'}</span>
+                </button>
+              </div>
+
               {/* Audit Stats Banner */}
               {auditStats && (
                 <div className="grid grid-cols-4 gap-3 p-3.5 bg-slate-950 rounded-2xl border border-slate-800 text-center">

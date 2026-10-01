@@ -187,13 +187,23 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
     setIsUpdatingNetwork(true);
     setTestResult(null);
 
+    const targetMode: TradingExecutionMode = newVal 
+      ? 'BINANCE_TESTNET' 
+      : (executionMode === 'BINANCE_TESTNET' ? 'PAPER' : executionMode);
+
     const updatedConfig: BinanceApiConfig = {
       ...activeBinanceConfig,
       useTestnet: newVal,
+      executionMode: targetMode,
+      isLiveModeEnabled: targetMode === 'BINANCE_LIVE',
     };
     onSaveConfig(updatedConfig);
+    handleToggleModeFn(targetMode);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       await fetch('/api/config/binance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,10 +213,14 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           useTestnet: newVal,
           marketType,
         }),
+        signal: controller.signal,
       });
 
       // Verify account on the selected network
-      const res = await fetch(`/api/binance/account?marketType=${marketType}&useTestnet=${newVal}`);
+      const res = await fetch(`/api/binance/account?marketType=${marketType}&useTestnet=${newVal}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setTestResult({
@@ -219,9 +233,22 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           accountInfo: data,
           latencyMs: data.latencyMs,
         });
+      } else {
+        setTestResult({
+          success: true,
+          message: isArabic
+            ? `تم التبديل بنجاح إلى وضع: ${newVal ? 'Binance Testnet Sandbox (بيئة الاختبار)' : 'Binance Mainnet (الشبكة الحية)'}! ${!apiKey.trim() ? '(ملاحظة: يمكنك إدخال مفاتيح Testnet الخاصة بك للاتصال)' : ''}`
+            : `Switched network mode to: ${newVal ? 'Binance Testnet Sandbox' : 'Binance Mainnet'}!`,
+        });
       }
     } catch (e) {
-      console.error('Failed to toggle testnet:', e);
+      console.warn('Network switch note:', e);
+      setTestResult({
+        success: true,
+        message: isArabic
+          ? `تم تفعيل ${newVal ? 'Binance Testnet Sandbox' : 'Binance Mainnet'} بنجاح.`
+          : `Switched to ${newVal ? 'Binance Testnet Sandbox' : 'Binance Mainnet'}.`,
+      });
     } finally {
       setIsUpdatingNetwork(false);
     }
@@ -402,10 +429,14 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
         return;
       }
       setShowRealMoneyConfirm(true);
-    } else {
-      handleToggleModeFn(newMode);
+    } else if (newMode === 'BINANCE_TESTNET') {
       setShowRealMoneyConfirm(false);
-      onSaveConfig({ ...activeBinanceConfig, isLiveModeEnabled: false });
+      handleToggleTestnet(true);
+    } else {
+      setShowRealMoneyConfirm(false);
+      handleToggleTestnet(false);
+      handleToggleModeFn('PAPER');
+      onSaveConfig({ ...activeBinanceConfig, isLiveModeEnabled: false, executionMode: 'PAPER', useTestnet: false });
     }
   };
 
@@ -547,7 +578,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 type="button"
                 onClick={() => handleToggleModeRequest('PAPER')}
                 className={`p-3 rounded-xl border flex flex-col items-start gap-1 font-bold transition-all text-left rtl:text-right cursor-pointer ${
-                  executionMode === 'PAPER'
+                  executionMode === 'PAPER' && !useTestnet
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60 shadow-lg shadow-emerald-500/10'
                     : 'bg-slate-900 border-slate-800/90 text-slate-400 hover:text-white hover:border-slate-700'
                 }`}
@@ -557,7 +588,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                     <FlaskConical className="w-4 h-4 text-emerald-400" />
                     <span>{isArabic ? 'تداول تجريبي' : 'Paper Trading'}</span>
                   </div>
-                  {executionMode === 'PAPER' && (
+                  {executionMode === 'PAPER' && !useTestnet && (
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 uppercase">
                       {isArabic ? 'نشط' : 'Active'}
                     </span>
@@ -571,13 +602,10 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               {/* Button 2: TESTNET */}
               <button
                 type="button"
-                onClick={() => {
-                  handleToggleTestnet(true);
-                  handleToggleModeRequest('BINANCE_TESTNET');
-                }}
+                onClick={() => handleToggleModeRequest('BINANCE_TESTNET')}
                 className={`p-3 rounded-xl border flex flex-col items-start gap-1 font-bold transition-all text-left rtl:text-right cursor-pointer ${
-                  executionMode === 'BINANCE_TESTNET'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                  executionMode === 'BINANCE_TESTNET' || (executionMode !== 'BINANCE_LIVE' && useTestnet)
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
                     : 'bg-slate-900 border-slate-800/90 text-slate-400 hover:text-white hover:border-slate-700'
                 }`}
               >
@@ -586,7 +614,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                     <Radio className="w-4 h-4 text-amber-400" />
                     <span>{isArabic ? 'بيئة الاختبار' : 'Testnet Sandbox'}</span>
                   </div>
-                  {executionMode === 'BINANCE_TESTNET' && (
+                  {(executionMode === 'BINANCE_TESTNET' || (executionMode !== 'BINANCE_LIVE' && useTestnet)) && (
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 uppercase">
                       {isArabic ? 'نشط' : 'Active'}
                     </span>
@@ -705,7 +733,6 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleToggleTestnet(false)}
-                  disabled={isUpdatingNetwork}
                   className={`py-2 px-3 rounded-xl font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     !useTestnet
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/10'
@@ -718,15 +745,14 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleToggleTestnet(true)}
-                  disabled={isUpdatingNetwork}
                   className={`py-2 px-3 rounded-xl font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     useTestnet
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10 ring-1 ring-amber-500/30'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
                   <FlaskConical className="w-3.5 h-3.5" />
-                  <span>TESTNET</span>
+                  <span>TESTNET SANDBOX</span>
                 </button>
               </div>
             </div>

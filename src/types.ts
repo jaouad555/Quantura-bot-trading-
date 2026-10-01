@@ -707,6 +707,7 @@ export interface BinanceApiConfig {
   useTestnet: boolean;
   marketType?: 'SPOT' | 'FUTURES';
   isLiveModeEnabled: boolean;
+  executionMode?: TradingExecutionMode;
   isConnected: boolean;
   lastConnectedAt?: number;
   latencyMs?: number;
