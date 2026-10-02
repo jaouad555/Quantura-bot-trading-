@@ -2178,25 +2178,26 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     const queryString = `timestamp=${timestamp}&recvWindow=10000`;
     const signature = createBinanceSignature(queryString, apiSecret);
 
-    // Try primary marketType first, then try the other if permission fails
-    const marketTypesToTry: ('FUTURES' | 'SPOT')[] = marketType === 'FUTURES' ? ['FUTURES', 'SPOT'] : ['SPOT', 'FUTURES'];
+    // Strictly test the requested marketType. Do NOT silently fallback to another market.
+    const isFutures = marketType === 'FUTURES';
+    const actualMarketType: 'FUTURES' | 'SPOT' = isFutures ? 'FUTURES' : 'SPOT';
     
     let lastError: any = null;
     let successfulData: any = null;
-    let actualMarketType: 'FUTURES' | 'SPOT' = marketType;
 
-    for (const currentType of marketTypesToTry) {
+    // List candidate base URLs for the requested market type (e.g. testnet vs fallback endpoints)
+    const baseUrlsToTry: string[] = isFutures
+      ? [getBinanceFuturesApiBase(useTestnet), useTestnet ? 'https://demo-fapi.binance.com' : 'https://fapi.binance.com']
+      : [getBinanceApiBase(useTestnet), useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com'];
+
+    const uniqueBaseUrls = Array.from(new Set(baseUrlsToTry.filter(Boolean)));
+
+    for (const baseUrl of uniqueBaseUrls) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 6000);
-
-      let fullUrl = '';
-      if (currentType === 'FUTURES') {
-        const baseUrl = getBinanceFuturesApiBase(useTestnet);
-        fullUrl = `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`;
-      } else {
-        const baseUrl = getBinanceApiBase(useTestnet);
-        fullUrl = `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
-      }
+      const fullUrl = isFutures
+        ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
+        : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
 
       try {
         const response = await fetch(fullUrl, {
@@ -2209,14 +2210,13 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
         });
         clearTimeout(timeout);
 
-        const data = await response.json();
-        if (response.ok) {
-          console.log('[DEBUG] Binance Account API Response:', JSON.stringify(data).substring(0, 500));
+        const data = await response.json().catch(() => null);
+        if (response.ok && data) {
+          console.log(`[DEBUG] Binance Account API Response (${actualMarketType}):`, JSON.stringify(data).substring(0, 300));
           successfulData = data;
-          actualMarketType = currentType;
           break;
         } else {
-          lastError = data;
+          lastError = data || { msg: `HTTP ${response.status} ${response.statusText}` };
         }
       } catch (err: any) {
         clearTimeout(timeout);

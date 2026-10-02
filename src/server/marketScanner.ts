@@ -126,7 +126,8 @@ export async function scanAllPairs() {
 
     const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
-    const marketType = config.marketType || 'FUTURES';
+    const kvMarketType = await kv.get('app_binance_market_type');
+    const marketType = (kvMarketType === 'SPOT' || kvMarketType === 'FUTURES') ? (kvMarketType as 'SPOT' | 'FUTURES') : (config.marketType || 'FUTURES');
 
     scannerState.lastGlobalScan = Date.now();
 

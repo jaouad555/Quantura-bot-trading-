@@ -346,7 +346,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           apiKey: hasInputKeys ? apiKey.trim() : activeBinanceConfig.apiKey,
           apiSecret: '',
           useTestnet,
-          marketType: data.marketType || marketType,
+          marketType,
           isConnected: true,
           lastConnectedAt: Date.now(),
           latencyMs: data.latencyMs,
@@ -357,10 +357,10 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
         setTestResult({
           success: true,
           message: isArabic
-            ? `✅ تم الاتصال بنجاح مع بايننس (${data.marketType || marketType})! الاستجابة: ${data.latencyMs ?? 24}ms | الرصيد المتاح: $${(data.freeUsdt || 0).toFixed(2)} USDT`
+            ? `✅ تم الاتصال بنجاح مع بايننس (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'})! الاستجابة: ${data.latencyMs ?? 24}ms | الرصيد المتاح: $${(data.freeUsdt || 0).toFixed(2)} USDT`
             : isEn
-            ? `✅ Successfully connected to Binance (${data.marketType || marketType})! Latency: ${data.latencyMs ?? 24}ms | Free: $${(data.freeUsdt || 0).toFixed(2)} USDT`
-            : `✅ Connexion réussie à Binance (${data.marketType || marketType}) ! Latence : ${data.latencyMs ?? 24}ms | Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT`,
+            ? `✅ Successfully connected to Binance (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'})! Latency: ${data.latencyMs ?? 24}ms | Free: $${(data.freeUsdt || 0).toFixed(2)} USDT`
+            : `✅ Connexion réussie à Binance (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'}) ! Latence : ${data.latencyMs ?? 24}ms | Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT`,
           accountInfo,
           latencyMs: data.latencyMs,
         });
@@ -374,7 +374,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               apiKey: hasInputKeys ? apiKey.trim() : undefined,
               apiSecret: hasInputKeys ? apiSecret.trim() : undefined,
               useTestnet,
-              marketType: data.marketType || marketType,
+              marketType,
             })
           }).catch(console.error);
           setIsSaving(false);
@@ -384,7 +384,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
       } else {
         setTestResult({
           success: false,
-          message: data.error || (isArabic ? 'فشل الاتصال بـ Binance API: تحقق من صحة المفاتيح وصلاحياتها' : 'Échec de connexion à Binance API : vérifiez vos clés'),
+          message: data.error || (isArabic ? `فشل الاتصال بـ Binance API (${marketType}): تحقق من صحة المفاتيح وصلاحياتها` : `Échec de connexion à Binance API (${marketType}) : vérifiez vos clés`),
         });
       }
     } catch (err: any) {

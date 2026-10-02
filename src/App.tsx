@@ -4057,6 +4057,9 @@ export const App: React.FC = () => {
           language={language}
           onSaveConfig={(newConfig) => {
             setBinanceConfig(newConfig);
+            if (newConfig.marketType) {
+              setBotConfig(prev => ({ ...prev, marketType: newConfig.marketType }));
+            }
             if (newConfig.executionMode) {
               handleSetExecutionMode(newConfig.executionMode);
             } else if (newConfig.isLiveModeEnabled) {
