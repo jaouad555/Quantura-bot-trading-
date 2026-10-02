@@ -176,6 +176,22 @@ export const recordPushAlertDirect = async (alert: {
   symbol: string;
 }) => {
   try {
+    // Spot Mode Filter: Do not emit or record SHORT signal alerts if marketType is SPOT
+    if (alert.decision === 'SHORT') {
+      try {
+        const botCfgStr = await kv.get('btc_bot_config');
+        const appMt = await kv.get('app_binance_market_type');
+        let isSpot = appMt === 'SPOT';
+        if (botCfgStr) {
+          const parsed = JSON.parse(botCfgStr);
+          if (parsed.marketType === 'SPOT') isSpot = true;
+        }
+        if (isSpot) {
+          return null;
+        }
+      } catch {}
+    }
+
     const alertsStr = await kv.get('btc_push_alerts');
     const alerts = alertsStr ? JSON.parse(alertsStr) : [];
     const newAlert = {

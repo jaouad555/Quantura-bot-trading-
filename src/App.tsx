@@ -333,7 +333,12 @@ export const App: React.FC = () => {
   const [alerts, setAlerts] = useState<PushAlert[]>(() => {
     try {
       const saved = apiStorage.getItem('btc_push_alerts');
-      return saved ? JSON.parse(saved) : [];
+      const loaded: PushAlert[] = saved ? JSON.parse(saved) : [];
+      const appMt = apiStorage.getItem('app_binance_market_type');
+      if (appMt === 'SPOT') {
+        return loaded.filter((a) => a && a.decision !== 'SHORT');
+      }
+      return loaded;
     } catch {
       return [];
     }
@@ -1047,6 +1052,12 @@ export const App: React.FC = () => {
       const MIN_ALERT_COOLDOWN_MS = 90 * 1000; // 90 seconds minimum cooldown between alerts for the same symbol
 
       // If this is an automatic background refresh and the trade recommendation is identical or within cooldown, do NOT duplicate the notification
+      // SPOT Market Protection: In SPOT mode, only emit LONG signal alerts (SHORT signals are strictly ignored)
+      const currentMarketType = botConfigRef.current?.marketType || 'SPOT';
+      if (currentMarketType === 'SPOT' && plan.decision === 'SHORT') {
+        return;
+      }
+
       if (!isUserInitiated) {
         if (lastEmittedAlertKeyRef.current[sym] === alertKey && now - lastEmittedTime < 300 * 1000) {
           return;
@@ -2894,8 +2905,10 @@ export const App: React.FC = () => {
                  // Check if push alerts changed on server
                   if (serverData.btc_push_alerts) {
                       try {
-                          const remoteAlerts: PushAlert[] = JSON.parse(serverData.btc_push_alerts);
-                          if (Array.isArray(remoteAlerts)) {
+                          const rawRemoteAlerts: PushAlert[] = JSON.parse(serverData.btc_push_alerts);
+                          if (Array.isArray(rawRemoteAlerts)) {
+                              const isSpotNow = (botConfigRef.current?.marketType || 'SPOT') === 'SPOT';
+                              const remoteAlerts = isSpotNow ? rawRemoteAlerts.filter((a) => a && a.decision !== 'SHORT') : rawRemoteAlerts;
                               const currentIds = new Set((alertsRef.current || []).map((a) => a.id));
                               const newIncoming = remoteAlerts.filter((a) => a && a.id && !seenPushAlertIdsRef.current.has(a.id) && !currentIds.has(a.id));
                               
@@ -4267,6 +4280,7 @@ export const App: React.FC = () => {
           }}
           language={language}
           onSendTestAlert={() => activeSignal && pushNewAlert(activeSignal, true)}
+          marketType={botConfig.marketType || 'SPOT'}
         />
 
         {/* Quick Start & Help Guide Modal */}

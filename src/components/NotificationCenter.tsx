@@ -26,6 +26,7 @@ interface NotificationCenterProps {
   onDeleteAlert: (id: string) => void;
   language: Language;
   onSendTestAlert?: () => void;
+  marketType?: 'SPOT' | 'FUTURES';
 }
 
 // Helper to format pair nicely e.g. BTCUSDT -> BTC/USDT
@@ -58,6 +59,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   onDeleteAlert,
   language,
   onSendTestAlert,
+  marketType = 'SPOT',
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'ALL' | 'BUY' | 'SELL' | 'INFO'>('ALL');
@@ -68,6 +70,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     }
     return 'default';
   });
+
+  const isArabic = language === 'ar';
+  const isSpot = marketType === 'SPOT';
 
   const handleRequestPermission = async () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -85,8 +90,6 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   if (!isOpen) return null;
 
-  const isArabic = language === 'ar';
-
   const handleCopyAlert = (alert: PushAlert) => {
     const text = `${alert.title}\n${alert.body}\n© 2026 jaouad abdechchafi — Binance AI Trading Terminal`;
     navigator.clipboard.writeText(text);
@@ -94,9 +97,15 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const filteredAlerts = alerts.filter((alert) => {
+  // When in SPOT mode, completely exclude any SHORT alerts
+  const applicableAlerts = alerts.filter((alert) => {
+    if (isSpot && alert.decision === 'SHORT') return false;
+    return true;
+  });
+
+  const filteredAlerts = applicableAlerts.filter((alert) => {
     if (filterType === 'BUY') return alert.decision === 'LONG';
-    if (filterType === 'SELL') return alert.decision === 'SHORT';
+    if (filterType === 'SELL') return !isSpot && alert.decision === 'SHORT';
     if (filterType === 'INFO') return alert.decision !== 'LONG' && alert.decision !== 'SHORT';
     return true;
   });
@@ -193,7 +202,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           >
             <Layers className="w-3 h-3" />
             <span>{isArabic ? 'الكل' : 'Tous'}</span>
-            <span className="text-[10px] font-mono opacity-70">({alerts.length})</span>
+            <span className="text-[10px] font-mono opacity-70">({applicableAlerts.length})</span>
           </button>
 
           <button
@@ -206,23 +215,25 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
             }`}
           >
             <TrendingUp className="w-3 h-3 text-emerald-400" />
-            <span>{isArabic ? 'صفقات شراء' : 'Achat'}</span>
-            <span className="text-[10px] font-mono text-emerald-400">({alerts.filter(a => a.decision === 'LONG').length})</span>
+            <span>{isArabic ? (isSpot ? 'صفقات شراء SPOT' : 'صفقات شراء') : (isSpot ? 'Spot Buy' : 'Achat')}</span>
+            <span className="text-[10px] font-mono text-emerald-400">({applicableAlerts.filter(a => a.decision === 'LONG').length})</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setFilterType('SELL')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition flex items-center gap-1 shrink-0 ${
-              filterType === 'SELL'
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
-                : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-rose-400'
-            }`}
-          >
-            <TrendingDown className="w-3 h-3 text-rose-400" />
-            <span>{isArabic ? 'صفقات بيع' : 'Vente'}</span>
-            <span className="text-[10px] font-mono text-rose-400">({alerts.filter(a => a.decision === 'SHORT').length})</span>
-          </button>
+          {!isSpot && (
+            <button
+              type="button"
+              onClick={() => setFilterType('SELL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition flex items-center gap-1 shrink-0 ${
+                filterType === 'SELL'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
+                  : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-rose-400'
+              }`}
+            >
+              <TrendingDown className="w-3 h-3 text-rose-400" />
+              <span>{isArabic ? 'صفقات بيع' : 'Vente'}</span>
+              <span className="text-[10px] font-mono text-rose-400">({applicableAlerts.filter(a => a.decision === 'SHORT').length})</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -235,7 +246,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           >
             <Info className="w-3 h-3 text-sky-400" />
             <span>{isArabic ? 'تنبيهات عامة' : 'Info'}</span>
-            <span className="text-[10px] font-mono text-sky-400">({alerts.filter(a => a.decision !== 'LONG' && a.decision !== 'SHORT').length})</span>
+            <span className="text-[10px] font-mono text-sky-400">({applicableAlerts.filter(a => a.decision !== 'LONG' && a.decision !== 'SHORT').length})</span>
           </button>
         </div>
 

@@ -263,6 +263,12 @@ async function analyzeSymbol(
           continue;
         }
 
+        // SPOT Mode Protection: In Spot trading, only LONG (Buy) signals are valid. SHORT is strictly ignored.
+        const isSpotConfig = (config.marketType || 'SPOT') === 'SPOT';
+        if (isSpotConfig && stratSignal.decision === 'SHORT') {
+          continue;
+        }
+
         // =========================================================================
         // QUANTITATIVE RISK & STRUCTURAL SAFETY GATE
         // =========================================================================
@@ -451,6 +457,13 @@ async function processTradingSignal(
           ? (kvMt as 'SPOT' | 'FUTURES') 
           : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
         const marketType = effectiveMarketType;
+
+        // Spot Market Protection: In Spot trading, only LONG orders are allowed. SHORT is rejected.
+        if (marketType === 'SPOT' && signal.decision === 'SHORT') {
+            console.log(`[SPOT FILTER] ${symUpper} SHORT trade blocked (Spot only allows LONG / BUY).`);
+            return;
+        }
+
         const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
         const currentModePositions = positions.filter((p: any) => {
             const pMode = p.mode || 'PAPER';
