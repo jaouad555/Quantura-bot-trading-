@@ -74,8 +74,13 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/debug/binance-config', async (req, res) => {
   try {
-    const config = await getBinanceConfig();
-    res.json(config);
+    const auth = await resolveBinanceAuth(req);
+    res.json({
+      hasApiKey: Boolean(auth.apiKey),
+      hasApiSecret: Boolean(auth.apiSecret),
+      useTestnet: auth.useTestnet,
+      marketType: auth.marketType,
+    });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -2709,7 +2714,7 @@ app.post('/api/binance/order', async (req, res) => {
  */
 app.get('/api/binance/open-orders', async (req, res) => {
   try {
-    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
     if (!apiKey || !apiSecret) {
       return res.status(400).json({ error: 'Missing API Credentials' });
     }
@@ -2720,8 +2725,11 @@ app.get('/api/binance/open-orders', async (req, res) => {
     if (symbol) query = `symbol=${symbol}&${query}`;
 
     const signature = createBinanceSignature(query, apiSecret);
-    const baseUrl = getBinanceApiBase(useTestnet);
-    const response = await fetch(`${baseUrl}/api/v3/openOrders?${query}&signature=${signature}`, {
+    const isFutures = marketType === 'FUTURES';
+    const baseUrl = isFutures ? getBinanceFuturesApiBase(useTestnet) : getBinanceApiBase(useTestnet);
+    const endpoint = isFutures ? '/fapi/v1/openOrders' : '/api/v3/openOrders';
+    
+    const response = await fetch(`${baseUrl}${endpoint}?${query}&signature=${signature}`, {
       headers: { 'X-MBX-APIKEY': apiKey },
     });
 
@@ -2741,7 +2749,7 @@ app.get('/api/binance/open-orders', async (req, res) => {
  */
 app.post('/api/binance/cancel-order', async (req, res) => {
   try {
-    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
     const { symbol, orderId } = req.body;
 
     if (!apiKey || !apiSecret || !symbol || !orderId) {
@@ -2750,9 +2758,11 @@ app.post('/api/binance/cancel-order', async (req, res) => {
 
     const query = `symbol=${symbol.toUpperCase()}&orderId=${orderId}&timestamp=${Date.now()}&recvWindow=10000`;
     const signature = createBinanceSignature(query, apiSecret);
-    const baseUrl = getBinanceApiBase(useTestnet);
+    const isFutures = marketType === 'FUTURES';
+    const baseUrl = isFutures ? getBinanceFuturesApiBase(useTestnet) : getBinanceApiBase(useTestnet);
+    const endpoint = isFutures ? '/fapi/v1/order' : '/api/v3/order';
 
-    const response = await fetch(`${baseUrl}/api/v3/order?${query}&signature=${signature}`, {
+    const response = await fetch(`${baseUrl}${endpoint}?${query}&signature=${signature}`, {
       method: 'DELETE',
       headers: { 'X-MBX-APIKEY': apiKey },
     });

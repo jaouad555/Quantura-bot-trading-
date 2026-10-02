@@ -442,9 +442,8 @@ async function processTradingSignal(
         return;
     }
 
-    try {
-        const posStr = await kv.get('btc_active_bot_positions');
-        const positions = posStr ? JSON.parse(posStr) : [];
+    const posStr = await kv.get('btc_active_bot_positions');
+    const positions = posStr ? JSON.parse(posStr) : [];
         
         // Risk Management Checks
         const marketType = config.marketType || 'FUTURES';
@@ -517,44 +516,6 @@ async function processTradingSignal(
           console.log(`[TRADE BLOCKED] ${symUpper} Insufficient balance ($${availableBalance.toFixed(2)} available).`);
           return;
         }
-        
-        // ... (rest of the logic, e.g., sizing, risk gate, execution) ...
-        // Note: For simplicity, I will now just continue the original function here
-    } finally {
-        await kv.delete('btc_positions_lock');
-    }
-
-    // -----------------------------------------------------------------
-    // SIZING & BALANCE RESOLUTION (Strict PAPER vs LIVE isolation)
-    // -----------------------------------------------------------------
-    let totalEquity = 0;
-    let availableBalance = 0;
-
-    if (isExchangeMode) {
-      const realAcc = await fetchRealBinanceAccountDirect();
-      if (!realAcc.success || !realAcc.canTrade || realAcc.freeUsdt <= 0 || realAcc.totalUsdtEquity <= 0) {
-        console.log(`[TRADE BLOCKED] ${symUpper} ${mode} Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
-        return;
-      }
-      totalEquity = realAcc.totalUsdtEquity;
-      availableBalance = realAcc.freeUsdt;
-    } else {
-      const walletStr = await kv.get('btc_paper_wallet');
-      let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
-      wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
-      wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
-
-      totalEquity = wallet.balance;
-      currentModePositions.forEach((p: any) => {
-        totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
-      });
-      availableBalance = wallet.balance;
-    }
-
-    if (availableBalance < 10 || totalEquity < 10) {
-      console.log(`[TRADE BLOCKED] ${symUpper} Insufficient balance ($${availableBalance.toFixed(2)} available).`);
-      return;
-    }
     
     const isLong = signal.decision === 'LONG';
     let safeSl = signal.stopLoss;
@@ -843,6 +804,7 @@ async function processTradingSignal(
   } catch (err) {
     console.error(`[ERROR] Processing trading signal for ${symUpper}:`, err);
   } finally {
+    await kv.delete('btc_positions_lock');
     inFlightExecutionLocks.delete(symUpper);
   }
 }

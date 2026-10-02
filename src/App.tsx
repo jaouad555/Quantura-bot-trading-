@@ -408,7 +408,8 @@ export const App: React.FC = () => {
   // Fetch live Binance account balances (Futures / Spot) and canTrade permissions
   const fetchLiveBinanceBalance = useCallback(async () => {
     try {
-      const currentMt = botConfigRef.current?.marketType || 'FUTURES';
+      const isSpot = (binanceConfigRef.current?.marketType || botConfigRef.current?.marketType || 'SPOT') === 'SPOT';
+      const currentMt = isSpot ? 'SPOT' : 'FUTURES';
       const isTestnet = executionModeRef.current === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
       const res = await fetch(`/api/binance/account?marketType=${currentMt}&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${executionModeRef.current}`);
       const data = await res.json().catch(() => ({}));
@@ -478,17 +479,17 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Synchronize live open positions directly from Binance Futures (Testnet & Live)
+  // Synchronize live open positions directly from Binance (Spot balances & Futures positions)
   const syncBinanceLivePositions = useCallback(async () => {
     const execMode = executionModeRef.current;
     if (execMode !== 'BINANCE_TESTNET' && execMode !== 'BINANCE_LIVE') {
       return;
     }
     const isTestnet = execMode === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
-    const currentMt = botConfigRef.current?.marketType || 'FUTURES';
+    const isSpot = (binanceConfigRef.current?.marketType || botConfigRef.current?.marketType || 'SPOT') === 'SPOT';
+    const currentMt = isSpot ? 'SPOT' : 'FUTURES';
 
     try {
-      const isSpot = currentMt === 'SPOT';
       const endpoint = isSpot 
         ? `/api/binance/spot/positions?marketType=SPOT&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`
         : `/api/binance/futures/positions?marketType=FUTURES&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`;
@@ -511,13 +512,15 @@ export const App: React.FC = () => {
           ? (qty * markPrice)
           : (parseFloat(p.isolatedMargin || p.positionInitialMargin || '0') || ((qty * entryPrice) / lev));
         const notional = Math.round(qty * markPrice * 100) / 100;
-        const unRealizedPnl = isSpot ? 0 : Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
+        const unRealizedPnl = isSpot 
+          ? Math.round((markPrice - entryPrice) * qty * 100) / 100 
+          : Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
         const liqPrice = isSpot ? 0 : parseFloat(p.liquidationPrice || '0');
 
-        const defaultSl = isLong ? entryPrice * 0.98 : entryPrice * 1.02;
-        const defaultTp1 = isLong ? entryPrice * 1.03 : entryPrice * 0.97;
-        const defaultTp2 = isLong ? entryPrice * 1.06 : entryPrice * 0.94;
-        const defaultTp3 = isLong ? entryPrice * 1.10 : entryPrice * 0.90;
+        const defaultSl = isLong ? entryPrice * 0.95 : entryPrice * 1.05;
+        const defaultTp1 = isLong ? entryPrice * 1.05 : entryPrice * 0.95;
+        const defaultTp2 = isLong ? entryPrice * 1.10 : entryPrice * 0.90;
+        const defaultTp3 = isLong ? entryPrice * 1.15 : entryPrice * 0.85;
 
         return {
           id: `binance-pos-${p.symbol.toUpperCase()}-${execMode}`,
@@ -539,7 +542,7 @@ export const App: React.FC = () => {
           tp3Hit: false,
           rebuysCount: 0,
           openedAt: p.updateTime || Date.now(),
-          lastAction: `Binance ${isTestnet ? 'Testnet' : 'Live'} Reconciled`,
+          lastAction: `Binance ${isSpot ? 'Spot Asset' : (isTestnet ? 'Testnet' : 'Live')} Reconciled`,
           realizedPnlUsdt: 0,
           pnlHistory: [unRealizedPnl],
           marginUsdt: Math.round(margin * 100) / 100,
@@ -551,7 +554,7 @@ export const App: React.FC = () => {
           unrealizedPnlUsdt: unRealizedPnl,
           roePercent: margin > 0 ? Math.round((unRealizedPnl / margin) * 1000) / 10 : 0,
           mode: execMode,
-          strategyName: 'Binance Live Position',
+          strategyName: isSpot ? 'Binance Spot Asset' : 'Binance Live Position',
         };
       });
 
@@ -3351,21 +3354,125 @@ export const App: React.FC = () => {
       if (res.ok && data.success) {
         const order = data.order || {};
         const orderId = order.orderId || order.clientOrderId || data.orderId || Date.now();
+        
+        // Calculate executed price and quantity from Binance response
+        let executedPrice = ticker?.price || currentPrice || 0;
+        let executedQty = computedQuantity || (quoteAmountUsdt / (executedPrice || 1));
+        let totalCost = quoteAmountUsdt;
+
+        if (Array.isArray(order.fills) && order.fills.length > 0) {
+          const totalQty = order.fills.reduce((sum: number, f: any) => sum + parseFloat(f.qty || '0'), 0);
+          const totalWeightedPrice = order.fills.reduce((sum: number, f: any) => sum + (parseFloat(f.price || '0') * parseFloat(f.qty || '0')), 0);
+          if (totalQty > 0) {
+            executedPrice = totalWeightedPrice / totalQty;
+            executedQty = totalQty;
+            totalCost = totalWeightedPrice;
+          }
+        } else if (order.cummulativeQuoteQty && order.executedQty) {
+          const cQuote = parseFloat(order.cummulativeQuoteQty);
+          const eQty = parseFloat(order.executedQty);
+          if (eQty > 0) {
+            executedPrice = cQuote / eQty;
+            executedQty = eQty;
+            totalCost = cQuote;
+          }
+        }
+
         const newLog: AutoTradeLog = {
           id: `manual-${Date.now()}`,
           timestamp: Date.now(),
           type: side === 'BUY' ? 'AUTO_BUY' : 'AUTO_SELL_TP1',
           symbol: selectedSymbol,
           side,
-          price: ticker?.price || 0,
-          amountUsdt: quoteAmountUsdt,
+          price: executedPrice,
+          amountUsdt: totalCost,
           reason: isArabicLang
             ? `أمر يدوي فوري على بايننس (${binanceConfig.marketType || 'SPOT'}) (Order ID: ${orderId})`
             : `Ordre direct manuel Binance (${binanceConfig.marketType || 'SPOT'}) (ID: ${orderId})`,
           mode: executionModeRef.current || 'BINANCE_TESTNET',
         };
         addBotLog(newLog);
+
+        const execMode = executionModeRef.current || 'BINANCE_TESTNET';
+        const defaultSl = side === 'BUY' ? executedPrice * (isSpot ? 0.95 : 0.98) : executedPrice * (isSpot ? 1.05 : 1.02);
+        const defaultTp1 = side === 'BUY' ? executedPrice * (isSpot ? 1.05 : 1.03) : executedPrice * (isSpot ? 0.95 : 0.97);
+        const defaultTp2 = side === 'BUY' ? executedPrice * (isSpot ? 1.10 : 1.06) : executedPrice * (isSpot ? 0.90 : 0.94);
+        const defaultTp3 = side === 'BUY' ? executedPrice * (isSpot ? 1.15 : 1.10) : executedPrice * (isSpot ? 0.85 : 0.90);
+
+        if (side === 'BUY') {
+          const newPos: ActiveBotPosition = {
+            id: `binance-pos-${selectedSymbol.toUpperCase()}-${execMode}`,
+            symbol: selectedSymbol.toUpperCase(),
+            decision: 'LONG',
+            entryPrice: executedPrice,
+            currentPrice: executedPrice,
+            initialAmountUsdt: Math.round(totalCost * 100) / 100,
+            remainingAmountUsdt: Math.round(totalCost * 100) / 100,
+            initialAmountBtc: executedQty,
+            remainingAmountBtc: executedQty,
+            tp1: defaultTp1,
+            tp2: defaultTp2,
+            tp3: defaultTp3,
+            stopLoss: defaultSl,
+            initialStopLoss: defaultSl,
+            tp1Hit: false,
+            tp2Hit: false,
+            tp3Hit: false,
+            rebuysCount: 0,
+            openedAt: Date.now(),
+            lastAction: `Manual Binance ${isSpot ? 'Spot' : 'Futures'} Buy`,
+            realizedPnlUsdt: 0,
+            pnlHistory: [0],
+            marginUsdt: Math.round(totalCost * 100) / 100,
+            positionSizeUsdt: Math.round(totalCost * 100) / 100,
+            leverage: isSpot ? 1 : 10,
+            marketType: isSpot ? 'SPOT' : 'FUTURES',
+            marginMode: 'ISOLATED',
+            unrealizedPnlUsdt: 0,
+            roePercent: 0,
+            mode: execMode,
+            strategyName: `Manual ${isSpot ? 'Spot' : 'Futures'} Position`,
+          };
+          updateBotPositionsSync((prev) => {
+            const filtered = (prev || []).filter(p => p.id !== newPos.id);
+            return [newPos, ...filtered];
+          });
+        } else if (side === 'SELL') {
+          updateBotPositionsSync((prev) => {
+            return (prev || []).filter(p => !(p.symbol.toUpperCase() === selectedSymbol.toUpperCase() && (p.mode || 'PAPER') === execMode));
+          });
+        }
+
+        // Add to trade history
+        const completedTrade: TradeHistoryItem = {
+          id: `trade-manual-${orderId}-${Date.now()}`,
+          timestamp: Date.now(),
+          symbol: selectedSymbol,
+          decision: side === 'BUY' ? 'LONG' : 'SHORT',
+          timeframe: timeframe || '15m',
+          entryPrice: executedPrice,
+          exitPrice: executedPrice,
+          tp1: defaultTp1,
+          tp2: defaultTp2,
+          tp3: defaultTp3,
+          stopLoss: defaultSl,
+          status: 'CLOSED',
+          profitPercent: 0,
+          profitUsdt: 0,
+          confidence: 90,
+          reason: isArabicLang ? `أمر يدوي فوري ${side} على بايننس` : `Ordre manuel direct ${side}`,
+          strategyName: `Manual ${isSpot ? 'Spot' : 'Futures'} Order`,
+        };
+        setTradeHistory(prev => [completedTrade, ...(prev || [])]);
+
         playAudioChime();
+
+        // Refresh Binance balance and open positions after order execution
+        setTimeout(() => {
+          syncBinanceLivePositions();
+          fetchLiveBinanceBalance();
+        }, 500);
+
         return {
           success: true,
           message: isArabicLang
