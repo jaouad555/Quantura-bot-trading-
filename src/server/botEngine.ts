@@ -843,6 +843,8 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
     ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
     : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
 
+  console.log(`[BINANCE DEBUG] Fetching account: marketType=${effectiveMarketType}, url=${url}`);
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);

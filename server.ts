@@ -72,6 +72,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+app.get('/api/debug/binance-config', async (req, res) => {
+  try {
+    const config = await getBinanceConfig();
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // --- SECURITY: Rate Limiting OWASP (Throttling API routes only, never static assets) ---
 const apiLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
@@ -2766,7 +2775,7 @@ app.get('/api/binance/futures/positions', async (req, res) => {
   try {
     const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
     if (!apiKey || !apiSecret) {
-      return res.status(400).json({ error: 'Missing Binance API Credentials' });
+      return res.json({ success: true, activePositionsCount: 0, positions: [], allPositions: [], message: 'No credentials configured' });
     }
 
     const symbol = (req.query.symbol as string)?.toUpperCase();
@@ -2778,12 +2787,23 @@ app.get('/api/binance/futures/positions', async (req, res) => {
     const baseUrl = getBinanceFuturesApiBase(useTestnet);
 
     const response = await fetch(`${baseUrl}/fapi/v2/positionRisk?${query}&signature=${signature}`, {
-      headers: { 'X-MBX-APIKEY': apiKey },
+      headers: { 
+        'X-MBX-APIKEY': apiKey,
+        'Content-Type': 'application/json',
+      },
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ([]));
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.msg || 'Failed to fetch futures positions', data });
+      console.warn('[BINANCE FUTURES POSITIONS WARN]', data);
+      return res.json({ 
+        success: true, 
+        activePositionsCount: 0, 
+        positions: [], 
+        allPositions: [], 
+        error: (data as any)?.msg || 'Failed to fetch futures positions',
+        binanceCode: (data as any)?.code,
+      });
     }
 
     const activePositions = Array.isArray(data) 
@@ -2797,7 +2817,78 @@ app.get('/api/binance/futures/positions', async (req, res) => {
       allPositions: data,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    console.error('[BINANCE FUTURES POSITIONS ERROR]', error);
+    return res.json({ success: true, activePositionsCount: 0, positions: [], allPositions: [], error: error.message });
+  }
+});
+
+app.get('/api/binance/spot/positions', async (req, res) => {
+  try {
+    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
+    if (!apiKey || !apiSecret) {
+      return res.json({ success: true, positions: [], message: 'No credentials configured' });
+    }
+    const timestamp = Date.now();
+    // Do NOT include symbol in /api/v3/account query string (Binance will reject with 400)
+    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+    
+    const signature = createBinanceSignature(queryString, apiSecret);
+    const baseUrl = getBinanceApiBase(useTestnet);
+    const response = await fetch(`${baseUrl}/api/v3/account?${queryString}&signature=${signature}`, {
+      headers: { 
+        'X-MBX-APIKEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.warn('[BINANCE SPOT POSITIONS WARN]', data);
+      return res.json({ 
+        success: true, 
+        positions: [], 
+        error: data.msg || 'Failed to fetch spot positions',
+        binanceCode: data.code,
+      });
+    }
+
+    const symbolFilter = (req.query.symbol as string)?.toUpperCase();
+    const rawBalances = Array.isArray(data.balances) ? data.balances : [];
+    
+    // Filter non-zero balances excluding cash/stablecoins
+    const positions = rawBalances
+      .filter((b: any) => {
+        const free = parseFloat(b.free || '0');
+        const locked = parseFloat(b.locked || '0');
+        const total = free + locked;
+        if (total <= 0) return false;
+        // Ignore base stablecoins as positions
+        if (['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(b.asset)) return false;
+        if (symbolFilter) {
+          const expectedAsset = symbolFilter.replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
+          return b.asset === expectedAsset;
+        }
+        return true;
+      })
+      .map((b: any) => {
+        const free = parseFloat(b.free || '0');
+        const locked = parseFloat(b.locked || '0');
+        const total = free + locked;
+        return {
+          symbol: `${b.asset}USDT`,
+          asset: b.asset,
+          positionAmt: total.toString(),
+          free: free.toString(),
+          locked: locked.toString(),
+          entryPrice: 0,
+          leverage: 1,
+          marketType: 'SPOT' as const,
+        };
+      });
+
+    return res.json({ success: true, positions });
+  } catch (error: any) {
+    console.error('[BINANCE SPOT POSITIONS ERROR]', error);
+    return res.json({ success: true, positions: [], error: error.message });
   }
 });
 

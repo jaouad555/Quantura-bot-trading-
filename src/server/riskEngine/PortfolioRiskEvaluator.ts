@@ -31,48 +31,60 @@ export class PortfolioRiskEvaluator {
     const candidateSide = candidateProposal.side;
     const strategy = candidateProposal.strategyName || 'Custom';
 
-    // 0. Defensive Sanitization: Filter out malformed positions and normalize numeric fields
-    const validPositions: ActivePositionSnapshot[] = [];
-    for (const rawPos of (existingPositions || [])) {
-      if (!rawPos || typeof rawPos !== 'object') continue;
-      const posSymbol = (rawPos.symbol || '').toUpperCase();
-      const posSide = (rawPos.side || (rawPos as any).decision);
-      const quantity = Number(rawPos.quantity || (rawPos as any).remainingAmountBtc || 0);
-      const currentPrice = Number(rawPos.currentPrice || rawPos.entryPrice || 0);
-      const stopLoss = Number(rawPos.stopLoss || 0);
-      const entryPrice = Number(rawPos.entryPrice || currentPrice || 0);
-      const leverage = Number(rawPos.leverage || 1);
-      const positionSizeUsdt = Number(rawPos.positionSizeUsdt || (rawPos.marginUsdt ? rawPos.marginUsdt * leverage : 0));
+      // 0. Defensive Sanitization: Filter out malformed positions and normalize numeric fields
+      const candidateMode = candidateProposal.executionMode || 'PAPER';
+      const candidateMarketType = candidateProposal.marketType || 'FUTURES';
+      
+      const validPositions: ActivePositionSnapshot[] = [];
+      for (const rawPos of (existingPositions || [])) {
+        if (!rawPos || typeof rawPos !== 'object') continue;
+        
+        // 3. احسب فقط الصفقات المفتوحة الفعلية لنفس "executionMode" و"marketType"
+        const posMode = (rawPos as any).mode || 'PAPER';
+        const posMarketType = rawPos.marketType || 'FUTURES';
+        
+        if (posMode !== candidateMode || posMarketType !== candidateMarketType) {
+          continue;
+        }
 
-      if (
-        !posSymbol ||
-        (posSide !== 'LONG' && posSide !== 'SHORT') ||
-        !Number.isFinite(quantity) || quantity <= 0 ||
-        !Number.isFinite(currentPrice) || currentPrice <= 0 ||
-        !Number.isFinite(stopLoss) || stopLoss <= 0 ||
-        !Number.isFinite(positionSizeUsdt) || positionSizeUsdt <= 0
-      ) {
-        console.warn(`[PORTFOLIO EVALUATOR WARN] Skipping malformed position in risk calculation:`, rawPos);
-        continue;
+        const posSymbol = (rawPos.symbol || '').toUpperCase();
+        const posSide = (rawPos.side || (rawPos as any).decision);
+        const quantity = Number(rawPos.quantity || (rawPos as any).remainingAmountBtc || 0);
+        const currentPrice = Number(rawPos.currentPrice || rawPos.entryPrice || 0);
+        const stopLoss = Number(rawPos.stopLoss || 0);
+        const entryPrice = Number(rawPos.entryPrice || currentPrice || 0);
+        const leverage = Number(rawPos.leverage || 1);
+        const positionSizeUsdt = Number(rawPos.positionSizeUsdt || (rawPos.marginUsdt ? rawPos.marginUsdt * leverage : 0));
+
+        if (
+          !posSymbol ||
+          (posSide !== 'LONG' && posSide !== 'SHORT') ||
+          !Number.isFinite(quantity) || quantity <= 0 ||
+          !Number.isFinite(currentPrice) || currentPrice <= 0 ||
+          !Number.isFinite(stopLoss) || stopLoss <= 0 ||
+          !Number.isFinite(positionSizeUsdt) || positionSizeUsdt <= 0
+        ) {
+          console.warn(`[PORTFOLIO EVALUATOR WARN] Skipping malformed position in risk calculation:`, rawPos);
+          continue;
+        }
+
+        validPositions.push({
+          ...rawPos,
+          symbol: posSymbol,
+          side: posSide,
+          quantity,
+          currentPrice,
+          stopLoss,
+          entryPrice,
+          leverage,
+          positionSizeUsdt,
+          marginUsdt: Number(rawPos.marginUsdt || (positionSizeUsdt / leverage)),
+          unrealizedPnlUsdt: Number(rawPos.unrealizedPnlUsdt || 0),
+          unrealizedRoePercent: Number(rawPos.unrealizedRoePercent || 0),
+          marketType: posMarketType,
+          openedAt: Number(rawPos.openedAt || Date.now()),
+        });
       }
-
-      validPositions.push({
-        ...rawPos,
-        symbol: posSymbol,
-        side: posSide,
-        quantity,
-        currentPrice,
-        stopLoss,
-        entryPrice,
-        leverage,
-        positionSizeUsdt,
-        marginUsdt: Number(rawPos.marginUsdt || (positionSizeUsdt / leverage)),
-        unrealizedPnlUsdt: Number(rawPos.unrealizedPnlUsdt || 0),
-        unrealizedRoePercent: Number(rawPos.unrealizedRoePercent || 0),
-        marketType: rawPos.marketType || 'FUTURES',
-        openedAt: Number(rawPos.openedAt || Date.now()),
-      });
-    }
 
     // 1. Max Open Positions Check
     if (validPositions.length >= config.maxOpenPositions) {

@@ -486,11 +486,15 @@ export const App: React.FC = () => {
     }
     const isTestnet = execMode === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
     const currentMt = botConfigRef.current?.marketType || 'FUTURES';
-    if (currentMt !== 'FUTURES') return;
 
     try {
-      const res = await fetch(`/api/binance/futures/positions?useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`);
+      const isSpot = currentMt === 'SPOT';
+      const endpoint = isSpot 
+        ? `/api/binance/spot/positions?marketType=SPOT&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`
+        : `/api/binance/futures/positions?marketType=FUTURES&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`;
+      const res = await fetch(endpoint);
       if (!res.ok) return;
+      
       const data = await res.json().catch(() => null);
       if (!data || !data.success) return;
 
@@ -498,15 +502,17 @@ export const App: React.FC = () => {
 
       const realPositions: ActiveBotPosition[] = rawPositions.map((p: any) => {
         const amt = parseFloat(p.positionAmt || '0');
-        const isLong = amt > 0;
-        const entryPrice = parseFloat(p.entryPrice || '0') || 1;
-        const markPrice = parseFloat(p.markPrice || '0') || entryPrice;
+        const isLong = isSpot ? true : amt > 0;
+        const entryPrice = parseFloat(p.entryPrice || '0') || (tickerRef.current?.price || 1);
+        const markPrice = parseFloat(p.markPrice || '0') || (tickerRef.current?.price || entryPrice);
         const qty = Math.abs(amt);
-        const lev = parseInt(p.leverage || '10') || 10;
-        const margin = parseFloat(p.isolatedMargin || p.positionInitialMargin || '0') || ((qty * entryPrice) / lev);
+        const lev = isSpot ? 1 : (parseInt(p.leverage || '10') || 10);
+        const margin = isSpot 
+          ? (qty * markPrice)
+          : (parseFloat(p.isolatedMargin || p.positionInitialMargin || '0') || ((qty * entryPrice) / lev));
         const notional = Math.round(qty * markPrice * 100) / 100;
-        const unRealizedPnl = Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
-        const liqPrice = parseFloat(p.liquidationPrice || '0');
+        const unRealizedPnl = isSpot ? 0 : Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
+        const liqPrice = isSpot ? 0 : parseFloat(p.liquidationPrice || '0');
 
         const defaultSl = isLong ? entryPrice * 0.98 : entryPrice * 1.02;
         const defaultTp1 = isLong ? entryPrice * 1.03 : entryPrice * 0.97;
@@ -540,8 +546,8 @@ export const App: React.FC = () => {
           positionSizeUsdt: notional,
           leverage: lev,
           liquidationPrice: liqPrice > 0 ? liqPrice : undefined,
-          marketType: 'FUTURES',
-          marginMode: p.marginType === 'isolated' ? 'ISOLATED' : 'CROSS',
+          marketType: isSpot ? 'SPOT' : 'FUTURES',
+          marginMode: isSpot ? 'ISOLATED' : (p.marginType === 'isolated' ? 'ISOLATED' : 'CROSS'),
           unrealizedPnlUsdt: unRealizedPnl,
           roePercent: margin > 0 ? Math.round((unRealizedPnl / margin) * 1000) / 10 : 0,
           mode: execMode,
@@ -556,7 +562,7 @@ export const App: React.FC = () => {
         return [...realPositions, ...otherModes];
       });
     } catch (e) {
-      console.error('Binance position sync error:', e);
+      // Ignore background fetch aborts / network blips
     }
   }, []);
 
