@@ -800,7 +800,7 @@ const getBinanceConfig = async () => {
 import crypto from 'crypto';
 
 // Binance Utilities
-const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
+const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
 const getBinanceFuturesApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
 
 const createBinanceSignature = (queryString: string, apiSecret: string) => {
@@ -838,41 +838,61 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
   const queryString = `timestamp=${timestamp}&recvWindow=10000`;
   const signature = createBinanceSignature(queryString, config.apiSecret);
   const isFutures = effectiveMarketType === 'FUTURES';
-  const baseUrl = isFutures ? getBinanceFuturesApiBase(config.useTestnet) : getBinanceApiBase(config.useTestnet);
-  const url = isFutures
-    ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
-    : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
 
-  console.log(`[BINANCE DEBUG] Fetching account: marketType=${effectiveMarketType}, url=${url}`);
+  const baseUrlsToTry = isFutures
+    ? (config.useTestnet ? ['https://testnet.binancefuture.com', 'https://demo-fapi.binance.com', 'https://fapi.binance.com'] : ['https://fapi.binance.com'])
+    : (config.useTestnet ? ['https://demo-api.binance.com', 'https://testnet.binance.vision', 'https://api.binance.com'] : ['https://api.binance.com']);
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-MBX-APIKEY': config.apiKey,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const data = await res.json();
-    if (!res.ok) {
-      return {
-        success: false,
-        canTrade: false,
-        freeUsdt: 0,
-        totalUsdtEquity: 0,
-        marketType: effectiveMarketType,
-        error: data.msg || 'Binance API request rejected',
-        binanceCode: data.code,
-      };
+  let lastData: any = null;
+  let lastError = 'Failed to fetch account info';
+  let lastCode: number | undefined;
+
+  for (const baseUrl of baseUrlsToTry) {
+    const url = isFutures
+      ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
+      : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-MBX-APIKEY': config.apiKey,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
+        lastData = data;
+        break;
+      } else {
+        lastError = data?.msg || `HTTP ${res.status}`;
+        lastCode = data?.code;
+      }
+    } catch (err: any) {
+      lastError = err.message;
     }
+  }
 
-    let canTrade = data.canTrade ?? true;
-    let freeUsdt = 0;
-    let totalUsdtEquity = 0;
+  if (!lastData) {
+    return {
+      success: false,
+      canTrade: false,
+      freeUsdt: 0,
+      totalUsdtEquity: 0,
+      marketType: effectiveMarketType,
+      error: lastError,
+      binanceCode: lastCode,
+    };
+  }
+
+  const data = lastData;
+  let canTrade = data.canTrade ?? true;
+  let freeUsdt = 0;
+  let totalUsdtEquity = 0;
 
     if (isFutures) {
       const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
@@ -904,16 +924,6 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
       totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
       marketType: effectiveMarketType,
     };
-  } catch (err: any) {
-    return {
-      success: false,
-      canTrade: false,
-      freeUsdt: 0,
-      totalUsdtEquity: 0,
-      marketType: effectiveMarketType,
-      error: err.message || 'Network timeout contacting Binance',
-    };
-  }
 };
 
 export const formatBinanceQuantity = (symbol: string, quantity: number, price?: number): string => {

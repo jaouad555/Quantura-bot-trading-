@@ -2151,7 +2151,7 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
 }
 
 function getBinanceApiBase(useTestnet: boolean): string {
-  return useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
+  return useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
 }
 
 function getBinanceFuturesApiBase(useTestnet: boolean): string {
@@ -2185,10 +2185,10 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     let lastError: any = null;
     let successfulData: any = null;
 
-    // List candidate base URLs for the requested market type (e.g. testnet vs fallback endpoints)
+    // List candidate base URLs for the requested market type (e.g. Binance Demo Trading vs Testnet Sandbox)
     const baseUrlsToTry: string[] = isFutures
-      ? [getBinanceFuturesApiBase(useTestnet), useTestnet ? 'https://demo-fapi.binance.com' : 'https://fapi.binance.com']
-      : [getBinanceApiBase(useTestnet), useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com'];
+      ? (useTestnet ? ['https://testnet.binancefuture.com', 'https://demo-fapi.binance.com', 'https://fapi.binance.com'] : ['https://fapi.binance.com'])
+      : (useTestnet ? ['https://demo-api.binance.com', 'https://testnet.binance.vision', 'https://api.binance.com'] : ['https://api.binance.com']);
 
     const uniqueBaseUrls = Array.from(new Set(baseUrlsToTry.filter(Boolean)));
 
