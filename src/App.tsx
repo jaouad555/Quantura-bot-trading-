@@ -1137,7 +1137,7 @@ export const App: React.FC = () => {
       formattedQty = Number(quantity.toFixed(3)); // fallback
     }
     const currentBinanceConfig = binanceConfigRef.current;
-    if (!currentBinanceConfig.apiKey || !currentBinanceConfig.apiSecret) {
+    if (!currentBinanceConfig.isConnected && !currentBinanceConfig.apiKey) {
       return { success: false, error: 'Binance API Key or Secret not configured.' };
     }
     const isTestnet = executionModeRef.current === 'BINANCE_TESTNET' || currentBinanceConfig.useTestnet;
@@ -1146,10 +1146,10 @@ export const App: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: currentBinanceConfig.apiKey,
-          apiSecret: currentBinanceConfig.apiSecret,
+          apiKey: currentBinanceConfig.apiKey || undefined,
+          apiSecret: currentBinanceConfig.apiSecret || undefined,
           useTestnet: isTestnet,
-          marketType: currentBinanceConfig.marketType || 'FUTURES',
+          marketType: currentBinanceConfig.marketType || 'SPOT',
           symbol,
           side,
           type: 'MARKET',
@@ -3318,38 +3318,39 @@ export const App: React.FC = () => {
     quoteAmountUsdt: number
   ): Promise<{ success: boolean; message: string }> => {
     const isArabicLang = language === 'ar';
-    if (!binanceConfig.apiKey || !binanceConfig.apiSecret) {
+    if (!binanceConfig.isConnected && !binanceConfig.apiKey) {
       return {
         success: false,
-        message: isArabicLang ? 'يرجى إدخال مفاتيح Binance API أولاً.' : 'Veuillez configurer les clés API Binance.',
+        message: isArabicLang ? 'يرجى إدخال مفاتيح Binance API وحفظها أولاً.' : 'Veuillez configurer les clés API Binance.',
       };
     }
     
-    // Calculate quantity for futures if price is available
     const currentPrice = ticker?.price || 0;
-    const computedQuantity = (binanceConfig.marketType === 'FUTURES' && currentPrice > 0) 
+    const isSpot = (binanceConfig.marketType || 'SPOT') === 'SPOT';
+    const computedQuantity = (!isSpot && currentPrice > 0) 
       ? Number((quoteAmountUsdt / currentPrice).toFixed(5))
       : undefined;
 
     try {
+      const isTestnet = executionModeRef.current === 'BINANCE_TESTNET' || binanceConfig.useTestnet;
       const res = await fetch('/api/binance/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: binanceConfig.apiKey,
-          apiSecret: binanceConfig.apiSecret,
-          useTestnet: binanceConfig.useTestnet,
-          marketType: binanceConfig.marketType,
+          apiKey: binanceConfig.apiKey || undefined,
+          apiSecret: binanceConfig.apiSecret || undefined,
+          useTestnet: isTestnet,
+          marketType: binanceConfig.marketType || 'SPOT',
           symbol: selectedSymbol,
           side,
           type: 'MARKET',
-          ...(quoteAmountUsdt ? { quoteOrderQty: quoteAmountUsdt } : {}),
-          ...(computedQuantity ? { quantity: computedQuantity } : {}),
+          ...(isSpot ? { quoteOrderQty: quoteAmountUsdt } : { quantity: computedQuantity || Number((quoteAmountUsdt / (currentPrice || 1)).toFixed(5)) }),
         }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        const order = data.order;
+        const order = data.order || {};
+        const orderId = order.orderId || order.clientOrderId || data.orderId || Date.now();
         const newLog: AutoTradeLog = {
           id: `manual-${Date.now()}`,
           timestamp: Date.now(),
@@ -3359,28 +3360,28 @@ export const App: React.FC = () => {
           price: ticker?.price || 0,
           amountUsdt: quoteAmountUsdt,
           reason: isArabicLang
-            ? `أمر يدوي فوري على بايننس (Order ID: ${order.orderId})`
-            : `Ordre direct manuel Binance (ID: ${order.orderId})`,
-          mode: 'BINANCE_LIVE',
+            ? `أمر يدوي فوري على بايننس (${binanceConfig.marketType || 'SPOT'}) (Order ID: ${orderId})`
+            : `Ordre direct manuel Binance (${binanceConfig.marketType || 'SPOT'}) (ID: ${orderId})`,
+          mode: executionModeRef.current || 'BINANCE_TESTNET',
         };
         addBotLog(newLog);
         playAudioChime();
         return {
           success: true,
           message: isArabicLang
-            ? `تم تنفيذ أمر ${side} بنجاح على بايننس! (رقم الأمر: ${order.orderId})`
-            : `Ordre ${side} exécuté avec succès sur Binance ! (ID: ${order.orderId})`,
+            ? `تم تنفيذ أمر ${side} بنجاح على بايننس (${binanceConfig.marketType || 'SPOT'})! (رقم الأمر: ${orderId})`
+            : `Ordre ${side} exécuté avec succès sur Binance (${binanceConfig.marketType || 'SPOT'}) ! (ID: ${orderId})`,
         };
       } else {
         return {
           success: false,
-          message: data.hint || data.error || (isArabicLang ? 'فشل تنفيذ الأمر على بايننس.' : 'Échec de l\'ordre Binance.'),
+          message: data.hint || data.error || (isArabicLang ? 'فشل تنفيذ الأمر على بايننس' : 'Échec de l\'ordre Binance'),
         };
       }
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || (isArabicLang ? 'خطأ في الاتصال بخادم بايننس.' : 'Erreur réseau avec Binance.'),
+        message: err.message || (isArabicLang ? 'خطأ في الاتصال بالخادم' : 'Erreur de connexion au serveur'),
       };
     }
   };
