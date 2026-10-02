@@ -542,6 +542,7 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
       // --- 3. MARKET TYPE & LEVERAGE ---
       case '/spot': {
         await kv.set('app_binance_market_type', 'SPOT');
+        binanceWs.setMarketType('SPOT');
         const configStr = await kv.get('btc_bot_config');
         const config = configStr ? JSON.parse(configStr) : {};
         config.marketType = 'SPOT';
@@ -552,7 +553,8 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           `🪙 <b>تم ضبط السوق على: التداول الفوري (Binance Spot Market)!</b>\n\n` +
           `• <b>نوع السوق:</b> SPOT (شراء وتملك أصول العملات الحقيقية)\n` +
           `• <b>الرافعة المالية:</b> 1x (بدون رافعة / بدون رسوم تمويل)\n` +
-          `• <b>الاتجاه:</b> الشراء فقط (Long / Buy Only)\n\n` +
+          `• <b>الاتجاه:</b> الشراء فقط (Long / Buy Only)\n` +
+          `• <b>ملاحظة:</b> تم تعطيل سوق العقود الآجلة (Futures) بالكامل!\n\n` +
           `للتحويل إلى العقود الآجلة أرسل: <code>/futures</code>`,
           chatId
         );
@@ -561,6 +563,7 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
       case '/futures': {
         await kv.set('app_binance_market_type', 'FUTURES');
+        binanceWs.setMarketType('FUTURES');
         const configStr = await kv.get('btc_bot_config');
         const config = configStr ? JSON.parse(configStr) : {};
         config.marketType = 'FUTURES';
@@ -571,7 +574,8 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           `⚡ <b>تم ضبط السوق على: العقود الآجلة (USDT-M Futures)!</b>\n\n` +
           `• <b>نوع السوق:</b> FUTURES (عقود المشتقات)\n` +
           `• <b>الرافعة المالية:</b> ${config.leverage}x\n` +
-          `• <b>الاتجاهات المدعومة:</b> صفقات الشراء (LONG) والبيع (SHORT)\n\n` +
+          `• <b>الاتجاهات المدعومة:</b> صفقات الشراء (LONG) والبيع (SHORT)\n` +
+          `• <b>ملاحظة:</b> تم تعطيل سوق التداول الفوري (Spot) بالكامل!\n\n` +
           `لتغيير الرافعة أرسل: <code>/leverage 5</code> أو <code>/leverage 10</code>\n` +
           `للتحويل للتداول الفوري أرسل: <code>/spot</code>`,
           chatId
@@ -583,19 +587,21 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         const target = (argument || '').toUpperCase().trim();
         if (target === 'SPOT') {
           await kv.set('app_binance_market_type', 'SPOT');
+          binanceWs.setMarketType('SPOT');
           const configStr = await kv.get('btc_bot_config');
           const config = configStr ? JSON.parse(configStr) : {};
           config.marketType = 'SPOT';
           config.leverage = 1;
           await kv.set('btc_bot_config', JSON.stringify(config));
-          await sendServerTelegramNotification(`🪙 <b>تم التحويل إلى سوق السبوت (Spot Market).</b>`, chatId);
+          await sendServerTelegramNotification(`🪙 <b>تم التحويل إلى سوق السبوت (Spot Market) وتعطيل العقود الآجلة.</b>`, chatId);
         } else if (target === 'FUTURES') {
           await kv.set('app_binance_market_type', 'FUTURES');
+          binanceWs.setMarketType('FUTURES');
           const configStr = await kv.get('btc_bot_config');
           const config = configStr ? JSON.parse(configStr) : {};
           config.marketType = 'FUTURES';
           await kv.set('btc_bot_config', JSON.stringify(config));
-          await sendServerTelegramNotification(`⚡ <b>تم التحويل إلى سوق العقود الآجلة (USDT-M Futures).</b>`, chatId);
+          await sendServerTelegramNotification(`⚡ <b>تم التحويل إلى سوق العقود الآجلة (USDT-M Futures) وتعطيل السبوت.</b>`, chatId);
         } else {
           const kvMt = (await kv.get('app_binance_market_type')) || 'SPOT';
           await sendServerTelegramNotification(`🎯 <b>نوع السوق الحالي:</b> ${kvMt}\n\nللتبديل أرسل:\n• <code>/spot</code> أو <code>/market spot</code>\n• <code>/futures</code> أو <code>/market futures</code>`, chatId);
@@ -1114,7 +1120,18 @@ const getBinanceConfig = async () => {
     ? true
     : (isLiveMode ? false : (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet)));
 
-  const marketType = ((kvMarketType as any) || dbMarketType || envCreds.marketType || 'FUTURES') as 'SPOT' | 'FUTURES';
+  const botCfgStr = await kv.get('btc_bot_config');
+  let botCfgMarketType: 'SPOT' | 'FUTURES' | null = null;
+  if (botCfgStr) {
+    try {
+      const parsed = JSON.parse(botCfgStr);
+      if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+        botCfgMarketType = parsed.marketType;
+      }
+    } catch (_) {}
+  }
+
+  const marketType = ((kvMarketType as any) || botCfgMarketType || dbMarketType || envCreds.marketType || 'SPOT') as 'SPOT' | 'FUTURES';
 
   const isConnected = isValidBinanceKey(effectiveKey) && isValidBinanceSecret(effectiveSecret);
 
@@ -1595,6 +1612,13 @@ export const startBotEngine = () => {
         // Skip positions that don't match the current execution mode to ensure Live/Paper separation
         const posMode = pos.mode || 'PAPER';
         if (posMode !== mode) continue; 
+
+        // --- STRICT MARKET TYPE SEPARATION ---
+        // If the active bot is in SPOT mode, completely disable and ignore FUTURES positions.
+        // If in FUTURES mode, completely disable and ignore SPOT positions.
+        const currentActiveMarketType = (await kv.get('app_binance_market_type')) || binanceConfig.marketType || botConfig.marketType || 'SPOT';
+        const posMarketType = pos.marketType || 'FUTURES';
+        if (posMarketType !== currentActiveMarketType) continue; 
 
         const pKey = `${pos.marketType || 'FUTURES'}_${pos.symbol}`;
         const currentP = prices[pKey];

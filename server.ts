@@ -191,10 +191,14 @@ app.post('/api/config', async (req, res) => {
       console.log(`[CONFIG API] Setting ${key} = ${finalValue.substring(0, 100)}${finalValue.length > 100 ? '...' : ''}`);
       await kv.set(key, finalValue);
 
-      // Auto-synchronize strategyManager if botConfig or active_strategies changed
+      // Auto-synchronize strategyManager and marketType if botConfig or active_strategies changed
       if (key === 'btc_bot_config') {
         try {
           const parsed = JSON.parse(String(value));
+          if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+            await kv.set('app_binance_market_type', parsed.marketType);
+            binanceWs.setMarketType(parsed.marketType);
+          }
           if (Array.isArray(parsed.activePresets)) {
             const activeSet = new Set(parsed.activePresets);
             for (const strat of strategyManager.getAllStrategies()) {
@@ -206,6 +210,10 @@ app.post('/api/config', async (req, res) => {
             }
           }
         } catch (e) {}
+      } else if (key === 'app_binance_market_type') {
+        if (finalValue === 'SPOT' || finalValue === 'FUTURES') {
+          binanceWs.setMarketType(finalValue as 'SPOT' | 'FUTURES');
+        }
       } else if (key === 'quantura_active_strategies') {
         try {
           const parsed = JSON.parse(String(value));
@@ -2008,6 +2016,7 @@ app.post('/api/config/binance', async (req, res) => {
   }
   if (marketType) {
     await kv.set('app_binance_market_type', marketType);
+    binanceWs.setMarketType(marketType);
   }
 
   // If user provided a mask or empty string, retrieve existing valid key
@@ -2150,7 +2159,18 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
   const isLiveMode = effectiveMode === 'BINANCE_LIVE';
 
   const useTestnet = isTestnetMode ? true : (isLiveMode ? false : (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet)));
-  const marketType = headerMarketType || bodyMarketType || (kvMarketType as any) || dbMarketType || envCreds.marketType || 'FUTURES';
+  const botCfgStr = await kv.get('btc_bot_config');
+  let botCfgMarketType: 'SPOT' | 'FUTURES' | null = null;
+  if (botCfgStr) {
+    try {
+      const parsed = JSON.parse(botCfgStr);
+      if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+        botCfgMarketType = parsed.marketType;
+      }
+    } catch (_) {}
+  }
+
+  const marketType = headerMarketType || bodyMarketType || (kvMarketType as any) || botCfgMarketType || dbMarketType || envCreds.marketType || 'SPOT';
 
   return { apiKey, apiSecret, useTestnet, marketType: marketType as any };
 }
@@ -3124,7 +3144,22 @@ async function initFrontendAndServices() {
   // Initialize SQLite Database, Strategy Manager & background engines safely
   try {
     initDb();
-    binanceWs.start();
+    const kvMt = await kv.get('app_binance_market_type');
+    const botCfgStr = await kv.get('btc_bot_config');
+    let initialMt: 'SPOT' | 'FUTURES' = 'SPOT';
+    if (kvMt === 'SPOT' || kvMt === 'FUTURES') {
+      initialMt = kvMt as any;
+    } else if (botCfgStr) {
+      try {
+        const parsed = JSON.parse(botCfgStr);
+        if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+          initialMt = parsed.marketType;
+        }
+      } catch (_) {}
+    } else {
+      initialMt = ((process.env.BINANCE_MARKET_TYPE || process.env.MARKET_TYPE || 'SPOT').toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT');
+    }
+    binanceWs.start(initialMt);
     await strategyManager.init();
     setMarketDataProvider(getMarketDataDirect);
     startBotEngine();

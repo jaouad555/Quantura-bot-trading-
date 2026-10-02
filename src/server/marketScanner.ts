@@ -446,11 +446,15 @@ async function processTradingSignal(
     const positions = posStr ? JSON.parse(posStr) : [];
         
         // Risk Management Checks
-        const marketType = config.marketType || 'FUTURES';
+        const kvMt = await kv.get('app_binance_market_type');
+        const effectiveMarketType: 'SPOT' | 'FUTURES' = (kvMt === 'SPOT' || kvMt === 'FUTURES') 
+          ? (kvMt as 'SPOT' | 'FUTURES') 
+          : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
+        const marketType = effectiveMarketType;
         const isExchangeMode = mode === 'BINANCE_LIVE' || mode === 'BINANCE_TESTNET';
         const currentModePositions = positions.filter((p: any) => {
             const pMode = p.mode || 'PAPER';
-            const pMarket = p.marketType || 'FUTURES';
+            const pMarket = p.marketType || 'SPOT';
             return pMode === mode && pMarket === marketType;
         });
         
@@ -538,7 +542,7 @@ async function processTradingSignal(
     }
 
     const slDistancePct = Math.abs(currentPrice - safeSl) / currentPrice;
-    const isFutures = (config.marketType || 'FUTURES') === 'FUTURES';
+    const isFutures = effectiveMarketType === 'FUTURES';
     const lev = isFutures ? (config.leverage || auth.strategy?.defaultLeverage || 3) : 1;
 
     let margin = 0;
@@ -596,7 +600,7 @@ async function processTradingSignal(
       entryPrice: currentPrice,
       stopLoss: safeSl,
       takeProfit: { tp1: safeTp1, tp2: safeTp2, tp3: safeTp3 },
-      marketType: (config.marketType || 'FUTURES') as 'SPOT' | 'FUTURES',
+      marketType: effectiveMarketType,
       leverage: lev,
       accountEquity: totalEquity,
       availableBalance: availableBalance,
@@ -750,7 +754,7 @@ async function processTradingSignal(
     // Filter by mode and marketType to check for duplicate and capacity
     const freshCurrentModePositions = freshPositions.filter((p: any) => {
       const pMode = p.mode || 'PAPER';
-      const pMarket = p.marketType || 'FUTURES';
+      const pMarket = p.marketType || 'SPOT';
       return pMode === mode && pMarket === marketType;
     });
 

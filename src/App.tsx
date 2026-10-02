@@ -3100,9 +3100,22 @@ export const App: React.FC = () => {
       botConfigRef.current = updated;
       try {
         apiStorage.setItem('btc_bot_config', JSON.stringify(updated));
+        apiStorage.setItem('app_binance_market_type', newMarketType);
       } catch {}
       return updated;
     });
+
+    setBinanceConfig((prev) => ({
+      ...prev,
+      marketType: newMarketType,
+    }));
+
+    // Explicitly notify server to switch marketType, purge other price cache, and disconnect other WebSocket
+    fetch('/api/config/binance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketType: newMarketType })
+    }).catch(() => {});
     
     const sym = selectedSymbolRef.current;
     const tf = timeframeRef.current;
