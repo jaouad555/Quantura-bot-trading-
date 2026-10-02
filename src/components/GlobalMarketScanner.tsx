@@ -36,6 +36,7 @@ interface GlobalMarketScannerProps {
   onNavigateToTab: (tab: string) => void;
   selectedSymbol: string;
   botEnabled?: boolean;
+  marketType?: 'SPOT' | 'FUTURES';
 }
 
 export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
@@ -44,8 +45,10 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
   onNavigateToTab,
   selectedSymbol,
   botEnabled = false,
+  marketType = 'SPOT',
 }) => {
   const isArabic = language === 'ar';
+  const isSpot = marketType === 'SPOT';
 
   const [scannerData, setScannerData] = useState<{
     status: string;
@@ -522,8 +525,8 @@ export const GlobalMarketScanner: React.FC<GlobalMarketScannerProps> = ({
                 <div className={`absolute top-full mt-1.5 z-50 w-64 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl p-1.5 space-y-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 ${isArabic ? 'right-0' : 'left-0'}`}>
                   {[
                     { id: 'ALL', labelAr: 'جميع الإشارات والمؤشرات', labelEn: 'All Signals & Indicators', icon: <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> },
-                    { id: 'LONG', labelAr: 'إشارات الشراء فقط (LONG)', labelEn: 'LONG Signals Only', icon: <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> },
-                    { id: 'SHORT', labelAr: 'إشارات البيع فقط (SHORT)', labelEn: 'SHORT Signals Only', icon: <ArrowDownRight className="w-3.5 h-3.5 text-rose-400 shrink-0" /> },
+                    { id: 'LONG', labelAr: isSpot ? 'إشارات الشراء الفوري (Spot Buy)' : 'إشارات الشراء فقط (LONG)', labelEn: isSpot ? 'Spot Buy Signals' : 'LONG Signals Only', icon: <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> },
+                    ...(!isSpot ? [{ id: 'SHORT', labelAr: 'إشارات البيع فقط (SHORT)', labelEn: 'SHORT Signals Only', icon: <ArrowDownRight className="w-3.5 h-3.5 text-rose-400 shrink-0" /> }] : []),
                     { id: 'OVERSOLD', labelAr: 'تشبع بيعي (RSI < 35)', labelEn: 'RSI Oversold (<35)', icon: <TrendingDown className="w-3.5 h-3.5 text-amber-400 shrink-0" /> },
                     { id: 'OVERBOUGHT', labelAr: 'تشبع شرائي (RSI > 65)', labelEn: 'RSI Overbought (>65)', icon: <TrendingUp className="w-3.5 h-3.5 text-purple-400 shrink-0" /> },
                     { id: 'HIGH_ADX', labelAr: 'ترند قوي ملحوظ (ADX > 25)', labelEn: 'Strong Trend (ADX > 25)', icon: <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0" /> },

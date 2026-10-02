@@ -1066,34 +1066,77 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
               </div>
             </div>
 
-            {/* Symmetrical Side-by-Side BUY & SELL Buttons */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => handleQuickManualOrder('BUY')}
-                disabled={isOrdering}
-                className="p-3 rounded-xl font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-500/10"
-              >
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <div className="flex flex-col text-left rtl:text-right">
-                  <span className="text-xs font-black">{isArabic ? 'شراء فوري BUY' : 'MARKET BUY'}</span>
-                  <span className="text-[10px] text-emerald-400/80 font-normal font-sans">${manualOrderAmount} USDT</span>
+            {/* Symmetrical Side-by-Side BUY & SELL Buttons or Spot-Adaptive LONG Console */}
+            {marketType === 'SPOT' ? (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>{isArabic ? 'نظام التداول الفوري (Spot Mode):' : 'Spot Market Mode:'}</span>
+                  </span>
+                  <span className="text-slate-300 font-mono text-[10px]">
+                    {isArabic ? 'يدعم صفقات الشراء (LONG) فقط' : 'LONG / BUY Orders Only (No Short)'}
+                  </span>
                 </div>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickManualOrder('SELL')}
-                disabled={isOrdering}
-                className="p-3 rounded-xl font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-500/10"
-              >
-                <TrendingUp className="w-4 h-4 rotate-180 text-rose-400" />
-                <div className="flex flex-col text-left rtl:text-right">
-                  <span className="text-xs font-black">{isArabic ? 'بيع فوري SELL' : 'MARKET SELL'}</span>
-                  <span className="text-[10px] text-rose-400/80 font-normal font-sans">${manualOrderAmount} USDT</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickManualOrder('BUY')}
+                    disabled={isOrdering}
+                    className="p-3 rounded-xl font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-500/10"
+                  >
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <div className="flex flex-col text-left rtl:text-right">
+                      <span className="text-xs font-black">{isArabic ? 'شراء فوري SPOT BUY (LONG)' : 'SPOT BUY (LONG)'}</span>
+                      <span className="text-[10px] text-emerald-400/80 font-normal font-sans">${manualOrderAmount} USDT</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleQuickManualOrder('SELL')}
+                    disabled={isOrdering}
+                    className="p-3 rounded-xl font-bold bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700 transition flex items-center justify-center gap-2 cursor-pointer"
+                    title={isArabic ? 'بيع رصيد العملة المملوك وتحويله إلى USDT' : 'Sell owned crypto back to USDT'}
+                  >
+                    <TrendingUp className="w-4 h-4 rotate-180 text-amber-400" />
+                    <div className="flex flex-col text-left rtl:text-right">
+                      <span className="text-xs font-black">{isArabic ? 'بيع رصيد العملة (Spot Sell)' : 'SPOT SELL ASSET'}</span>
+                      <span className="text-[10px] text-slate-400 font-normal font-sans">{isArabic ? 'تحويل إلى USDT' : 'Convert to USDT'}</span>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleQuickManualOrder('BUY')}
+                  disabled={isOrdering}
+                  className="p-3 rounded-xl font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-500/10"
+                >
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <div className="flex flex-col text-left rtl:text-right">
+                    <span className="text-xs font-black">{isArabic ? 'عقد شراء LONG (Futures)' : 'FUTURES LONG BUY'}</span>
+                    <span className="text-[10px] text-emerald-400/80 font-normal font-sans">${manualOrderAmount} USDT</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickManualOrder('SELL')}
+                  disabled={isOrdering}
+                  className="p-3 rounded-xl font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-500/10"
+                >
+                  <TrendingUp className="w-4 h-4 rotate-180 text-rose-400" />
+                  <div className="flex flex-col text-left rtl:text-right">
+                    <span className="text-xs font-black">{isArabic ? 'عقد هبوط SHORT (Futures)' : 'FUTURES SHORT SELL'}</span>
+                    <span className="text-[10px] text-rose-400/80 font-normal font-sans">${manualOrderAmount} USDT</span>
+                  </div>
+                </button>
+              </div>
+            )}
 
             {orderFeedback && (
               <div

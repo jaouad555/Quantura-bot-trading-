@@ -3406,7 +3406,11 @@ export const App: React.FC = () => {
           symbol: selectedSymbol,
           side,
           type: 'MARKET',
-          ...(isSpot ? { quoteOrderQty: quoteAmountUsdt } : { quantity: computedQuantity || Number((quoteAmountUsdt / (currentPrice || 1)).toFixed(5)) }),
+          ...(isSpot 
+            ? (side === 'BUY' 
+                ? { quoteOrderQty: quoteAmountUsdt } 
+                : { quantity: Number((quoteAmountUsdt / (currentPrice || 1)).toFixed(5)) })
+            : { quantity: computedQuantity || Number((quoteAmountUsdt / (currentPrice || 1)).toFixed(5)) }),
         }),
       });
       const data = await res.json();
@@ -3958,6 +3962,7 @@ export const App: React.FC = () => {
               onNavigateToTab={(tab) => setActiveTab(tab as any)}
               selectedSymbol={selectedSymbol}
               botEnabled={botConfig.enabled}
+              marketType={botConfig.marketType || 'SPOT'}
             />
           )}
 

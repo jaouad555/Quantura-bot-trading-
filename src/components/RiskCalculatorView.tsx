@@ -66,6 +66,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
 
   // Calculator inputs
   const isLive = executionMode === 'BINANCE_LIVE';
+  const isFutures = (binanceConfig?.marketType || 'FUTURES') === 'FUTURES';
   const effectiveBalance = isLive && binanceConfig?.accountInfo?.totalUsdtEquity !== undefined
     ? binanceConfig.accountInfo.totalUsdtEquity
     : paperWallet.balance || 0;
@@ -183,6 +184,7 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
   // Actions
   const handleOpenPaperTrade = (type: 'LONG' | 'SHORT') => {
     if (paperWallet.openPosition) return;
+    if (!isFutures && type === 'SHORT') return; // Enforce SPOT LONG only rule
     const entry = currentPrice || entryPrice;
     const sl = stopLossPrice;
     const tp1 = activeSignal?.targets?.tp1 || (type === 'LONG' ? entry * 1.025 : entry * 0.975);
@@ -740,29 +742,31 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
             <p className="text-[11px] text-slate-400">
               {t.noActivePosition}
             </p>
-            {/* Compact 2-column action buttons for simulator */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+            {/* Compact action buttons for simulator (Adaptive: LONG Only for SPOT, 2-column for FUTURES) */}
+            <div className={`grid ${isFutures ? 'grid-cols-2' : 'grid-cols-1'} gap-2 sm:gap-2.5`}>
               <button
                 id="btn-paper-open-long"
                 onClick={() => handleOpenPaperTrade('LONG')}
-                className="py-2 sm:py-2.5 px-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-[11px] sm:text-xs rounded-lg shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-300/40"
+                className={`py-2 sm:py-2.5 px-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-[11px] sm:text-xs rounded-lg shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-300/40 ${!isFutures ? 'w-full text-center' : ''}`}
               >
                 <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                 <span className="font-mono truncate">
-                  {t.openLong} ({formatCoinQty(positionSizeBtc)} {baseAsset})
+                  {isFutures ? t.openLong : (isArabic ? `شراء فوري محاكاة SPOT BUY (${formatCoinQty(positionSizeBtc)} ${baseAsset})` : `Simulated Spot Buy LONG (${formatCoinQty(positionSizeBtc)} ${baseAsset})`)}
                 </span>
               </button>
 
-              <button
-                id="btn-paper-open-short"
-                onClick={() => handleOpenPaperTrade('SHORT')}
-                className="py-2 sm:py-2.5 px-2.5 bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-bold text-[11px] sm:text-xs rounded-lg shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-rose-400/40"
-              >
-                <TrendingDown className="w-3.5 h-3.5 shrink-0" />
-                <span className="font-mono truncate">
-                  {t.openShort} ({formatCoinQty(positionSizeBtc)} {baseAsset})
-                </span>
-              </button>
+              {isFutures && (
+                <button
+                  id="btn-paper-open-short"
+                  onClick={() => handleOpenPaperTrade('SHORT')}
+                  className="py-2 sm:py-2.5 px-2.5 bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-bold text-[11px] sm:text-xs rounded-lg shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-rose-400/40"
+                >
+                  <TrendingDown className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-mono truncate">
+                    {t.openShort} ({formatCoinQty(positionSizeBtc)} {baseAsset})
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         )}

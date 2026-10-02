@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+local_kv_cache.json
+local_kv_cache.backup.json
