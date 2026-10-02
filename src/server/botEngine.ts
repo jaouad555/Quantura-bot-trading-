@@ -1148,7 +1148,7 @@ const getBinanceConfig = async () => {
 import crypto from 'crypto';
 
 // Binance Utilities
-const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
+const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
 const getBinanceFuturesApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
 
 const createBinanceSignature = (queryString: string, apiSecret: string) => {
@@ -1286,14 +1286,15 @@ export const formatBinanceQuantity = (symbol: string, quantity: number, price?: 
   if (!quantity || isNaN(quantity) || quantity <= 0) return '0';
   const sym = symbol.toUpperCase().replace('/', '').trim();
   
-  let decimals = 3;
-  if (sym.startsWith('BTC') || sym.startsWith('ETH')) {
+  // Binance precision mapping based on official LOT_SIZE stepSize:
+  let decimals = 2;
+  if (sym.startsWith('BTC') || sym.startsWith('ETH') || sym.startsWith('BCH')) {
     decimals = 3;
-  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('AVAX') || sym.startsWith('LINK') || sym.startsWith('NEAR') || sym.startsWith('AAVE') || sym.startsWith('DOT') || sym.startsWith('LTC') || sym.startsWith('BCH') || sym.startsWith('ETC') || sym.startsWith('ATOM') || sym.startsWith('LINK')) {
+  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('LINK') || sym.startsWith('LTC') || sym.startsWith('ATOM') || sym.startsWith('AAVE')) {
     decimals = 2;
-  } else if (sym.startsWith('XRP') || sym.startsWith('ADA') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('TRX') || sym.startsWith('UNI') || sym.startsWith('XLM') || sym.startsWith('FTM') || sym.startsWith('ALGO') || sym.startsWith('APT') || sym.startsWith('RENDER')) {
+  } else if (sym.startsWith('AVAX') || sym.startsWith('DOT') || sym.startsWith('NEAR') || sym.startsWith('XRP') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('UNI') || sym.startsWith('APT') || sym.startsWith('RENDER')) {
     decimals = 1;
-  } else if (sym.startsWith('DOGE') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB') || sym.startsWith('WIF') || sym.startsWith('FET')) {
+  } else if (sym.startsWith('ADA') || sym.startsWith('DOGE') || sym.startsWith('TRX') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('XLM') || sym.startsWith('ALGO') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB') || sym.startsWith('WIF') || sym.startsWith('FET')) {
     decimals = 0;
   } else {
     if (price && price > 1000) decimals = 3;
@@ -1301,11 +1302,6 @@ export const formatBinanceQuantity = (symbol: string, quantity: number, price?: 
     else if (price && price > 1) decimals = 1;
     else decimals = 0;
   }
-
-  // Force 1 decimal for safer Binance compatibility unless price is very low
-  if (price && price > 100) decimals = 0;
-  else if (price && price > 10) decimals = 1;
-  else decimals = 2;
 
   const factor = Math.pow(10, decimals);
   // Strictly truncate to prevent precision errors
@@ -1337,7 +1333,7 @@ export const serverExecuteOrder = async (
           return { success: false, error: `Position size too small for ${normSymbol} (Min Qty not met). Try increasing margin or leverage.` };
         }
 
-        console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly}`);
+        console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly} Mode: ${config.marketType}`);
 
         if (config.marketType === 'FUTURES') {
           const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
@@ -1408,8 +1404,10 @@ export const serverExecuteOrder = async (
           console.log(`[SERVER ENGINE] Binance Futures Order SUCCESS:`, data);
           return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
         } else {
-          // SPOT Order
-          const baseUrl = getBinanceApiBase(config.useTestnet);
+          // SPOT Order (Testnet & Live)
+          const primaryBaseUrl = config.useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
+          const fallbackBaseUrl = config.useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
+
           const params: Record<string, string> = {
             symbol: normSymbol,
             side: side.toUpperCase(),
@@ -1418,7 +1416,10 @@ export const serverExecuteOrder = async (
             recvWindow: '10000',
           };
 
-          if (quoteOrderQty && quoteOrderQty > 0) {
+          // On Binance Spot:
+          // MARKET BUY orders can use quoteOrderQty (USDT amount to spend), which prevents LOT_SIZE and precision errors!
+          // MARKET SELL orders MUST use quantity (base asset amount) according to Binance Spot API specifications.
+          if (side.toUpperCase() === 'BUY' && quoteOrderQty && quoteOrderQty > 0) {
             params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
           } else {
             params.quantity = formattedQty;
@@ -1426,27 +1427,48 @@ export const serverExecuteOrder = async (
 
           const queryString = new URLSearchParams(params).toString();
           const signature = createBinanceSignature(queryString, config.apiSecret!);
-          const orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
 
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 8000);
-          const response = await fetch(orderUrl, {
-            method: 'POST',
-            headers: {
-              'X-MBX-APIKEY': config.apiKey!,
-              'Content-Type': 'application/json',
-            },
-            signal: controller.signal,
-          });
-          clearTimeout(timeout);
-          const data = await response.json();
+          const candidateUrls = [
+            `${primaryBaseUrl}/api/v3/order?${queryString}&signature=${signature}`,
+            ...(config.useTestnet ? [`${fallbackBaseUrl}/api/v3/order?${queryString}&signature=${signature}`] : []),
+          ];
 
-          if (!response.ok) {
-            console.error("[SERVER ENGINE] Binance Spot Order Error:", data);
-            return { success: false, error: data.msg || 'Binance order rejected', binanceCode: data.code };
+          let lastSpotError: any = null;
+          let lastSpotCode: any = null;
+
+          for (const orderUrl of candidateUrls) {
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 8000);
+              const response = await fetch(orderUrl, {
+                method: 'POST',
+                headers: {
+                  'X-MBX-APIKEY': config.apiKey!,
+                  'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeout);
+              const data = await response.json();
+
+              if (response.ok) {
+                console.log(`[SERVER ENGINE] Binance Spot Order SUCCESS:`, data);
+                return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
+              } else {
+                lastSpotError = data.msg || 'Binance Spot order rejected';
+                lastSpotCode = data.code;
+                console.warn(`[SERVER ENGINE] Spot order attempt failed on ${orderUrl}:`, data);
+                if (data.code === -2015 && candidateUrls.length > 1) {
+                  continue; // Try fallback testnet host if API key mismatch
+                }
+                break;
+              }
+            } catch (netErr: any) {
+              lastSpotError = netErr.message;
+            }
           }
 
-          return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
+          return { success: false, error: lastSpotError || 'Spot order execution failed', binanceCode: lastSpotCode };
         }
     } catch (err: any) {
         console.error("[SERVER ENGINE] Fetch Error:", err);
@@ -1456,6 +1478,10 @@ export const serverExecuteOrder = async (
 
 
 export const permanentlyClosedPositionIds = new Set<string>();
+
+export const resetBotEngineState = () => {
+  permanentlyClosedPositionIds.clear();
+};
 
 /**
  * Reconciles the paper wallet to exact mathematical truth:

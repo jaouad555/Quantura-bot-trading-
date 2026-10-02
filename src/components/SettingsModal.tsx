@@ -134,8 +134,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = (props) => {
               </h3>
               <p className="text-sm text-slate-300">
                 {isArabic 
-                  ? 'هل أنت متأكد من مسح كافة الإعدادات والبيانات؟ لا يمكن التراجع عن هذه العملية.'
-                  : 'Voulez-vous vraiment effacer toutes vos configurations ? Cette action est irréversible.'}
+                  ? 'سيتم تصفير محرك المخاطر ومسح كافة الصفقات وتاريخ التداول وإعادة المحفظة إلى 1,000 USDT، مع الحفاظ التام على مفاتيح API وتيليغرام ونموذج الذكاء الاصطناعي.'
+                  : isEn
+                  ? 'Reset Risk Engine, clear all active trades, trade history and set wallet to $1,000 USDT. API keys, Telegram tokens and AI model settings are fully preserved.'
+                  : 'Remet le Risk Engine à zéro, efface toutes les positions et l\'historique (1 000 USDT). Vos clés API, Telegram et modèle IA sont strictement conservés.'}
               </p>
               <div className="flex gap-3 pt-2">
                 <button 

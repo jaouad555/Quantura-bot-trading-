@@ -2285,6 +2285,7 @@ export const App: React.FC = () => {
     activeBotPositionsRef.current = [];
     botLogsRef.current = [];
     tradeHistoryRef.current = [];
+    recentlyClosedPositionIdsRef.current.clear();
     paperWalletRef.current = {
       balance: 1000,
       realizedPnl: 0,
@@ -2297,12 +2298,13 @@ export const App: React.FC = () => {
       enabled: false,
       activePresets: [],
       circuitBreakerTripped: false,
+      circuitBreakerTrippedAt: undefined,
+      circuitBreakerResetAt: Date.now(),
     };
     botConfigRef.current = resetBotConfig;
     lastConfigUpdateRef.current = Date.now();
-    apiStorage.setItem('btc_bot_config', JSON.stringify(resetBotConfig));
 
-    // 2. Clear state
+    // 2. Clear state immediately
     setActiveBotPositions([]);
     setTradeHistory([]);
     setBotLogs([]);
@@ -2318,7 +2320,31 @@ export const App: React.FC = () => {
     // 3. Clear database and local storage via dedicated reset endpoint
     try {
       await apiStorage.resetTradingData();
-    } catch (e) {}
+    } catch (e) {
+      console.error('Reset error:', e);
+    }
+
+    // 4. Force refetch clean server state to ensure complete synchronization
+    try {
+      const res = await fetch('/api/config/all');
+      if (res.ok) {
+        const serverData = await res.json();
+        if (serverData.btc_active_bot_positions) {
+          try {
+            const positions = JSON.parse(serverData.btc_active_bot_positions);
+            setActiveBotPositions(positions);
+            activeBotPositionsRef.current = positions;
+          } catch {}
+        }
+        if (serverData.btc_paper_wallet) {
+          try {
+            const wallet = JSON.parse(serverData.btc_paper_wallet);
+            setPaperWallet(wallet);
+            paperWalletRef.current = wallet;
+          } catch {}
+        }
+      }
+    } catch {}
 
     playAudioChime();
 
@@ -2328,10 +2354,10 @@ export const App: React.FC = () => {
       type: 'SYSTEM',
       title: language === 'ar' ? 'إعادة ضبط شاملة للمنصة' : language === 'fr' ? 'Réinitialisation Totale Réussie' : 'Full Platform Reset',
       body: language === 'ar'
-        ? 'تم تصفير المحفظة بنجاح إلى 1,000 USDT ومسح جميع الصفقات والسجلات وإيقاف تشغيل الاستراتيجيات.'
+        ? 'تم تصفير محرك المخاطر والمحفظة بنجاح إلى 1,000 USDT ومسح جميع الصفقات والسجلات، مع الحفاظ الكامل على مفاتيح API وتيليغرام ونموذج الذكاء الاصطناعي.'
         : language === 'fr'
-        ? 'Le portefeuille a été remis à 1 000 USDT, les positions/logs ont été effacés et les stratégies désactivées.'
-        : 'Paper wallet reset to $1,000 USDT, all positions and history wiped, and strategies set to inactive.',
+        ? 'Le Risk Engine, l\'historique et le portefeuille ont été remis à 1 000 USDT. Vos clés API, Telegram et modèle IA sont strictement conservés.'
+        : 'Risk Engine, trade history and paper wallet reset to $1,000 USDT. API keys, Telegram tokens and AI model settings are fully preserved.',
       read: false,
     };
     triggerToastAlert(resetAlert);

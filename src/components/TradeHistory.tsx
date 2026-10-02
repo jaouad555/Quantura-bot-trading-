@@ -221,7 +221,7 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
               <button
                 onClick={onFullReset}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-rose-600/40 text-slate-300 hover:text-rose-200 rounded-xl border border-slate-700 hover:border-rose-500/50 transition shadow-sm"
-                title={isArabic ? 'إغلاق ومسح كافة الصفقات وإعادة ضبط المحفظة 1000$' : 'Tout réinitialiser (1000$)'}
+                title={isArabic ? 'إعادة ضبط شاملة: مسح الصفقات ومحرك المخاطر وإعادة المحفظة (1000$) مع حفظ مفاتيح API وتيليغرام والذكاء الاصطناعي' : 'Tout réinitialiser (1000$) en préservant clés API, Telegram et modèle IA'}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>{isArabic ? 'إعادة ضبط شاملة (1000$)' : 'Reset tout ($1,000)'}</span>

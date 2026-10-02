@@ -41,8 +41,8 @@ import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
-import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect } from './src/server/botEngine';
-import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider } from './src/server/marketScanner';
+import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect, resetBotEngineState } from './src/server/botEngine';
+import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider, inFlightExecutionLocks, symbolCooldownMap } from './src/server/marketScanner';
 import { binanceWs } from './src/server/binanceWebSocket';
 import { binanceRestCache } from './src/server/binanceRestCache';
 import { strategyManager } from './src/server/strategyManager';
@@ -365,77 +365,37 @@ app.post('/api/strategies/set', async (req, res) => {
   }
 });
 
-app.post('/api/trading/reset', async (req, res) => {
+// Comprehensive Root-Level Reset Engine
+// Preserves: Binance API Keys, Telegram bot token/chatId, AI Model keys/config, User auth and UI preferences.
+// Wipes: Active positions, trade history, logs, paper wallet (to $1,000 USDT baseline), symbol cooldowns,
+//        Risk Engine drawdown/daily PnL/streaks (to exact 0.00 baseline), and sets all strategies/bot to inactive.
+export async function executeFullPlatformReset() {
+  console.log('[RESET ENGINE] Initiating Full Platform Reset (Preserving API keys, Telegram, AI models & Auth)...');
+
+  // 1. Reset Strategy Manager & Deactivate All Strategies
   try {
     strategyManager.resetToDefaults();
-    await kv.set('quantura_active_strategies', JSON.stringify({
-      INSTITUTIONAL_SMC: false,
-      MOMENTUM: false,
-      SWING: false,
-      MTF_CONFLUENCE: false,
-      VWAP_VOLUME_DELTA: false,
-      FUNDING_SQUEEZE: false,
-      BREAKOUT: false,
-      SCALPER: false,
-      MEAN_REVERSION: false,
-    }));
-    
-    let cfg: any = {
-      enabled: false,
-      activePresets: [],
-      tradeAllocationPercent: 25,
-      minConfidence: 75,
-      mode: 'SCALE_OUT_REBUY',
-      autoCompound: true,
-      maxOpenTrades: 3,
-      timeframe: 'AUTO',
-      marketType: 'FUTURES',
-      leverage: 3,
-      marginMode: 'ISOLATED',
-      trailingStopEnabled: true,
-      trailingStopPercent: 1.2,
-      trailingActivationProfitPercent: 1.5,
-      dailyDrawdownLimitPercent: 5.0,
-      circuitBreakerTripped: false,
-      sizingMode: 'FIXED_PERCENT',
-      riskPerTradePercent: 2.0,
-      cooldownMinutes: 10,
-      multiPairScanning: true,
-      allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
-    };
+  } catch (e) {
+    console.error('[RESET ENGINE] StrategyManager reset error:', e);
+  }
 
-    const botConfigStr = await kv.get('btc_bot_config');
-    if (botConfigStr) {
-      try {
-        const parsed = JSON.parse(botConfigStr);
-        cfg = { ...cfg, ...parsed, activePresets: [], enabled: false };
-      } catch (e) {}
-    }
-    await kv.set('btc_bot_config', JSON.stringify(cfg));
-    await kv.set('btc_active_bot_positions', '[]');
-    await kv.set('btc_trade_history', '[]');
-    await kv.set('btc_bot_logs', '[]');
-    await kv.set('btc_paper_wallet', JSON.stringify({
-      balance: 1000,
-      realizedPnl: 0,
-      openPosition: null,
-      history: [],
-    }));
-    await kv.set('btc_push_alerts', '[]');
-    await kv.set('quantura_risk_drawdown_state', JSON.stringify({
-      startingDailyEquity: 1000,
-      lastDailyResetTimestamp: Date.now(),
-      peakEquity: 1000,
-      dailyRealizedPnl: 0,
-      dailyFeesPaid: 0,
-      dailyFundingPaid: 0,
-      consecutiveLosses: 0,
-      consecutiveWins: 0,
-      lastClosedTradePnl: 0,
-      lastClosedTradeSizeUsdt: 0,
-      lastClosedTradeLeverage: 1,
-    }));
+  await kv.set('quantura_active_strategies', JSON.stringify({
+    INSTITUTIONAL_SMC: false,
+    MOMENTUM: false,
+    SWING: false,
+    MTF_CONFLUENCE: false,
+    VWAP_VOLUME_DELTA: false,
+    FUNDING_SQUEEZE: false,
+    BREAKOUT: false,
+    SCALPER: false,
+    MEAN_REVERSION: false,
+    LIQUIDITY_HUNT: false,
+  }));
 
+  // 2. Clear symbol cooldowns and in-flight locks in scanner
+  try {
+    symbolCooldownMap.clear();
+    inFlightExecutionLocks.clear();
     if (scannerState) {
       scannerState.activeStrategiesCount = 0;
       if (scannerState.symbolStates) {
@@ -448,94 +408,165 @@ app.post('/api/trading/reset', async (req, res) => {
         });
       }
     }
+  } catch (e) {
+    console.error('[RESET ENGINE] Scanner reset error:', e);
+  }
 
-    res.json({ success: true, message: 'Trading state and strategy activations wiped and reset to default INACTIVE' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to reset trading data' });
+  // 3. Clear bot engine in-memory position tracker
+  try {
+    resetBotEngineState();
+  } catch (e) {
+    console.error('[RESET ENGINE] resetBotEngineState error:', e);
+  }
+
+  // 4. Reset Paper Wallet to clean $1,000 USDT mathematical truth
+  const cleanWallet = {
+    balance: 1000,
+    realizedPnl: 0,
+    openPosition: null,
+    history: [],
+  };
+  await kv.set('btc_paper_wallet', JSON.stringify(cleanWallet));
+  await kv.set('paper_wallet_initial_deposit', '1000');
+
+  // 5. Clear active positions, history, logs and alerts
+  await kv.set('btc_active_bot_positions', '[]');
+  await kv.delete('btc_active_bot_position');
+  await kv.set('btc_trade_history', '[]');
+  await kv.set('btc_bot_logs', '[]');
+  await kv.set('btc_push_alerts', '[]');
+
+  // 6. Reset Risk Engine to zero baseline (0% drawdown, $0 daily loss, 0 streaks)
+  try {
+    const riskEngine = RiskEngine.getInstance();
+    await riskEngine.resetAllToZero(1000);
+    await riskEngine.setEmergencyStop(false);
+  } catch (err) {
+    console.error('[RESET ENGINE] Error resetting RiskEngine:', err);
+  }
+
+  // Clear Audit Trail entries
+  try {
+    await AuditTrail.clear();
+  } catch (err) {
+    console.error('[RESET ENGINE] Error clearing AuditTrail:', err);
+  }
+
+  // Set explicit clean zero drawdown state in kv
+  await kv.set('quantura_risk_drawdown_state', JSON.stringify({
+    startingDailyEquity: 1000,
+    lastDailyResetTimestamp: Date.now(),
+    peakEquity: 1000,
+    dailyRealizedPnl: 0,
+    dailyFeesPaid: 0,
+    dailyFundingPaid: 0,
+    consecutiveLosses: 0,
+    consecutiveWins: 0,
+    lastClosedTradePnl: 0,
+    lastClosedTradeSizeUsdt: 0,
+    lastClosedTradeLeverage: 1,
+  }));
+
+  // Clean Risk Config
+  await kv.set('quantura_risk_config', JSON.stringify({
+    maxDailyLossPercent: 3.0,
+    maxAccountDrawdownPercent: 5.0,
+    maxLeverageLimit: 10,
+    minLeverageLimit: 1,
+    maxRiskPerTradePercent: 2.5,
+    minRiskRewardRatio: 1.5,
+    consecutiveLossLimit: 3,
+    consecutiveLossCooldownMinutes: 30,
+    maxOpenCorrelatedTrades: 2,
+    emergencyStop: false,
+    riskLockStatus: 'NORMAL',
+  }));
+
+  // 7. Reset Bot Config to clean disabled defaults while PRESERVING marketType preference if already set
+  let preservedMarketType: 'SPOT' | 'FUTURES' = 'FUTURES';
+  try {
+    const currentCfgStr = await kv.get('btc_bot_config');
+    if (currentCfgStr) {
+      const parsed = JSON.parse(currentCfgStr);
+      if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+        preservedMarketType = parsed.marketType;
+      }
+    }
+    const appMarketType = await kv.get('app_binance_market_type');
+    if (appMarketType === 'SPOT' || appMarketType === 'FUTURES') {
+      preservedMarketType = appMarketType;
+    }
+  } catch {}
+
+  const defaultBotConfig = {
+    enabled: false,
+    activePresets: [],
+    tradeAllocationPercent: 25,
+    minConfidence: 75,
+    mode: 'SCALE_OUT_REBUY',
+    autoCompound: true,
+    maxOpenTrades: 3,
+    timeframe: 'AUTO',
+    marketType: preservedMarketType,
+    leverage: 3,
+    marginMode: 'ISOLATED',
+    trailingStopEnabled: true,
+    trailingStopPercent: 1.2,
+    trailingActivationProfitPercent: 1.5,
+    dailyDrawdownLimitPercent: 5.0,
+    circuitBreakerTripped: false,
+    circuitBreakerTrippedAt: undefined,
+    circuitBreakerResetAt: Date.now(),
+    sizingMode: 'FIXED_PERCENT',
+    riskPerTradePercent: 2.0,
+    cooldownMinutes: 10,
+    multiPairScanning: true,
+    allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
+  };
+  await kv.set('btc_bot_config', JSON.stringify(defaultBotConfig));
+
+  // 8. Wipe backtest settings & checklist progress & audit logs
+  await kv.delete('quantura_backtest_settings');
+  await kv.delete('quantura_checklist_progress');
+  await kv.delete('risk_audit_log_entries');
+
+  console.log('[RESET ENGINE] Platform fully reset to clean baseline (API keys, Telegram, AI model and auth preserved).');
+  return {
+    success: true,
+    message: 'Reset complete: Risk Engine, positions, history, logs and wallet reset to zero. API keys, Telegram, and AI model preserved.',
+  };
+}
+
+// Unified Full Factory Reset endpoint
+app.post('/api/system/full-factory-reset', async (req, res) => {
+  try {
+    const result = await executeFullPlatformReset();
+    res.json(result);
+  } catch (error: any) {
+    console.error('[RESET ENGINE] Error in /api/system/full-factory-reset:', error);
+    res.status(500).json({ error: error.message || 'Failed to execute factory reset' });
   }
 });
 
+// Backward-compatible trading reset endpoint
+app.post('/api/trading/reset', async (req, res) => {
+  try {
+    const result = await executeFullPlatformReset();
+    res.json(result);
+  } catch (error: any) {
+    console.error('[RESET ENGINE] Error in /api/trading/reset:', error);
+    res.status(500).json({ error: error.message || 'Failed to reset trading data' });
+  }
+});
+
+// Backward-compatible system reset endpoint
 app.post('/api/system/reset', async (req, res) => {
   try {
-    strategyManager.resetToDefaults();
-    await kv.set('quantura_active_strategies', JSON.stringify({
-      INSTITUTIONAL_SMC: false,
-      MOMENTUM: false,
-      SWING: false,
-      MTF_CONFLUENCE: false,
-      VWAP_VOLUME_DELTA: false,
-      FUNDING_SQUEEZE: false,
-      BREAKOUT: false,
-      SCALPER: false,
-      MEAN_REVERSION: false,
-      LIQUIDITY_HUNT: false,
-    }));
-    
-    const defaultCfg = {
-      enabled: false,
-      activePresets: [],
-      tradeAllocationPercent: 25,
-      minConfidence: 75,
-      mode: 'SCALE_OUT_REBUY',
-      autoCompound: true,
-      maxOpenTrades: 3,
-      timeframe: 'AUTO',
-      marketType: 'FUTURES',
-      leverage: 3,
-      marginMode: 'ISOLATED',
-      trailingStopEnabled: true,
-      trailingStopPercent: 1.2,
-      trailingActivationProfitPercent: 1.5,
-      dailyDrawdownLimitPercent: 5.0,
-      circuitBreakerTripped: false,
-      sizingMode: 'FIXED_PERCENT',
-      riskPerTradePercent: 2.0,
-      cooldownMinutes: 10,
-      multiPairScanning: true,
-      allowedSymbols: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'],
-    };
-
-    await kv.set('btc_bot_config', JSON.stringify(defaultCfg));
-    await kv.set('btc_active_bot_positions', '[]');
-    await kv.set('btc_trade_history', '[]');
-    await kv.set('btc_bot_logs', '[]');
-    await kv.set('btc_paper_wallet', JSON.stringify({
-      balance: 1000,
-      realizedPnl: 0,
-      openPosition: null,
-      history: [],
-    }));
-    await kv.set('btc_push_alerts', '[]');
-    await kv.set('quantura_risk_drawdown_state', JSON.stringify({
-      startingDailyEquity: 1000,
-      lastDailyResetTimestamp: Date.now(),
-      peakEquity: 1000,
-      dailyRealizedPnl: 0,
-      dailyFeesPaid: 0,
-      dailyFundingPaid: 0,
-      consecutiveLosses: 0,
-      consecutiveWins: 0,
-      lastClosedTradePnl: 0,
-      lastClosedTradeSizeUsdt: 0,
-      lastClosedTradeLeverage: 1,
-    }));
-
-    if (scannerState) {
-      scannerState.activeStrategiesCount = 0;
-      if (scannerState.symbolStates) {
-        Object.keys(scannerState.symbolStates).forEach((k) => {
-          if (scannerState.symbolStates[k]) {
-            scannerState.symbolStates[k].lastSignal = undefined;
-            scannerState.symbolStates[k].signalDirection = undefined;
-            scannerState.symbolStates[k].strategyName = undefined;
-          }
-        });
-      }
-    }
-
-    res.json({ success: true, message: 'Factory reset completed' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to reset system data' });
+    const result = await executeFullPlatformReset();
+    res.json(result);
+  } catch (error: any) {
+    console.error('[RESET ENGINE] Error in /api/system/reset:', error);
+    res.status(500).json({ error: error.message || 'Failed to reset system data' });
   }
 });
 
@@ -2176,7 +2207,7 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
 }
 
 function getBinanceApiBase(useTestnet: boolean): string {
-  return useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
+  return useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
 }
 
 function getBinanceFuturesApiBase(useTestnet: boolean): string {
@@ -2213,7 +2244,7 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     // List candidate base URLs for the requested market type (e.g. Binance Demo Trading vs Testnet Sandbox)
     const baseUrlsToTry: string[] = isFutures
       ? (useTestnet ? ['https://testnet.binancefuture.com', 'https://demo-fapi.binance.com', 'https://fapi.binance.com'] : ['https://fapi.binance.com'])
-      : (useTestnet ? ['https://demo-api.binance.com', 'https://testnet.binance.vision', 'https://api.binance.com'] : ['https://api.binance.com']);
+      : (useTestnet ? ['https://testnet.binance.vision', 'https://demo-api.binance.com', 'https://api.binance.com'] : ['https://api.binance.com']);
 
     const uniqueBaseUrls = Array.from(new Set(baseUrlsToTry.filter(Boolean)));
 

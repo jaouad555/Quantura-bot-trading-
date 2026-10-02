@@ -521,6 +521,12 @@ async function processTradingSignal(
           return;
         }
     
+    // In SPOT mode, short positions cannot be opened (Spot market is strictly Long-only)
+    if (effectiveMarketType === 'SPOT' && signal.decision === 'SHORT') {
+      console.log(`[SPOT FILTER] ${symUpper} SHORT signal skipped: Spot market only supports LONG (Buy) positions.`);
+      return;
+    }
+
     const isLong = signal.decision === 'LONG';
     let safeSl = signal.stopLoss;
     let safeTp1 = signal.tp1;

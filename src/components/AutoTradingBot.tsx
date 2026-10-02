@@ -2603,7 +2603,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                   type="button"
                   onClick={onFullReset}
                   className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/70 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                  title={isArabic ? 'إغلاق كل الصفقات ومسح الأرشيف وإعادة ضبط المحفظة 1000$' : 'Tout réinitialiser (1000$)'}
+                  title={isArabic ? 'إعادة ضبط شاملة: مسح الصفقات ومحرك المخاطر وإعادة المحفظة (1000$) مع حفظ مفاتيح API وتيليغرام والذكاء الاصطناعي' : 'Tout réinitialiser (1000$) en préservant clés API, Telegram et modèle IA'}
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>{isArabic ? 'إعادة ضبط شاملة (1000$)' : 'Reset tout (1000$)'}</span>

@@ -144,6 +144,84 @@ class ApiStorage {
   }
 
   async resetTradingData() {
+    // 1. Immediately abort any debounced or pending backend writes
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+      this.syncTimeout = null;
+    }
+    this.pendingSync = {};
+
+    // 2. Define the STRICT white-list of keys to preserve:
+    // - API Keys (Binance & Exchange credentials)
+    // - Telegram Bot Token and Chat ID
+    // - AI Model Keys & Settings (DeepSeek, Gemini, OpenAI, model selections)
+    // - User Authentication & Session
+    // - UI preferences (Language, Theme, Sound)
+    const PRESERVED_KEYS = new Set([
+      // Binance / Exchange API keys & configs
+      'app_binance_api_key',
+      'app_binance_api_secret',
+      'app_binance_use_testnet',
+      'app_binance_market_type',
+      'binance_api_config',
+      // Telegram bot tokens
+      'app_telegram_bot_token',
+      'app_telegram_chat_id',
+      // AI model & API keys
+      'DEEPSEEK_API_KEY',
+      'GEMINI_API_KEY',
+      'OPENAI_API_KEY',
+      'selected_ai_model',
+      'app_ai_model',
+      'ai_model',
+      'gemini_model',
+      'ai_provider',
+      // User authentication & session
+      'app_is_authenticated',
+      'app_username',
+      'app_email',
+      'session_token',
+      'app_2fa_master_pin',
+      'app_2fa_verified',
+      'quantura_2fa_enabled',
+      'quantura_2fa_configured',
+      'quantura_2fa_secret',
+      // UI Preferences
+      'app_language',
+      'app_timezone',
+      'app_sound_enabled',
+      'app_notifications_enabled',
+      'quantura_display_mode',
+      'app_dev_mode',
+    ]);
+
+    // 3. Clear all non-preserved keys from in-memory cache
+    const currentMemKeys = Object.keys(this.mem);
+    for (const k of currentMemKeys) {
+      if (!PRESERVED_KEYS.has(k)) {
+        delete this.mem[k];
+      }
+    }
+
+    // 4. Clear all non-preserved keys from window.localStorage
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && !PRESERVED_KEYS.has(k)) {
+            keysToRemove.push(k);
+          }
+        }
+        for (const k of keysToRemove) {
+          window.localStorage.removeItem(k);
+        }
+      } catch (e) {}
+    }
+
+    // 5. Establish clean default baselines (1,000 USDT Paper Wallet, 0 Drawdown, 0 Trades)
+    const preservedMarketType = this.getItem('app_binance_market_type') || 'FUTURES';
+
     const defaultBotConfig = JSON.stringify({
       enabled: false,
       activePresets: [],
@@ -153,7 +231,7 @@ class ApiStorage {
       autoCompound: true,
       maxOpenTrades: 3,
       timeframe: 'AUTO',
-      marketType: 'FUTURES',
+      marketType: preservedMarketType,
       leverage: 3,
       marginMode: 'ISOLATED',
       trailingStopEnabled: true,
@@ -169,47 +247,81 @@ class ApiStorage {
     });
 
     const defaultStrategies = JSON.stringify({
-      MOMENTUM: false,
-      SCALPER: false,
-      SWING: false,
-      BREAKOUT: false,
-      MEAN_REVERSION: false,
       INSTITUTIONAL_SMC: false,
+      MOMENTUM: false,
+      SWING: false,
+      MTF_CONFLUENCE: false,
+      VWAP_VOLUME_DELTA: false,
+      FUNDING_SQUEEZE: false,
+      BREAKOUT: false,
+      SCALPER: false,
+      MEAN_REVERSION: false,
+      LIQUIDITY_HUNT: false,
     });
 
-    this.mem['btc_active_bot_positions'] = '[]';
-    this.mem['btc_trade_history'] = '[]';
-    this.mem['btc_bot_logs'] = '[]';
-    this.mem['btc_paper_wallet'] = JSON.stringify({
+    const cleanWallet = JSON.stringify({
       balance: 1000,
       realizedPnl: 0,
       openPosition: null,
       history: [],
     });
+
+    const cleanDrawdown = JSON.stringify({
+      startingDailyEquity: 1000,
+      lastDailyResetTimestamp: Date.now(),
+      peakEquity: 1000,
+      dailyRealizedPnl: 0,
+      dailyFeesPaid: 0,
+      dailyFundingPaid: 0,
+      consecutiveLosses: 0,
+      consecutiveWins: 0,
+      lastClosedTradePnl: 0,
+      lastClosedTradeSizeUsdt: 0,
+      lastClosedTradeLeverage: 1,
+    });
+
+    // Write pristine zero baselines to mem
+    this.mem['btc_active_bot_positions'] = '[]';
+    this.mem['btc_trade_history'] = '[]';
+    this.mem['btc_bot_logs'] = '[]';
     this.mem['btc_push_alerts'] = '[]';
+    this.mem['btc_paper_wallet'] = cleanWallet;
+    this.mem['paper_wallet_initial_deposit'] = '1000';
     this.mem['btc_bot_config'] = defaultBotConfig;
     this.mem['quantura_active_strategies'] = defaultStrategies;
+    this.mem['quantura_risk_drawdown_state'] = cleanDrawdown;
 
+    // Write pristine zero baselines to localStorage
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.setItem('btc_active_bot_positions', '[]');
         window.localStorage.setItem('btc_trade_history', '[]');
         window.localStorage.setItem('btc_bot_logs', '[]');
-        window.localStorage.setItem('btc_paper_wallet', JSON.stringify({
-          balance: 1000,
-          realizedPnl: 0,
-          openPosition: null,
-          history: [],
-        }));
         window.localStorage.setItem('btc_push_alerts', '[]');
+        window.localStorage.setItem('btc_paper_wallet', cleanWallet);
+        window.localStorage.setItem('paper_wallet_initial_deposit', '1000');
         window.localStorage.setItem('btc_bot_config', defaultBotConfig);
         window.localStorage.setItem('quantura_active_strategies', defaultStrategies);
+        window.localStorage.setItem('quantura_risk_drawdown_state', cleanDrawdown);
       } catch (e) {}
     }
 
+    // 6. Execute root-level server reset
     try {
-      await fetch('/api/trading/reset', { method: 'POST' });
-    } catch {}
+      const res = await fetch('/api/system/full-factory-reset', { method: 'POST' });
+      if (!res.ok) {
+        await fetch('/api/trading/reset', { method: 'POST' });
+      }
+    } catch {
+      try {
+        await fetch('/api/trading/reset', { method: 'POST' });
+      } catch {}
+    }
+
+    // 7. Dispatch storage update notification for UI components
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('apiStorage_updated', { detail: { key: 'ALL_RESET' } }));
+    }
   }
 
   clear() {

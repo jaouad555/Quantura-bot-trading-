@@ -1909,8 +1909,8 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                         </div>
                         <div className="text-xs text-slate-300 mt-0.5">
                           {isArabic 
-                            ? 'إرجاع كافة الإعدادات والصفقات ومحفظة المحاكاة إلى الوضع الافتراضي النظيف (1,000 USDT).'
-                            : 'Remet à zéro l\'historique des trades, les alertes et réinitialise le solde à 1 000 USDT.'}
+                            ? 'تصفير محرك المخاطر (Risk Engine)، مسح الصفقات والأرباح والسجل، وإرجاع المحفظة إلى 1,000 USDT، مع الحفاظ التام على مفاتيح API وتيليغرام ونموذج الذكاء الاصطناعي.'
+                            : 'Remet à zéro le Risk Engine, l\'historique des trades, les alertes et le solde à 1 000 USDT. Clés API, Telegram et modèle IA strictement préservés.'}
                         </div>
                       </div>
                     </div>
@@ -1992,8 +1992,8 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {isArabic 
-                    ? 'سيتم مسح جميع الصفقات المفتوحة، التاريخ، مفاتيح بايننس المخزنة محلياً وإرجاع المحفظة إلى 1,000 USDT. هذا الإجراء لا يمكن التراجع عنه.'
-                    : 'All trade history, local keys and cache will be reset. Paper wallet balance will be restored to 1,000 USDT.'}
+                    ? 'سيتم تصفير محرك المخاطر ومسح جميع الصفقات المفتوحة والتاريخ والأرباح وإرجاع المحفظة إلى 1,000 USDT. مفاتيح API بايننس، وتيليغرام، ونموذج الذكاء الاصطناعي ستبقى محفوظة بالكامل ولن تُمس.'
+                    : 'Toutes les positions, le risk engine, l\'historique et les profits seront remis à zéro (1 000 USDT). Vos clés API, Telegram et modèle IA sont strictement conservés.'}
                 </p>
               </div>
             </div>
