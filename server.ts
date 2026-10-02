@@ -2861,41 +2861,83 @@ app.get('/api/binance/spot/positions', async (req, res) => {
       });
     }
 
-    const symbolFilter = (req.query.symbol as string)?.toUpperCase();
     const rawBalances = Array.isArray(data.balances) ? data.balances : [];
-    
-    // Filter non-zero balances excluding cash/stablecoins
-    const positions = rawBalances
-      .filter((b: any) => {
-        const free = parseFloat(b.free || '0');
-        const locked = parseFloat(b.locked || '0');
-        const total = free + locked;
-        if (total <= 0) return false;
-        // Ignore base stablecoins as positions
-        if (['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(b.asset)) return false;
-        if (symbolFilter) {
-          const expectedAsset = symbolFilter.replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
-          return b.asset === expectedAsset;
-        }
-        return true;
+    const balanceMap = new Map<string, { free: number; locked: number; total: number }>();
+    for (const b of rawBalances) {
+      const free = parseFloat(b.free || '0');
+      const locked = parseFloat(b.locked || '0');
+      const total = free + locked;
+      if (total > 0) {
+        balanceMap.set(b.asset.toUpperCase(), { free, locked, total });
+      }
+    }
+
+    // Get active bot positions tracked in database/system for SPOT
+    const storedPositionsStr = await kv.get('btc_active_bot_positions');
+    const storedPositions: any[] = storedPositionsStr ? JSON.parse(storedPositionsStr) : [];
+    const spotTracked = storedPositions.filter((p: any) => p && (p.marketType === 'SPOT' || p.leverage === 1));
+
+    const symbolFilter = (req.query.symbol as string)?.toUpperCase();
+
+    // Reconcile: Only return positions for assets that either:
+    // 1) Have an active tracked bot/manual trade in spotTracked AND exist in wallet
+    // 2) OR if explicitly queried via symbolFilter and the asset has non-zero balance
+    const reconciledPositions = spotTracked
+      .filter((pos: any) => {
+        const baseAsset = pos.symbol.toUpperCase().replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
+        const bal = balanceMap.get(baseAsset);
+        return bal && bal.total > 0;
       })
-      .map((b: any) => {
-        const free = parseFloat(b.free || '0');
-        const locked = parseFloat(b.locked || '0');
-        const total = free + locked;
+      .map((pos: any) => {
+        const baseAsset = pos.symbol.toUpperCase().replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
+        const bal = balanceMap.get(baseAsset)!;
         return {
-          symbol: `${b.asset}USDT`,
-          asset: b.asset,
-          positionAmt: total.toString(),
-          free: free.toString(),
-          locked: locked.toString(),
-          entryPrice: 0,
+          id: pos.id,
+          symbol: pos.symbol.toUpperCase(),
+          asset: baseAsset,
+          positionAmt: bal.total.toString(),
+          free: bal.free.toString(),
+          locked: bal.locked.toString(),
+          entryPrice: pos.entryPrice || 0,
           leverage: 1,
           marketType: 'SPOT' as const,
+          decision: pos.decision || 'LONG',
+          tp1: pos.tp1,
+          tp2: pos.tp2,
+          tp3: pos.tp3,
+          stopLoss: pos.stopLoss,
+          openedAt: pos.openedAt,
+          strategyName: pos.strategyName,
         };
       });
 
-    return res.json({ success: true, positions });
+    // If symbolFilter was requested specifically, and it wasn't already in reconciledPositions but has balance
+    if (symbolFilter && !reconciledPositions.some(p => p.symbol === symbolFilter)) {
+      const baseAsset = symbolFilter.replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
+      const bal = balanceMap.get(baseAsset);
+      if (bal && bal.total > 0 && !['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(baseAsset)) {
+        reconciledPositions.push({
+          id: `spot-pos-${symbolFilter}`,
+          symbol: symbolFilter,
+          asset: baseAsset,
+          positionAmt: bal.total.toString(),
+          free: bal.free.toString(),
+          locked: bal.locked.toString(),
+          entryPrice: 0,
+          leverage: 1,
+          marketType: 'SPOT' as const,
+          decision: 'LONG',
+          tp1: undefined,
+          tp2: undefined,
+          tp3: undefined,
+          stopLoss: undefined,
+          openedAt: Date.now(),
+          strategyName: 'Spot Asset Holding',
+        });
+      }
+    }
+
+    return res.json({ success: true, positions: reconciledPositions });
   } catch (error: any) {
     console.error('[BINANCE SPOT POSITIONS ERROR]', error);
     return res.json({ success: true, positions: [], error: error.message });

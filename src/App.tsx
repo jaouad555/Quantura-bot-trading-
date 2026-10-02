@@ -559,10 +559,30 @@ export const App: React.FC = () => {
       });
 
       // Two-way reconciliation: Replace positions for current exchange mode with real Binance positions,
-      // while preserving other modes (e.g. PAPER).
+      // while preserving other modes (e.g. PAPER) and keeping existing metadata.
       updateBotPositionsSync((prev) => {
         const otherModes = prev.filter(p => (p.mode || 'PAPER') !== execMode);
-        return [...realPositions, ...otherModes];
+        const currentModeExisting = prev.filter(p => (p.mode || 'PAPER') === execMode);
+
+        const mergedRealPositions = realPositions.map(freshPos => {
+          const existing = currentModeExisting.find(p => p.symbol.toUpperCase() === freshPos.symbol.toUpperCase());
+          if (existing) {
+            return {
+              ...existing,
+              currentPrice: freshPos.currentPrice,
+              unrealizedPnlUsdt: freshPos.unrealizedPnlUsdt,
+              roePercent: freshPos.roePercent,
+              remainingAmountBtc: freshPos.remainingAmountBtc,
+              marginUsdt: freshPos.marginUsdt,
+              positionSizeUsdt: freshPos.positionSizeUsdt,
+              lastAction: freshPos.lastAction,
+              pnlHistory: [...(existing.pnlHistory || []), freshPos.unrealizedPnlUsdt].slice(-20),
+            };
+          }
+          return freshPos;
+        });
+
+        return [...mergedRealPositions, ...otherModes];
       });
     } catch (e) {
       // Ignore background fetch aborts / network blips
