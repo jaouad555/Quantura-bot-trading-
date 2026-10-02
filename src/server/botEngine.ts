@@ -1285,17 +1285,16 @@ export const formatBinanceQuantity = (symbol: string, quantity: number, price?: 
     else decimals = 0;
   }
 
+  // Force 1 decimal for safer Binance compatibility unless price is very low
+  if (price && price > 100) decimals = 0;
+  else if (price && price > 10) decimals = 1;
+  else decimals = 2;
+
   const factor = Math.pow(10, decimals);
-  // We use Math.round for opening orders to avoid truncation to zero for small positions, 
-  // but truncation is strictly required by Binance for stepSize.
+  // Strictly truncate to prevent precision errors
   let truncated = Math.floor(quantity * factor) / factor;
   
-  // Safety: If quantity is valid but truncated to zero, use the smallest possible step
-  if (truncated === 0 && quantity > 0) {
-    truncated = 1 / factor;
-  }
-  
-  return decimals === 0 ? Math.floor(truncated).toString() : truncated.toFixed(decimals);
+  return truncated.toFixed(decimals);
 };
 
 // Simulate or real execute order
