@@ -134,7 +134,7 @@ export function calculatePortfolioMetrics(
   let spotHoldingsValue = 0;
   const holdingsSummary: Record<string, { qty: number; valueUsdt: number; avgCost: number; pnlUsdt: number; pnlPercent: number }> = {};
 
-  if (isExchange && binanceAccountInfo && !isTestnet) {
+  if (isExchange && binanceAccountInfo) {
     const rawFree = Number(binanceAccountInfo.freeUsdt) || 0;
     const rawTotalEquity = Number(binanceAccountInfo.totalUsdtEquity) || rawFree;
     freeCash = Math.max(0, rawFree);
@@ -143,12 +143,12 @@ export function calculatePortfolioMetrics(
       const apiInTradeMargin = Number(binanceAccountInfo.inTradeMargin) || 0;
       const apiUnrealized = Number(binanceAccountInfo.unrealizedProfit) || 0;
 
-      // In real Binance Live Futures:
+      // In real Binance Futures (Testnet & Live):
       effectiveInTradeMargin = apiInTradeMargin > 0 ? apiInTradeMargin : inTradeMargin;
       effectiveFloatingPnl = apiUnrealized !== 0 ? apiUnrealized : floatingPnl;
       
       const computedEquity = freeCash + effectiveInTradeMargin + effectiveFloatingPnl;
-      totalEquity = Math.max(rawTotalEquity, computedEquity);
+      totalEquity = rawTotalEquity > 0 ? rawTotalEquity : computedEquity;
     } else {
       let cryptoVal = 0;
       if (binanceAccountInfo.balances) {
@@ -173,10 +173,10 @@ export function calculatePortfolioMetrics(
       }
       spotHoldingsValue = Math.max(cryptoVal, inTradeMargin);
       const computedSpotEquity = freeCash + spotHoldingsValue + effectiveFloatingPnl;
-      totalEquity = Math.max(rawTotalEquity, computedSpotEquity, freeCash + inTradeMargin + effectiveFloatingPnl);
+      totalEquity = rawTotalEquity > 0 ? rawTotalEquity : Math.max(computedSpotEquity, freeCash + inTradeMargin + effectiveFloatingPnl);
     }
   } else {
-    // PAPER Simulation & BINANCE_TESTNET Sandbox
+    // PAPER Simulation (when not connected to Binance exchange)
     realizedPnl = paperWallet?.realizedPnl ?? 0;
     const baseDeposit = (paperWallet as any)?.initialDeposit || 1000;
     const totalCapital = baseDeposit + realizedPnl;
