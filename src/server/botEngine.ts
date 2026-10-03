@@ -1577,10 +1577,27 @@ export const serverExecuteOrder = async (
 };
 
 
-export const permanentlyClosedPositionIds = new Set<string>();
+export const recentlyClosedPositionMap = new Map<string, number>();
+
+export const isPositionPermanentlyClosed = (id: string): boolean => {
+  if (!id) return false;
+  const closedAt = recentlyClosedPositionMap.get(id);
+  if (!closedAt) return false;
+  if (Date.now() - closedAt > 30000) { // expired after 30s
+    recentlyClosedPositionMap.delete(id);
+    return false;
+  }
+  return true;
+};
+
+export const markPositionClosed = (id: string) => {
+  if (id) {
+    recentlyClosedPositionMap.set(id, Date.now());
+  }
+};
 
 export const resetBotEngineState = () => {
-  permanentlyClosedPositionIds.clear();
+  recentlyClosedPositionMap.clear();
 };
 
 /**
@@ -1600,8 +1617,6 @@ export const reconcilePaperWalletDirect = async () => {
       const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
       if (seenHistoryIds.has(id)) return false;
       seenHistoryIds.add(id);
-      if (h.posId) permanentlyClosedPositionIds.add(h.posId);
-      if (h.id) permanentlyClosedPositionIds.add(h.id);
       return true;
     });
 
@@ -1610,7 +1625,7 @@ export const reconcilePaperWalletDirect = async () => {
     // Get active open positions
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
-    const activePaperPositions = positions.filter((p: any) => !permanentlyClosedPositionIds.has(p.id) && (!p.mode || p.mode === 'PAPER'));
+    const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER'));
     
     const inTradeMargin = activePaperPositions.reduce((acc: number, p: any) => {
       const m = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
@@ -1699,8 +1714,8 @@ export const startBotEngine = () => {
       let positions = JSON.parse(positionsStr);
       if (!Array.isArray(positions) || positions.length === 0) return;
 
-      // Filter out any positions that were already permanently closed to prevent duplicate triggers
-      positions = positions.filter((p: any) => p && p.id && !permanentlyClosedPositionIds.has(p.id));
+      // Filter out any positions that were already closed within cooldown to prevent duplicate triggers
+      positions = positions.filter((p: any) => p && p.id && !isPositionPermanentlyClosed(p.id));
       if (positions.length === 0) return;
 
       let stateChanged = false;
@@ -1722,7 +1737,8 @@ export const startBotEngine = () => {
         if (res.status === 'fulfilled' && (res.value as number) > 0) {
           prices[k] = res.value as number;
         } else {
-          prices[k] = FALLBACK_PRICES[sym] || 50.0;
+          const matchingPos = positions.find((p: any) => p.symbol === sym);
+          prices[k] = matchingPos?.currentPrice || matchingPos?.entryPrice || FALLBACK_PRICES[sym] || 50.0;
         }
       });
 
@@ -1747,11 +1763,11 @@ export const startBotEngine = () => {
         if (posMarketType !== currentActiveMarketType) continue; 
 
         const pKey = `${pos.marketType || 'FUTURES'}_${pos.symbol}`;
-        const currentP = prices[pKey];
+        const currentP = prices[pKey] || pos.currentPrice || pos.entryPrice;
         
         if (!currentP || currentP <= 0) continue;
 
-        const isLong = pos.decision === 'LONG';
+        const isLong = pos.decision === 'LONG' || pos.side === 'LONG' || pos.side === 'BUY' || !pos.decision;
         const lev = Math.max(1, pos.leverage || 1);
         const activeMargin = typeof pos.remainingAmountUsdt === 'number' && pos.remainingAmountUsdt > 0
           ? pos.remainingAmountUsdt
@@ -2168,7 +2184,7 @@ export const startBotEngine = () => {
             console.error('[SERVER ENGINE] Risk Engine record error:', err);
           }
 
-          permanentlyClosedPositionIds.add(pos.id);
+          markPositionClosed(pos.id);
           pos._delete = true;
           stateChanged = true;
         }
@@ -2180,7 +2196,7 @@ export const startBotEngine = () => {
       const freshPositions = freshPositionsStr ? JSON.parse(freshPositionsStr) : [];
       
       const updatedPositions = freshPositions.map((freshPos: any) => {
-         if (permanentlyClosedPositionIds.has(freshPos.id)) return null;
+         if (isPositionPermanentlyClosed(freshPos.id)) return null;
          const loopPos = positions.find((p: any) => p.id === freshPos.id);
          if (loopPos) {
              if (loopPos._delete) return null;
@@ -2247,7 +2263,7 @@ export const closePositionDirect = async (
 
     // If position is not in the array (e.g. client removed it first), handle fallback gracefully
     if (!pos) {
-      permanentlyClosedPositionIds.add(posId);
+      markPositionClosed(posId);
       if (extraData?.tradeHistoryItem) {
         const histStr = await kv.get('btc_trade_history');
         const history = histStr ? JSON.parse(histStr) : [];
@@ -2265,7 +2281,7 @@ export const closePositionDirect = async (
     }
 
     const currentP = (customExitPrice && customExitPrice > 0) ? customExitPrice : await fetchSymbolPrice(pos.symbol, pos.marketType || 'FUTURES');
-    const isLong = pos.decision === 'LONG';
+    const isLong = pos.decision === 'LONG' || pos.side === 'LONG' || pos.side === 'BUY' || !pos.decision;
     const lev = Math.max(1, pos.leverage || 1);
     const marginClosed = pos.remainingAmountUsdt || 0;
 
@@ -2307,7 +2323,7 @@ export const closePositionDirect = async (
       }
     }
 
-    permanentlyClosedPositionIds.add(posId);
+    markPositionClosed(posId);
 
     // Enforce cooldown on manual or api position closure
     symbolCooldownMap.set(pos.symbol.toUpperCase().trim(), Date.now() + 20 * 60 * 1000);

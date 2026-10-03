@@ -490,6 +490,11 @@ export const App: React.FC = () => {
     if (execMode !== 'BINANCE_TESTNET' && execMode !== 'BINANCE_LIVE') {
       return;
     }
+    // Safety guard: only poll Binance positions if connected to avoid wiping state on unauthenticated requests
+    if (!binanceConfigRef.current?.isConnected) {
+      return;
+    }
+
     const isTestnet = execMode === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
     const isSpot = (binanceConfigRef.current?.marketType || botConfigRef.current?.marketType || 'SPOT') === 'SPOT';
     const currentMt = isSpot ? 'SPOT' : 'FUTURES';
@@ -502,9 +507,9 @@ export const App: React.FC = () => {
       if (!res.ok) return;
       
       const data = await res.json().catch(() => null);
-      if (!data || !data.success) return;
+      if (!data || !data.success || !Array.isArray(data.positions)) return;
 
-      const rawPositions: any[] = data.positions || [];
+      const rawPositions: any[] = data.positions;
 
       const realPositions: ActiveBotPosition[] = rawPositions.map((p: any) => {
         const amt = parseFloat(p.positionAmt || '0');
@@ -527,8 +532,9 @@ export const App: React.FC = () => {
         const defaultTp2 = isLong ? entryPrice * 1.10 : entryPrice * 0.90;
         const defaultTp3 = isLong ? entryPrice * 1.15 : entryPrice * 0.85;
 
+        const posUniqueKey = p.openedAt || p.updateTime || (p.entryPrice ? Math.round(Number(p.entryPrice) * 100) : '') || Date.now();
         return {
-          id: `binance-pos-${p.symbol.toUpperCase()}-${execMode}`,
+          id: p.id || `binance-pos-${p.symbol.toUpperCase()}-${execMode}-${posUniqueKey}`,
           symbol: p.symbol.toUpperCase(),
           decision: isLong ? 'LONG' : 'SHORT',
           entryPrice,
@@ -546,7 +552,7 @@ export const App: React.FC = () => {
           tp2Hit: false,
           tp3Hit: false,
           rebuysCount: 0,
-          openedAt: p.updateTime || Date.now(),
+          openedAt: p.openedAt || p.updateTime || Date.now(),
           lastAction: `Binance ${isSpot ? 'Spot Asset' : (isTestnet ? 'Testnet' : 'Live')} Reconciled`,
           realizedPnlUsdt: 0,
           pnlHistory: [unRealizedPnl],
@@ -559,35 +565,40 @@ export const App: React.FC = () => {
           unrealizedPnlUsdt: unRealizedPnl,
           roePercent: margin > 0 ? Math.round((unRealizedPnl / margin) * 1000) / 10 : 0,
           mode: execMode,
-          strategyName: isSpot ? 'Binance Spot Asset' : 'Binance Live Position',
+          strategyName: p.strategyName || (isSpot ? 'Binance Spot Asset' : 'Binance Live Position'),
         };
       });
 
-      // Two-way reconciliation: Replace positions for current exchange mode with real Binance positions,
-      // while preserving other modes (e.g. PAPER) and keeping existing metadata.
+      // Update positions without wiping out tracked bot trades
       updateBotPositionsSync((prev) => {
         const otherModes = prev.filter(p => (p.mode || 'PAPER') !== execMode);
         const currentModeExisting = prev.filter(p => (p.mode || 'PAPER') === execMode);
 
-        const mergedRealPositions = realPositions.map(freshPos => {
-          const existing = currentModeExisting.find(p => p.symbol.toUpperCase() === freshPos.symbol.toUpperCase());
-          if (existing) {
+        // Update live price / PnL for existing positions from real exchange data
+        const updatedExisting = currentModeExisting.map(existing => {
+          const fresh = realPositions.find(rp => rp.symbol.toUpperCase() === existing.symbol.toUpperCase());
+          if (fresh) {
             return {
               ...existing,
-              currentPrice: freshPos.currentPrice,
-              unrealizedPnlUsdt: freshPos.unrealizedPnlUsdt,
-              roePercent: freshPos.roePercent,
-              remainingAmountBtc: freshPos.remainingAmountBtc,
-              marginUsdt: freshPos.marginUsdt,
-              positionSizeUsdt: freshPos.positionSizeUsdt,
-              lastAction: freshPos.lastAction,
-              pnlHistory: [...(existing.pnlHistory || []), freshPos.unrealizedPnlUsdt].slice(-20),
+              currentPrice: fresh.currentPrice,
+              unrealizedPnlUsdt: fresh.unrealizedPnlUsdt,
+              roePercent: fresh.roePercent,
+              remainingAmountBtc: fresh.remainingAmountBtc,
+              marginUsdt: fresh.marginUsdt,
+              positionSizeUsdt: fresh.positionSizeUsdt,
+              pnlHistory: [...(existing.pnlHistory || []), fresh.unrealizedPnlUsdt].slice(-20),
             };
           }
-          return freshPos;
+          // If not in fresh, but opened recently (< 45s) or in Spot, keep it to avoid flicker
+          return existing;
         });
 
-        return [...mergedRealPositions, ...otherModes];
+        // Add any external Binance positions that weren't in currentModeExisting
+        const newExternalPositions = realPositions.filter(rp =>
+          !currentModeExisting.some(ex => ex.symbol.toUpperCase() === rp.symbol.toUpperCase())
+        );
+
+        return [...updatedExisting, ...newExternalPositions, ...otherModes];
       });
     } catch (e) {
       // Ignore background fetch aborts / network blips
@@ -969,18 +980,29 @@ export const App: React.FC = () => {
     activeBotPositionsRef.current = activeBotPositions;
   }, [activeBotPositions]);
 
-  // Set of closed position IDs to prevent them from reappearing due to polling race conditions
-  const recentlyClosedPositionIdsRef = useRef<Set<string>>(new Set<string>());
+  // Map of closed position IDs to timestamps to prevent polling race conditions without permanent blacklisting
+  const recentlyClosedPositionIdsRef = useRef<Map<string, number>>(new Map<string, number>());
+
+  const isPositionRecentlyClosed = useCallback((id: string): boolean => {
+    if (!id) return false;
+    const closedAt = recentlyClosedPositionIdsRef.current.get(id);
+    if (!closedAt) return false;
+    if (Date.now() - closedAt > 20000) { // 20s TTL
+      recentlyClosedPositionIdsRef.current.delete(id);
+      return false;
+    }
+    return true;
+  }, []);
 
   const updateBotPositionsSync = useCallback((updater: (prev: ActiveBotPosition[]) => ActiveBotPosition[]) => {
     const rawUpdated = updater(activeBotPositionsRef.current);
-    // Filter out any positions that have been marked as closed
-    const safeUpdated = rawUpdated.filter(p => !recentlyClosedPositionIdsRef.current.has(p.id));
+    // Filter out any positions that have been marked as closed recently
+    const safeUpdated = rawUpdated.filter(p => !isPositionRecentlyClosed(p.id));
     activeBotPositionsRef.current = safeUpdated;
     setActiveBotPositions([...safeUpdated]);
     // Explicitly update storage to avoid useEffect infinite loops / race conditions
     apiStorage.setItem('btc_active_bot_positions', JSON.stringify(safeUpdated));
-  }, []);
+  }, [isPositionRecentlyClosed]);
 
   const updatePaperWalletSync = useCallback((updater: (prev: PaperWallet) => PaperWallet) => {
     paperWalletRef.current = updater(paperWalletRef.current);
@@ -1980,7 +2002,7 @@ export const App: React.FC = () => {
         }
 
         lastClosedTimesBySymbolRef.current[pos.symbol.toLowerCase()] = Date.now();
-        recentlyClosedPositionIdsRef.current.add(pos.id);
+        recentlyClosedPositionIdsRef.current.set(pos.id, Date.now());
         updateBotPositionsSync((prev) => prev.filter(p => p.id !== pos.id));
 
         const closedHistoryItem: TradeHistoryItem = {

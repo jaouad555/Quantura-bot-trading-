@@ -312,19 +312,19 @@ export function isValidPersistedPosition(pos: any): pos is PersistedPosition {
   if (!pos || typeof pos !== 'object') return false;
   if (!pos.symbol || typeof pos.symbol !== 'string') return false;
 
-  const side = pos.side || pos.decision;
-  if (side !== 'LONG' && side !== 'SHORT') return false;
+  const rawSide = String(pos.side || pos.decision || 'LONG').toUpperCase();
+  const side = rawSide === 'SELL' || rawSide === 'SHORT' ? 'SHORT' : 'LONG';
 
-  const entryPrice = Number(pos.entryPrice);
-  const currentPrice = Number(pos.currentPrice || pos.entryPrice);
-  const stopLoss = Number(pos.stopLoss);
-  const quantity = Number(pos.quantity || pos.remainingAmountBtc);
-  const leverage = Number(pos.leverage || 1);
-  const positionSizeUsdt = Number(pos.positionSizeUsdt || (pos.marginUsdt ? pos.marginUsdt * leverage : 0));
+  const entryPrice = Number(pos.entryPrice || pos.currentPrice || 1);
+  const currentPrice = Number(pos.currentPrice || pos.entryPrice || entryPrice);
+  const stopLoss = pos.stopLoss !== undefined && pos.stopLoss !== null && Number(pos.stopLoss) > 0 ? Number(pos.stopLoss) : undefined;
+  const quantity = Number(pos.quantity || pos.remainingAmountBtc || pos.initialAmountBtc || pos.positionAmt || pos.amount || 0);
+  const leverage = Math.max(1, Number(pos.leverage || 1));
+  const positionSizeUsdt = Number(pos.positionSizeUsdt || (pos.marginUsdt ? pos.marginUsdt * leverage : (quantity > 0 && entryPrice > 0 ? quantity * entryPrice : 10)));
 
   if (!Number.isFinite(entryPrice) || entryPrice <= 0) return false;
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return false;
-  if (!Number.isFinite(stopLoss) || stopLoss <= 0) return false;
+  if (stopLoss !== undefined && (!Number.isFinite(stopLoss) || stopLoss < 0)) return false;
   if (!Number.isFinite(quantity) || quantity <= 0) return false;
   if (!Number.isFinite(leverage) || leverage <= 0) return false;
   if (!Number.isFinite(positionSizeUsdt) || positionSizeUsdt <= 0) return false;

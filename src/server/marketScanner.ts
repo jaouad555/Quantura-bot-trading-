@@ -439,7 +439,8 @@ async function processTradingSignal(
     let locked = false;
     for (let i = 0; i < 20; i++) {
         const lock = await kv.get('btc_positions_lock');
-        if (!lock) {
+        const lockAge = lock ? Date.now() - Number(lock) : Infinity;
+        if (!lock || isNaN(lockAge) || lockAge > 8000) {
             await kv.set('btc_positions_lock', Date.now().toString());
             locked = true;
             break;

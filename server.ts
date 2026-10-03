@@ -173,13 +173,35 @@ app.post('/api/config', async (req, res) => {
         try {
           const parsed = JSON.parse(String(value));
           if (Array.isArray(parsed)) {
-            const valid = parsed.filter((p: any) => {
-              const ok = isValidPersistedPosition(p);
-              if (!ok) {
-                console.warn(`[CONFIG API WARN] Rejected malformed position payload for ${p?.symbol || 'UNKNOWN'}:`, p);
-              }
-              return ok;
-            });
+            const valid = parsed
+              .map((p: any) => {
+                if (!p || typeof p !== 'object' || !p.symbol) return null;
+                const rawSide = String(p.side || p.decision || 'LONG').toUpperCase();
+                const decision = rawSide === 'SELL' || rawSide === 'SHORT' ? 'SHORT' : 'LONG';
+                const entryPrice = Number(p.entryPrice || p.currentPrice || 1);
+                const currentPrice = Number(p.currentPrice || p.entryPrice || entryPrice);
+                const leverage = Math.max(1, Number(p.leverage || 1));
+                const quantity = Number(p.quantity || p.remainingAmountBtc || p.initialAmountBtc || p.positionAmt || p.amount || 0);
+                const margin = Number(p.marginUsdt || p.initialAmountUsdt || p.remainingAmountUsdt) || (quantity > 0 ? (quantity * entryPrice) / leverage : 10);
+                const positionSize = Number(p.positionSizeUsdt) || (margin * leverage);
+
+                return {
+                  ...p,
+                  id: p.id || `pos-${p.symbol.toUpperCase()}-${Date.now()}`,
+                  symbol: String(p.symbol).toUpperCase(),
+                  decision,
+                  side: decision,
+                  entryPrice,
+                  currentPrice,
+                  leverage,
+                  quantity: quantity > 0 ? quantity : p.quantity,
+                  remainingAmountBtc: quantity > 0 ? quantity : (p.remainingAmountBtc || 0.001),
+                  marginUsdt: margin,
+                  positionSizeUsdt: positionSize,
+                };
+              })
+              .filter((p: any) => p && isValidPersistedPosition(p));
+
             finalValue = JSON.stringify(valid);
           }
         } catch (e) {
