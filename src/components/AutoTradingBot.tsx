@@ -11,7 +11,6 @@ import {
   Zap, 
   CheckCircle2, 
   ArrowRight, 
-  RefreshCw, 
   Sliders, 
   Clock, 
   Layers,
@@ -1801,22 +1800,6 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               <div className="h-10 sm:h-11 px-2.5 sm:px-3 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-xs font-mono text-slate-500 min-w-0">
                 <span className="truncate">Binance Local</span>
               </div>
-            )}
-
-            {/* Quick Sync Button for Binance Testnet & Live */}
-            {(executionMode === 'BINANCE_TESTNET' || executionMode === 'BINANCE_LIVE') && onSyncBinancePositions && (
-              <button
-                type="button"
-                id="btn-bot-binance-sync"
-                onClick={() => onSyncBinancePositions()}
-                className="h-10 sm:h-11 px-2.5 sm:px-3 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer shrink-0 shadow-sm"
-                title={isArabic ? 'مزامنة فورية للصفقات والأرصدة مع منصة بايننس' : 'Instant Sync Positions & Balances with Binance'}
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline font-mono">
-                  {isArabic ? 'مزامنة' : 'Sync'}
-                </span>
-              </button>
             )}
 
             {/* 4. Leverage & Bot Config */}
