@@ -5,6 +5,7 @@ import { symbolCooldownMap, scannerState } from './marketScanner.js';
 import { strategyManager } from './strategyManager.js';
 import { binanceWs } from './binanceWebSocket.js';
 import { binanceRestCache } from './binanceRestCache.js';
+import { formatBinancePrecisionQty, formatBinancePrecisionPrice, getSymbolFilterRules } from './binancePrecision.js';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -944,19 +945,65 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
   }
 }
 
-export const startTelegramCommandListener = () => {
+export const startTelegramCommandListener = async () => {
   if (telegramCommandPollingActive) return;
   telegramCommandPollingActive = true;
 
+  // Restore persistent lastTelegramUpdateOffset from KV
+  try {
+    const savedOffset = await kv.get('last_telegram_update_offset');
+    if (savedOffset) {
+      const parsed = parseInt(savedOffset, 10);
+      if (!isNaN(parsed) && parsed > lastTelegramUpdateOffset) {
+        lastTelegramUpdateOffset = parsed;
+      }
+    }
+  } catch {}
+
+  const localInstanceId = `quantura_${process.pid}_${Math.random().toString(36).substring(2, 8)}`;
+
   const pollLoop = async () => {
     try {
+      if (process.env.DISABLE_TELEGRAM_POLLING === 'true') {
+        setTimeout(pollLoop, 15000);
+        return;
+      }
+
       const { token, chatId } = await getTelegramCredentials();
       if (token && chatId) {
+        // --- DISTRIBUTED LEASE LOCK ---
+        // Guarantees only ONE server instance (VPS or preview) handles Telegram commands
+        // Lease lasts 12 seconds; active poller renews every iteration
+        const now = Date.now();
+        let isLeader = false;
+        try {
+          const leaseData = await kv.get('telegram_poller_lease');
+          if (leaseData) {
+            const lease = JSON.parse(leaseData);
+            if (lease.instanceId === localInstanceId || now > (lease.expiresAt || 0)) {
+              await kv.set('telegram_poller_lease', JSON.stringify({ instanceId: localInstanceId, expiresAt: now + 12000 }));
+              isLeader = true;
+            } else {
+              isLeader = false;
+            }
+          } else {
+            await kv.set('telegram_poller_lease', JSON.stringify({ instanceId: localInstanceId, expiresAt: now + 12000 }));
+            isLeader = true;
+          }
+        } catch {
+          isLeader = true;
+        }
+
+        if (!isLeader) {
+          // Another instance is already the active Telegram leader; yield to prevent duplicates
+          setTimeout(pollLoop, 6000);
+          return;
+        }
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
 
         const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${lastTelegramUpdateOffset}&timeout=5`;
-        console.log(`[TELEGRAM] Polling updates for chatId ${chatId}...`);
         const res = await fetch(url, { signal: controller.signal }).catch(() => null);
         clearTimeout(timeout);
 
@@ -966,12 +1013,14 @@ export const startTelegramCommandListener = () => {
             for (const update of data.result) {
               if (processedUpdateIds.has(update.update_id)) continue;
               processedUpdateIds.add(update.update_id);
-              if (processedUpdateIds.size > 1000) {
+              if (processedUpdateIds.size > 2000) {
                 const first = processedUpdateIds.values().next().value;
                 if (first !== undefined) processedUpdateIds.delete(first);
               }
 
               lastTelegramUpdateOffset = Math.max(lastTelegramUpdateOffset, update.update_id + 1);
+              await kv.set('last_telegram_update_offset', String(lastTelegramUpdateOffset));
+
               const msg = update.message;
               if (!msg || !msg.text) continue;
 
@@ -980,6 +1029,14 @@ export const startTelegramCommandListener = () => {
                 continue;
               }
 
+              // Deduplication by Telegram message_id across processes
+              const msgKey = `tg_handled_msg_${msg.message_id}`;
+              const alreadyHandled = await kv.get(msgKey);
+              if (alreadyHandled) {
+                continue;
+              }
+              await kv.set(msgKey, String(now));
+
               const rawText = msg.text.trim();
               if (!rawText.startsWith('/')) continue;
 
@@ -987,7 +1044,7 @@ export const startTelegramCommandListener = () => {
               const cmd = parts[0].toLowerCase().split('@')[0];
               const arg = parts.slice(1).join(' ').trim();
 
-              console.log(`[TELEGRAM] Processing command: ${cmd} with arg: ${arg}`);
+              console.log(`[TELEGRAM] Executing single command: ${cmd} (msgId: ${msg.message_id})`);
               await handleTelegramCommand(cmd, arg, chatId);
             }
           }
@@ -1005,7 +1062,7 @@ export const startTelegramCommandListener = () => {
   };
 
   pollLoop();
-  console.log('🤖 Interactive Telegram Command Listener Started!');
+  console.log('🤖 Interactive Telegram Single-Leader Command Listener Started!');
 };
 
 
@@ -1281,7 +1338,28 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
       const usdc = balances.find((b: any) => b.asset === 'USDC');
       const fdusd = balances.find((b: any) => b.asset === 'FDUSD');
       freeUsdt = (parseFloat(usdt?.free || '0') || 0) + (parseFloat(usdc?.free || '0') || 0) + (parseFloat(fdusd?.free || '0') || 0);
-      totalUsdtEquity = freeUsdt + (parseFloat(usdt?.locked || '0') || 0) + (parseFloat(usdc?.locked || '0') || 0) + (parseFloat(fdusd?.locked || '0') || 0);
+
+      // Include all non-stablecoin crypto assets valued at live prices
+      let cryptoHoldingsUsdt = 0;
+      for (const b of balances) {
+        const free = parseFloat(b.free || '0');
+        const locked = parseFloat(b.locked || '0');
+        const total = free + locked;
+        const asset = b.asset?.toUpperCase();
+        if (total > 0 && asset && !['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(asset)) {
+          const ticker = binanceWs.getTicker(`${asset}USDT`);
+          let p = ticker?.price || 0;
+          if (!p || p <= 0) {
+            p = FALLBACK_PRICES[`${asset}USDT`] || 0;
+          }
+          if (p > 0) {
+            cryptoHoldingsUsdt += total * p;
+          }
+        }
+      }
+
+      const stableLocked = (parseFloat(usdt?.locked || '0') || 0) + (parseFloat(usdc?.locked || '0') || 0) + (parseFloat(fdusd?.locked || '0') || 0);
+      totalUsdtEquity = freeUsdt + stableLocked + cryptoHoldingsUsdt;
     }
 
     const inTradeMargin = Math.max(0, totalUsdtEquity - freeUsdt);
@@ -1298,32 +1376,8 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
     };
 };
 
-export const formatBinanceQuantity = (symbol: string, quantity: number, price?: number): string => {
-  if (!quantity || isNaN(quantity) || quantity <= 0) return '0';
-  const sym = symbol.toUpperCase().replace('/', '').trim();
-  
-  // Binance precision mapping based on official LOT_SIZE stepSize:
-  let decimals = 2;
-  if (sym.startsWith('BTC') || sym.startsWith('ETH') || sym.startsWith('BCH')) {
-    decimals = 3;
-  } else if (sym.startsWith('SOL') || sym.startsWith('BNB') || sym.startsWith('LINK') || sym.startsWith('LTC') || sym.startsWith('ATOM') || sym.startsWith('AAVE')) {
-    decimals = 2;
-  } else if (sym.startsWith('AVAX') || sym.startsWith('DOT') || sym.startsWith('NEAR') || sym.startsWith('XRP') || sym.startsWith('SUI') || sym.startsWith('MATIC') || sym.startsWith('POL') || sym.startsWith('UNI') || sym.startsWith('APT') || sym.startsWith('RENDER')) {
-    decimals = 1;
-  } else if (sym.startsWith('ADA') || sym.startsWith('DOGE') || sym.startsWith('TRX') || sym.startsWith('SHIB') || sym.startsWith('PEPE') || sym.startsWith('BONK') || sym.startsWith('FLOKI') || sym.startsWith('GALA') || sym.startsWith('VET') || sym.startsWith('XLM') || sym.startsWith('ALGO') || sym.startsWith('1000PEPE') || sym.startsWith('1000SHIB') || sym.startsWith('WIF') || sym.startsWith('FET')) {
-    decimals = 0;
-  } else {
-    if (price && price > 1000) decimals = 3;
-    else if (price && price > 50) decimals = 2;
-    else if (price && price > 1) decimals = 1;
-    else decimals = 0;
-  }
-
-  const factor = Math.pow(10, decimals);
-  // Strictly truncate to prevent precision errors
-  let truncated = Math.floor(quantity * factor) / factor;
-  
-  return truncated.toFixed(decimals);
+export const formatBinanceQuantity = (symbol: string, quantity: number, price?: number, marketType: 'SPOT' | 'FUTURES' = 'SPOT'): string => {
+  return formatBinancePrecisionQty(symbol, quantity, marketType);
 };
 
 // Simulate or real execute order
@@ -1334,7 +1388,9 @@ export const serverExecuteOrder = async (
   quantity: number, 
   currentPrice: number,
   leverage: number = 3,
-  reduceOnly: boolean = false
+  reduceOnly: boolean = false,
+  stopLossPrice?: number,
+  takeProfitPrice?: number
 ) => {
     const config = await getBinanceConfig();
     if (!config.isConnected) {
@@ -1343,21 +1399,21 @@ export const serverExecuteOrder = async (
     
     try {
         const normSymbol = symbol.toUpperCase().replace('/', '').trim();
-        const formattedQty = formatBinanceQuantity(normSymbol, quantity, currentPrice);
+        const effectiveMt = (config.marketType === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
+        const formattedQty = formatBinancePrecisionQty(normSymbol, quantity, effectiveMt);
 
         if (formattedQty === '0' || parseFloat(formattedQty) <= 0) {
           return { success: false, error: `Position size too small for ${normSymbol} (Min Qty not met). Try increasing margin or leverage.` };
         }
 
-        console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly} Mode: ${config.marketType}`);
+        console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly} Mode: ${effectiveMt}`);
 
-        if (config.marketType === 'FUTURES') {
+        if (effectiveMt === 'FUTURES') {
           const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
           
           // 1. Ensure symbol leverage and margin type are configured
           try {
             const now = Date.now();
-            // Set Margin Type to ISOLATED (Binance errors if already set, so we wrap in try-catch)
             try {
               const marginQuery = `symbol=${normSymbol}&marginType=ISOLATED&timestamp=${now}&recvWindow=10000`;
               const marginSig = createBinanceSignature(marginQuery, config.apiSecret!);
@@ -1365,7 +1421,7 @@ export const serverExecuteOrder = async (
                 method: 'POST',
                 headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
               });
-            } catch (mErr) { /* Ignore "No need to change margin type" error */ }
+            } catch (mErr) { /* Ignore "No need to change margin type" */ }
 
             const targetLev = Math.max(1, Math.min(50, leverage || 3));
             const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${now}&recvWindow=10000`;
@@ -1418,7 +1474,35 @@ export const serverExecuteOrder = async (
           }
 
           console.log(`[SERVER ENGINE] Binance Futures Order SUCCESS:`, data);
-          return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
+          const primaryOrderId = data.orderId || Date.now().toString();
+
+          // 3. Place native Conditional Stop Loss on Binance Futures so it appears in "Open Orders"
+          if (!reduceOnly && stopLossPrice && stopLossPrice > 0) {
+            try {
+              const slSide = side.toUpperCase() === 'BUY' ? 'SELL' : 'BUY';
+              const formattedSlPrice = formatBinancePrecisionPrice(normSymbol, stopLossPrice, 'FUTURES');
+              const slParams: Record<string, string> = {
+                symbol: normSymbol,
+                side: slSide,
+                type: 'STOP_MARKET',
+                stopPrice: formattedSlPrice,
+                closePosition: 'true',
+                timestamp: Date.now().toString(),
+                recvWindow: '10000',
+              };
+              const slQuery = new URLSearchParams(slParams).toString();
+              const slSig = createBinanceSignature(slQuery, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, {
+                method: 'POST',
+                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
+              });
+              console.log(`[SERVER ENGINE] Stop Loss conditional order placed on Binance Testnet Open Orders for ${normSymbol} at $${formattedSlPrice}`);
+            } catch (slErr) {
+              console.warn('[SERVER ENGINE] Non-fatal SL conditional order placement notice:', slErr);
+            }
+          }
+
+          return { success: true, orderId: primaryOrderId, executedQty: data.executedQty || formattedQty };
         } else {
           // SPOT Order (Testnet & Live)
           const primaryBaseUrl = config.useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
@@ -1434,7 +1518,7 @@ export const serverExecuteOrder = async (
 
           // On Binance Spot:
           // MARKET BUY orders can use quoteOrderQty (USDT amount to spend), which prevents LOT_SIZE and precision errors!
-          // MARKET SELL orders MUST use quantity (base asset amount) according to Binance Spot API specifications.
+          // MARKET SELL orders MUST use quantity (base asset amount) formatted to exact stepSize.
           if (side.toUpperCase() === 'BUY' && quoteOrderQty && quoteOrderQty > 0) {
             params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
           } else {

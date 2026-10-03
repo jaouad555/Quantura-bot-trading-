@@ -108,11 +108,15 @@ export async function scanAllPairs() {
     scannerState.activeStrategiesCount = activeStrategies.length;
     scannerState.status = 'RUNNING';
 
-    const rawAllowed = (Array.isArray(config.allowedSymbols) && config.allowedSymbols.length > 0)
+    const allAvailablePairs = RESPECTED_TRADING_PAIRS.map(p => p.symbol);
+    const rawAllowed = (Array.isArray(config.allowedSymbols) && config.allowedSymbols.length > 0 && !config.allowedSymbols.includes('ALL'))
       ? config.allowedSymbols
-      : RESPECTED_TRADING_PAIRS.map(p => p.baseAsset);
+      : allAvailablePairs;
     // Convert base symbols like "BTC" to "BTCUSDT"
-    const allowedToExecute = rawAllowed.map((s: string) => s.toUpperCase().endsWith('USDT') ? s.toUpperCase() : s.toUpperCase() + 'USDT');
+    const allowedToExecute = rawAllowed.map((s: string) => {
+      const u = s.toUpperCase().trim();
+      return u.endsWith('USDT') ? u : `${u}USDT`;
+    });
     
     // The scanner will ALWAYS monitor all respected pairs from the Header.
     let enabledPairs = RESPECTED_TRADING_PAIRS.map(p => p.symbol);
@@ -669,7 +673,7 @@ async function processTradingSignal(
     let binanceOrderId = null;
     if (isExchangeMode) {
       const orderSide = isLong ? 'BUY' : 'SELL';
-      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false);
+      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false, safeSl, safeTp1);
       if (!orderRes.success || !orderRes.orderId) {
         console.error(`[EXECUTION] ${symbol} ${mode} ORDER FAILED:`, orderRes.error);
         const errorMsg = orderRes.error || 'Unknown Binance Error';

@@ -3432,73 +3432,71 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
                       <div className="text-slate-200 text-xs font-bold flex items-center gap-1.5">
                         <Coins className="w-4 h-4 text-amber-400" />
                         <span>{isArabic ? 'العملات المصرح للبوت بتداولها' : 'Cryptos Autorisées pour le Bot'}</span>
-                        <span className="text-[10px] text-cyan-400 font-mono">({allowedSymbolsInput.length})</span>
+                        <span className="text-[10px] text-cyan-400 font-mono">({allowedSymbolsInput.length === 0 ? (isArabic ? 'الكل' : 'Tous') : allowedSymbolsInput.length})</span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP'])}
+                          onClick={() => setAllowedSymbolsInput(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'])}
                           className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
                         >
                           Top 5
                         </button>
                         <button
                           type="button"
-                          onClick={() => setAllowedSymbolsInput(['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'])}
-                          className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                          onClick={() => setAllowedSymbolsInput(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'NEARUSDT', 'SUIUSDT', 'LINKUSDT', 'MATICUSDT', 'DOGEUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'TRXUSDT', 'ETCUSDT', 'BCHUSDT', 'XLMUSDT', 'ALGOUSDT', 'VETUSDT', 'FETUSDT', 'RENDERUSDT', 'APTUSDT'])}
+                          className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg border border-slate-700 transition cursor-pointer font-bold"
                         >
-                          {isArabic ? 'تحديد الكل (20)' : 'Tout (20)'}
+                          {isArabic ? 'تحديد الكل (25)' : 'Tout (25)'}
                         </button>
                         <button
                           type="button"
                           onClick={() => setAllowedSymbolsInput([])}
                           className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg border border-slate-700 transition cursor-pointer"
                         >
-                          {isArabic ? 'مسح' : 'Vider'}
+                          {isArabic ? 'تداول الكل (تلقائي)' : 'Tous (Auto)'}
                         </button>
                       </div>
                     </div>
 
                     <p className="text-[11px] text-slate-400 leading-tight">
                       {isArabic 
-                        ? 'انقر على العملة لتفعيل أو تعطيل مراقبتها وفتح صفقات تلقائية عليها.' 
-                        : 'Cliquez sur une crypto pour l\'activer ou la désactiver dans l\'univers de trading du bot.'}
+                        ? 'اختر العملات المصرح للبوت بتداولها. عند تركها فارغة، سيتداول البوت جميع العملات المدعومة تلقائياً.' 
+                        : 'Sélectionnez les cryptos autorisées. Si aucune n\'est cochée, le bot négociera automatiquement sur tous les actifs.'}
                     </p>
 
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 max-h-56 overflow-y-auto pr-1">
-                      {['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET'].map((sym) => {
-                        const isActive = allowedSymbolsInput.includes(sym);
+                      {['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'NEAR', 'SUI', 'LINK', 'MATIC', 'DOGE', 'LTC', 'UNI', 'ATOM', 'TRX', 'ETC', 'BCH', 'XLM', 'ALGO', 'VET', 'FET', 'RENDER', 'APT'].map((sym) => {
+                        const isChecked = allowedSymbolsInput.length === 0 || allowedSymbolsInput.some(s => s.toUpperCase().replace('USDT', '') === sym);
                         return (
                           <button
                             key={sym}
                             type="button"
                             onClick={() => {
-                              if (isActive) {
-                                setAllowedSymbolsInput(prev => prev.filter(s => s !== sym));
+                              const pair = `${sym}USDT`;
+                              if (allowedSymbolsInput.length === 0) {
+                                // Transition from "all" to everything except this sym
+                                const allPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'NEARUSDT', 'SUIUSDT', 'LINKUSDT', 'MATICUSDT', 'DOGEUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'TRXUSDT', 'ETCUSDT', 'BCHUSDT', 'XLMUSDT', 'ALGOUSDT', 'VETUSDT', 'FETUSDT', 'RENDERUSDT', 'APTUSDT'];
+                                setAllowedSymbolsInput(allPairs.filter(p => p !== pair));
+                              } else if (isChecked) {
+                                setAllowedSymbolsInput(prev => prev.filter(s => s.toUpperCase().replace('USDT', '') !== sym));
                               } else {
-                                setAllowedSymbolsInput(prev => [...prev, sym]);
+                                setAllowedSymbolsInput(prev => [...prev, pair]);
                               }
                             }}
                             className={`p-2.5 rounded-xl text-xs font-bold font-mono transition flex items-center justify-between border cursor-pointer ${
-                              isActive 
+                              isChecked 
                                 ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm ring-1 ring-cyan-500/30' 
                                 : 'bg-slate-900/60 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
                             }`}
                           >
                             <span>{sym}</span>
-                            <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,1)]' : 'bg-slate-700'}`} />
+                            <div className={`w-2 h-2 rounded-full ${isChecked ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,1)]' : 'bg-slate-700'}`} />
                           </button>
                         );
                       })}
                     </div>
-
-                    {allowedSymbolsInput.length === 0 && (
-                      <div className="text-xs font-bold text-rose-400 mt-2 flex items-center gap-1.5 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/30">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{isArabic ? 'تنبيه: يجب اختيار عملة واحدة على الأقل ليتمكن البوت من مراقبة السوق' : 'Alerte: Sélectionnez au moins un actif pour que le bot puisse analyser le marché'}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}

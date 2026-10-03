@@ -2940,7 +2940,7 @@ export const App: React.FC = () => {
                  }
 
                  const remoteMode = serverData.trading_execution_mode || serverData.app_execution_mode;
-                 if (remoteMode && (remoteMode === 'PAPER' || remoteMode === 'BINANCE_LIVE')) {
+                 if (remoteMode && (remoteMode === 'PAPER' || remoteMode === 'BINANCE_LIVE' || remoteMode === 'BINANCE_TESTNET')) {
                      setExecutionMode(remoteMode);
                  }
              }

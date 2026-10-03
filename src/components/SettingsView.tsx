@@ -114,10 +114,23 @@ const AVAILABLE_PAIRS = [
   { symbol: 'DOGEUSDT', name: 'Dogecoin', tag: 'Meme' },
   { symbol: 'ADAUSDT', name: 'Cardano', tag: 'L1' },
   { symbol: 'AVAXUSDT', name: 'Avalanche', tag: 'L1' },
+  { symbol: 'DOTUSDT', name: 'Polkadot', tag: 'Interoperable' },
   { symbol: 'NEARUSDT', name: 'NEAR Protocol', tag: 'AI & Data' },
   { symbol: 'SUIUSDT', name: 'Sui Network', tag: 'L1 Fast' },
   { symbol: 'LINKUSDT', name: 'Chainlink', tag: 'Oracle' },
-  { symbol: 'DOTUSDT', name: 'Polkadot', tag: 'Interoperable' }
+  { symbol: 'MATICUSDT', name: 'Polygon', tag: 'Layer 2' },
+  { symbol: 'LTCUSDT', name: 'Litecoin', tag: 'Payment' },
+  { symbol: 'UNIUSDT', name: 'Uniswap', tag: 'DeFi' },
+  { symbol: 'ATOMUSDT', name: 'Cosmos', tag: 'Interoperable' },
+  { symbol: 'TRXUSDT', name: 'Tron', tag: 'Layer 1' },
+  { symbol: 'ETCUSDT', name: 'Ethereum Classic', tag: 'PoW' },
+  { symbol: 'BCHUSDT', name: 'Bitcoin Cash', tag: 'Major' },
+  { symbol: 'XLMUSDT', name: 'Stellar', tag: 'Payment' },
+  { symbol: 'ALGOUSDT', name: 'Algorand', tag: 'Layer 1' },
+  { symbol: 'VETUSDT', name: 'VeChain', tag: 'Supply Chain' },
+  { symbol: 'FETUSDT', name: 'Artificial Superintelligence', tag: 'AI' },
+  { symbol: 'RENDERUSDT', name: 'Render Network', tag: 'AI GPU' },
+  { symbol: 'APTUSDT', name: 'Aptos', tag: 'L1 Fast' }
 ];
 
 const SettingsViewComponent: React.FC<SettingsViewProps> = ({
@@ -321,15 +334,17 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   };
 
   const handleTogglePairSelection = (symbol: string) => {
-    const current = botConfig?.allowedSymbols || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'];
+    const current = botConfig?.allowedSymbols || AVAILABLE_PAIRS.map(p => p.symbol);
+    const norm = symbol.toUpperCase().replace('USDT', '');
+    const isAlreadyPresent = current.some(s => s.toUpperCase().replace('USDT', '') === norm);
     let updated: string[];
-    if (current.includes(symbol)) {
+    if (isAlreadyPresent) {
       if (current.length <= 1) {
         setLocalBotFeedback(isArabic ? 'يجب الإبقاء على زوج واحد على الأقل نشطاً' : 'Must keep at least 1 pair selected');
         setTimeout(() => setLocalBotFeedback(null), 2500);
         return;
       }
-      updated = current.filter(s => s !== symbol);
+      updated = current.filter(s => s.toUpperCase().replace('USDT', '') !== norm);
     } else {
       updated = [...current, symbol];
     }
@@ -1382,10 +1397,10 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleBotUpdateWithFeedback({ allowedSymbols: AVAILABLE_PAIRS.map(p => p.symbol) }, 'تم تحديد جميع أزواج المنصة', 'Selected all pairs')}
+                        onClick={() => handleBotUpdateWithFeedback({ allowedSymbols: AVAILABLE_PAIRS.map(p => p.symbol) }, 'تم تحديد جميع أزواج المنصة (25 زوج)', 'Selected all 25 pairs')}
                         className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-cyan-300 transition cursor-pointer active:scale-95"
                       >
-                        {isArabic ? 'تحديد الكل' : 'Select All'}
+                        {isArabic ? 'تحديد الكل (25)' : 'Select All (25)'}
                       </button>
                       <button
                         type="button"
@@ -1397,9 +1412,10 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1 max-h-72 overflow-y-auto pr-1">
                     {AVAILABLE_PAIRS.map((pair) => {
-                      const isChecked = currentAllowedPairs.includes(pair.symbol);
+                      const norm = pair.symbol.replace('USDT', '');
+                      const isChecked = currentAllowedPairs.length === 0 || currentAllowedPairs.some(s => s.toUpperCase().replace('USDT', '') === norm);
                       return (
                         <button
                           key={pair.symbol}
