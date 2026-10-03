@@ -97,9 +97,18 @@ export function calculatePortfolioMetrics(
 
   // Filter positions by matching execution mode & market type
   const positions = (activeBotPositions || []).filter(p => {
-    const posMode = p.mode || 'PAPER';
-    const posMarket = p.marketType || 'FUTURES';
-    return posMode === executionMode && posMarket === marketType;
+    if (!p) return false;
+    const posMode = String(p.mode || 'PAPER').toUpperCase();
+    const currentMode = String(executionMode || 'PAPER').toUpperCase();
+    const modeMatches = posMode === currentMode || 
+      (currentMode === 'BINANCE_TESTNET' && (posMode === 'TESTNET' || posMode === 'BINANCE_TESTNET')) ||
+      (currentMode === 'PAPER' && (posMode === 'PAPER' || !p.mode));
+
+    const posMarket = String(p.marketType || 'FUTURES').toUpperCase();
+    const targetMarket = String(marketType || 'FUTURES').toUpperCase();
+    const marketMatches = posMarket === targetMarket;
+
+    return modeMatches && marketMatches;
   });
 
   const inTradeMargin = positions.reduce((acc, p) => {
