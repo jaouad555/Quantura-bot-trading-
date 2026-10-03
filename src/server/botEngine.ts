@@ -28,6 +28,7 @@ const FALLBACK_PRICES: Record<string, number> = {
   SHIBUSDT: 0.000014,
   LTCUSDT: 98,
   TRXUSDT: 0.22,
+  MATICUSDT: 0.42,
   UNIUSDT: 8.2,
   ATOMUSDT: 4.5,
   ARBUSDT: 0.52,

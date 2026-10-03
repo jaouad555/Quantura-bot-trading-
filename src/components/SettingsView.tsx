@@ -15,6 +15,7 @@ import { translations } from '../utils/translations';
 import { apiStorage } from '../utils/apiStorage';
 import { sendTelegramMessage } from '../utils/telegram';
 import { exportConfigToJson, importConfigFromJson } from '../utils/exportImport';
+import { RESPECTED_TRADING_PAIRS } from '../utils/tradingPairs';
 import {
   Globe,
   Clock,
@@ -105,33 +106,11 @@ export interface SettingsViewProps {
 
 type SettingsSection = 'general' | 'binance' | 'wallet' | 'bot' | 'security' | 'notifications' | 'backup';
 
-const AVAILABLE_PAIRS = [
-  { symbol: 'BTCUSDT', name: 'Bitcoin', tag: 'Major' },
-  { symbol: 'ETHUSDT', name: 'Ethereum', tag: 'Major' },
-  { symbol: 'SOLUSDT', name: 'Solana', tag: 'L1 Fast' },
-  { symbol: 'BNBUSDT', name: 'BNB Chain', tag: 'Exchange' },
-  { symbol: 'XRPUSDT', name: 'Ripple', tag: 'Payment' },
-  { symbol: 'DOGEUSDT', name: 'Dogecoin', tag: 'Meme' },
-  { symbol: 'ADAUSDT', name: 'Cardano', tag: 'L1' },
-  { symbol: 'AVAXUSDT', name: 'Avalanche', tag: 'L1' },
-  { symbol: 'DOTUSDT', name: 'Polkadot', tag: 'Interoperable' },
-  { symbol: 'NEARUSDT', name: 'NEAR Protocol', tag: 'AI & Data' },
-  { symbol: 'SUIUSDT', name: 'Sui Network', tag: 'L1 Fast' },
-  { symbol: 'LINKUSDT', name: 'Chainlink', tag: 'Oracle' },
-  { symbol: 'MATICUSDT', name: 'Polygon', tag: 'Layer 2' },
-  { symbol: 'LTCUSDT', name: 'Litecoin', tag: 'Payment' },
-  { symbol: 'UNIUSDT', name: 'Uniswap', tag: 'DeFi' },
-  { symbol: 'ATOMUSDT', name: 'Cosmos', tag: 'Interoperable' },
-  { symbol: 'TRXUSDT', name: 'Tron', tag: 'Layer 1' },
-  { symbol: 'ETCUSDT', name: 'Ethereum Classic', tag: 'PoW' },
-  { symbol: 'BCHUSDT', name: 'Bitcoin Cash', tag: 'Major' },
-  { symbol: 'XLMUSDT', name: 'Stellar', tag: 'Payment' },
-  { symbol: 'ALGOUSDT', name: 'Algorand', tag: 'Layer 1' },
-  { symbol: 'VETUSDT', name: 'VeChain', tag: 'Supply Chain' },
-  { symbol: 'FETUSDT', name: 'Artificial Superintelligence', tag: 'AI' },
-  { symbol: 'RENDERUSDT', name: 'Render Network', tag: 'AI GPU' },
-  { symbol: 'APTUSDT', name: 'Aptos', tag: 'L1 Fast' }
-];
+const AVAILABLE_PAIRS = RESPECTED_TRADING_PAIRS.map((p) => ({
+  symbol: p.symbol,
+  name: p.arabicName ? p.arabicName.split(' ')[0] : p.displayName,
+  tag: p.category,
+}));
 
 const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   language,
