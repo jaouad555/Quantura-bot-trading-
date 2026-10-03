@@ -115,6 +115,8 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
+  const isFrench = language === 'fr' || (!isArabic && !isEn);
+  const isSpot = botConfig.marketType === 'SPOT';
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [timeframeInput, setTimeframeInput] = useState<BotTimeframe>(botConfig.timeframe || 'AUTO');
@@ -2340,7 +2342,13 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           <div className="text-slate-400 text-xs mb-1 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <DollarSign className="w-3.5 h-3.5 text-brand-400" />
-              <span>{isArabic ? 'إجمالي رصيد العقود (Equity)' : 'Futures Wallet Equity'}</span>
+              <span>
+                {isArabic 
+                  ? (isSpot ? 'إجمالي محفظة السبوت (Spot Equity)' : 'إجمالي رصيد العقود (Futures Equity)') 
+                  : (isFrench 
+                      ? (isSpot ? 'Solde Portefeuille Spot' : 'Solde Portefeuille Futures') 
+                      : (isSpot ? 'Spot Wallet Equity' : 'Futures Wallet Equity'))}
+              </span>
             </div>
             {!isLiveMode && onOpenCustomBalanceModal && (
               <button
@@ -2356,12 +2364,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             ${(Number(totalEquity) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800/80 flex items-center justify-between font-mono">
-            <span title={isArabic ? 'السيولة المتاحة لفتح صفقات جديدة' : 'Free Cash Available'}>
+            <span title={isArabic ? (isSpot ? 'السيولة المتاحة للشراء الفوري' : 'السيولة المتاحة لفتح صفقات جديدة') : 'Free Cash Available'}>
               {isArabic ? 'المتاح:' : 'Free:'} <span className="text-emerald-400 font-bold">${(Number(metrics.freeCash) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </span>
             {displayPositions.length > 0 && (
-              <span title={isArabic ? 'الهامش المحجوز في الصفقات النشطة' : 'Margin locked in trades'}>
-                {isArabic ? 'محجوز:' : 'Margin:'} <span className="text-amber-400 font-bold">${(Number(metrics.inTradeMargin) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span title={isArabic ? (isSpot ? 'قيمة الأصول المشترات والمحجوزة' : 'الهامش المحجوز في الصفقات النشطة') : (isSpot ? 'Holdings in trades' : 'Margin locked in trades')}>
+                {isArabic ? (isSpot ? 'مستثمر:' : 'محجوز:') : (isSpot ? 'Invested:' : 'Margin:')} <span className="text-amber-400 font-bold">${(Number(metrics.inTradeMargin) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </span>
             )}
             {floatingPnl !== 0 && (
@@ -2377,7 +2385,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isArabic ? 'الأرباح المحققة (Logs)' : 'Total Realized P&L'}</span>
+            <span>{isArabic ? 'الأرباح المحققة (Logs)' : (isFrench ? 'P&L Total Réalisé' : 'Total Realized P&L')}</span>
           </div>
           <div className={`text-base sm:text-lg font-bold font-mono ${(Number(totalRealizedPnl) || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {(Number(totalRealizedPnl) || 0) >= 0 ? '+' : ''}${(Number(totalRealizedPnl) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -2390,37 +2398,39 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isArabic ? 'نسبة النجاح (Win Rate)' : 'Win Rate'}</span>
+            <span>{isArabic ? 'نسبة النجاح (Win Rate)' : (isFrench ? 'Taux de Réussite' : 'Win Rate')}</span>
           </div>
           <div className="text-base sm:text-lg font-bold text-white font-mono">
             {winRate}%
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">
-            {totalTradesCount} {isArabic ? 'عقود مغلقة' : 'Closed Contracts'}
+            {totalTradesCount} {isArabic ? (isSpot ? 'صفقات مغلقة' : 'عقود مغلقة') : (isFrench ? (isSpot ? 'Trades Spot Clôturés' : 'Contrats Clôturés') : (isSpot ? 'Closed Spot Trades' : 'Closed Contracts'))}
           </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isArabic ? 'العقود النشطة الآن' : 'Active Contracts'}</span>
+            <span>{isArabic ? (isSpot ? 'الصفقات الفورية النشطة (Spot)' : 'العقود النشطة الآن (Futures)') : (isFrench ? (isSpot ? 'Trades Spot Actifs' : 'Contrats Futures Actifs') : (isSpot ? 'Active Spot Trades' : 'Active Contracts'))}</span>
           </div>
           <div className={`text-base sm:text-lg font-bold font-mono ${isOverMaxTrades ? 'text-rose-400' : 'text-brand-400'}`}>
             {displayPositions.length} / {maxTradesLimit}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">
-            {isOverMaxTrades ? (isArabic ? 'تجاوز الحد الأقصى' : 'Limit exceeded') : (isArabic ? 'أقصى حد متزامن' : 'Open slots')}
+            {isOverMaxTrades ? (isArabic ? 'تجاوز الحد الأقصى' : 'Limit exceeded') : (isArabic ? 'أقصى حد صفقات' : 'Open slots')}
           </div>
         </div>
       </div>
 
-      {/* Quick Manual Contract Actions Bar */}
+      {/* Quick Manual Actions Bar */}
       <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs">
             <Gauge className="w-4 h-4 text-cyan-400" />
             <span className="font-bold text-slate-300">
-              {isArabic ? `تداول فوري يدوي (${selectedSymbol}):` : `Quick Manual Contract (${selectedSymbol}):`}
+              {isArabic 
+                ? (isSpot ? `تداول سبوت فوري يدوي (${selectedSymbol}):` : `تداول عقود يدوي (${selectedSymbol}):`) 
+                : (isFrench ? (isSpot ? `Ordre Manuel Spot (${selectedSymbol}):` : `Contrat Manuel Futures (${selectedSymbol}):`) : (isSpot ? `Quick Manual Spot (${selectedSymbol}):` : `Quick Manual Contract (${selectedSymbol}):`))}
             </span>
             <span className="text-[11px] text-slate-400 font-mono">
               {botConfig.marketType === 'SPOT' ? 'SPOT 1x' : `USDT-M ${botConfig.leverage || 10}x`}
@@ -2672,7 +2682,9 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-cyan-400" />
             <h3 className="font-bold text-white text-xs uppercase tracking-wider font-mono">
-              {isArabic ? 'سجل عمليات العقود الآجلة (Live Futures Auto-Logs)' : 'Journal des Exécutions Futures'}
+              {isArabic 
+                ? (isSpot ? 'سجل عمليات التداول الفوري (Live Spot Auto-Logs)' : 'سجل عمليات العقود الآجلة (Live Futures Auto-Logs)') 
+                : (isFrench ? (isSpot ? 'Journal des Exécutions Spot' : 'Journal des Exécutions Futures') : (isSpot ? 'Live Spot Auto-Logs' : 'Live Futures Auto-Logs'))}
             </h3>
           </div>
 
