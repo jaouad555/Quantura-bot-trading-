@@ -48,7 +48,8 @@ import {
   Timeframe,
   BotTimeframe,
   PaperWallet,
-  StrategyId
+  StrategyId,
+  TradeHistoryItem
 } from '../types';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { calculatePortfolioMetrics, calculatePositionUnrealizedPnl } from '../utils/portfolioCalc';
@@ -59,6 +60,7 @@ interface AutoTradingBotProps {
   botConfig: AutoBotConfig;
   activePositions: ActiveBotPosition[];
   logs: AutoTradeLog[];
+  tradeHistory?: TradeHistoryItem[];
   walletBalance: number;
   paperWallet?: PaperWallet;
   currentPrice: number;
@@ -90,6 +92,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
   botConfig,
   activePositions,
   logs,
+  tradeHistory,
   walletBalance,
   paperWallet,
   currentPrice,
@@ -1159,20 +1162,52 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     };
   };
 
-  // Performance Stats Calculation based on wallet and trade logs
-  const totalRealizedPnl = (paperWallet?.realizedPnl !== undefined && typeof paperWallet.realizedPnl === 'number')
-    ? paperWallet.realizedPnl
-    : displayLogs.reduce((acc, log) => acc + (log.pnlUsdt || 0), 0);
+  // Performance Stats Calculation: accurately sums realized PnL across history trades, bot logs, and paper wallet
+  const historyTrades = useMemo(() => {
+    return (tradeHistory || []).filter(t => (t.mode || 'PAPER') === executionMode && t.status !== 'ACTIVE');
+  }, [tradeHistory, executionMode]);
 
-  const tradeCloseLogs = displayLogs.filter(log => 
-    log.type.includes('SELL') || 
-    log.type.includes('SL') || 
-    log.type.includes('TP') || 
-    log.type.includes('LIQUIDATION') ||
-    (log.pnlUsdt !== undefined && log.pnlUsdt !== 0)
-  );
-  const winningTrades = tradeCloseLogs.filter(log => (log.pnlUsdt || 0) > 0).length;
-  const losingTrades = tradeCloseLogs.filter(log => (log.pnlUsdt || 0) <= 0).length;
+  const historyRealizedPnl = useMemo(() => {
+    return historyTrades.reduce((acc, t) => acc + (Number(t.profitUsdt || t.pnlUsdt) || 0), 0);
+  }, [historyTrades]);
+
+  const logsRealizedPnl = useMemo(() => {
+    return displayLogs.reduce((acc, log) => {
+      if (typeof log.pnlUsdt === 'number' && !isNaN(log.pnlUsdt)) {
+        return acc + log.pnlUsdt;
+      }
+      return acc;
+    }, 0);
+  }, [displayLogs]);
+
+  // Robust total realized PnL calculation: takes verified history or logs, ensuring profit from Trailing/TP is never lost
+  const totalRealizedPnl = useMemo(() => {
+    if (historyTrades.length > 0) {
+      return Math.round(historyRealizedPnl * 100) / 100;
+    }
+    if (logsRealizedPnl !== 0) {
+      return Math.round(logsRealizedPnl * 100) / 100;
+    }
+    if (paperWallet?.realizedPnl !== undefined && typeof paperWallet.realizedPnl === 'number') {
+      return Math.round(paperWallet.realizedPnl * 100) / 100;
+    }
+    return 0;
+  }, [historyTrades.length, historyRealizedPnl, logsRealizedPnl, paperWallet?.realizedPnl]);
+
+  const winningTrades = useMemo(() => {
+    if (historyTrades.length > 0) {
+      return historyTrades.filter(t => (Number(t.profitUsdt || t.pnlUsdt) || 0) > 0).length;
+    }
+    return displayLogs.filter(log => (log.pnlUsdt || 0) > 0).length;
+  }, [historyTrades, displayLogs]);
+
+  const losingTrades = useMemo(() => {
+    if (historyTrades.length > 0) {
+      return historyTrades.filter(t => (Number(t.profitUsdt || t.pnlUsdt) || 0) <= 0).length;
+    }
+    return displayLogs.filter(log => (log.pnlUsdt || 0) < 0).length;
+  }, [historyTrades, displayLogs]);
+
   const totalTradesCount = winningTrades + losingTrades;
   const winRate = totalTradesCount > 0 ? ((winningTrades / totalTradesCount) * 100).toFixed(1) : '0.0';
 

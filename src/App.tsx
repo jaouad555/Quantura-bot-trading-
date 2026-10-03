@@ -3857,6 +3857,7 @@ export const App: React.FC = () => {
                 activePositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode)}
                 selectedSymbol={selectedSymbol}
                 logs={(botLogs || []).filter(l => (l.mode || 'PAPER') === executionMode)}
+                tradeHistory={tradeHistory}
                 walletBalance={paperWallet.balance}
                 paperWallet={paperWallet}
                 currentPrice={ticker?.price || 0}

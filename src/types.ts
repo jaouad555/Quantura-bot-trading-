@@ -304,6 +304,8 @@ export interface TradeHistoryItem {
   status: SignalLifecycleStatus | 'ACTIVE' | 'CLOSED' | 'PROFIT_TP1' | 'PROFIT_TP2' | 'STOPPED_OUT';
   profitPercent: number;
   profitUsdt?: number;
+  pnlUsdt?: number;
+  mode?: TradingExecutionMode;
   strategyName?: string;
   confidence: number;
   riskRewardRatio?: number;

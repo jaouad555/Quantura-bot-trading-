@@ -1654,7 +1654,8 @@ export const reconcilePaperWalletDirect = async () => {
     
     // Deduplicate history by trade id or key to ensure PnL is counted strictly once
     const seenHistoryIds = new Set<string>();
-    const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER');
+    const currentMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER' || h.mode === currentMode);
     const uniquePaperTrades = paperTrades.filter((h: any) => {
       const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
       if (seenHistoryIds.has(id)) return false;
@@ -1667,7 +1668,7 @@ export const reconcilePaperWalletDirect = async () => {
     // Get active open positions
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
-    const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER'));
+    const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER' || p.mode === currentMode));
     
     const inTradeMargin = activePaperPositions.reduce((acc: number, p: any) => {
       const m = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
