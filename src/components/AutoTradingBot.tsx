@@ -1180,19 +1180,14 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     }, 0);
   }, [displayLogs]);
 
-  // Robust total realized PnL calculation: takes verified history or logs, ensuring profit from Trailing/TP is never lost
+  // Robust total realized PnL calculation: combines history trades, logs, and paperWallet realized PnL
   const totalRealizedPnl = useMemo(() => {
-    if (historyTrades.length > 0) {
-      return Math.round(historyRealizedPnl * 100) / 100;
-    }
-    if (logsRealizedPnl !== 0) {
-      return Math.round(logsRealizedPnl * 100) / 100;
-    }
-    if (paperWallet?.realizedPnl !== undefined && typeof paperWallet.realizedPnl === 'number') {
-      return Math.round(paperWallet.realizedPnl * 100) / 100;
-    }
-    return 0;
-  }, [historyTrades.length, historyRealizedPnl, logsRealizedPnl, paperWallet?.realizedPnl]);
+    const hPnl = historyRealizedPnl;
+    const lPnl = logsRealizedPnl;
+    const wPnl = paperWallet?.realizedPnl || 0;
+    const bestPnl = hPnl !== 0 ? hPnl : (wPnl !== 0 ? wPnl : lPnl);
+    return Math.round((bestPnl || 0) * 100) / 100;
+  }, [historyRealizedPnl, logsRealizedPnl, paperWallet?.realizedPnl]);
 
   const winningTrades = useMemo(() => {
     if (historyTrades.length > 0) {

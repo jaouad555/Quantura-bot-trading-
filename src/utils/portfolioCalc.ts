@@ -125,7 +125,7 @@ export function calculatePortfolioMetrics(
   let spotHoldingsValue = 0;
   const holdingsSummary: Record<string, { qty: number; valueUsdt: number; avgCost: number; pnlUsdt: number; pnlPercent: number }> = {};
 
-  if (isExchange && binanceAccountInfo) {
+  if (isExchange && binanceAccountInfo && !isTestnet) {
     const rawFree = Number(binanceAccountInfo.freeUsdt) || 0;
     const rawTotalEquity = Number(binanceAccountInfo.totalUsdtEquity) || rawFree;
     freeCash = Math.max(0, rawFree);
@@ -134,45 +134,45 @@ export function calculatePortfolioMetrics(
       const apiInTradeMargin = Number(binanceAccountInfo.inTradeMargin) || 0;
       const apiUnrealized = Number(binanceAccountInfo.unrealizedProfit) || 0;
 
-      // In real Binance Futures (Testnet & Live):
-      // 1. inTradeMargin is authoritatively reported by Binance totalInitialMargin
+      // In real Binance Live Futures:
       effectiveInTradeMargin = apiInTradeMargin > 0 ? apiInTradeMargin : inTradeMargin;
-      // 2. floatingPnl is authoritatively reported by Binance totalUnrealizedProfit
       effectiveFloatingPnl = apiUnrealized !== 0 ? apiUnrealized : floatingPnl;
-      // 3. totalEquity is the true total margin balance on Binance (Wallet Balance + Floating PnL)
-      totalEquity = rawTotalEquity > 0 ? rawTotalEquity : Math.max(0, freeCash + effectiveInTradeMargin + effectiveFloatingPnl);
+      
+      const computedEquity = freeCash + effectiveInTradeMargin + effectiveFloatingPnl;
+      totalEquity = Math.max(rawTotalEquity, computedEquity);
     } else {
-      // SPOT Live / Testnet: Calculate coin balances
       let cryptoVal = 0;
       if (binanceAccountInfo.balances) {
         for (const bal of binanceAccountInfo.balances) {
           if (!['USDT', 'USDC', 'FDUSD', 'BUSD'].includes(bal.asset) && bal.total > 0) {
             const sym = `${bal.asset}USDT`;
-            const price = (selectedSymbol && sym === selectedSymbol.toUpperCase() && liveTickerPrice)
+            const matchingPos = positions.find(p => p.symbol.toUpperCase() === sym);
+            const price = (selectedSymbol && sym === selectedSymbol.toUpperCase() && liveTickerPrice && liveTickerPrice > 0)
               ? liveTickerPrice
-              : (priceLookup && priceLookup[sym] ? priceLookup[sym] : 0);
-            const val = bal.total * (price > 0 ? price : 0);
+              : (priceLookup && priceLookup[sym] ? priceLookup[sym] : (matchingPos ? (matchingPos.currentPrice || matchingPos.entryPrice) : 0));
+            const val = bal.total * (price > 0 ? price : (matchingPos?.entryPrice || 100));
             cryptoVal += val;
             holdingsSummary[bal.asset] = {
               qty: bal.total,
               valueUsdt: Math.round(val * 100) / 100,
-              avgCost: 0,
-              pnlUsdt: 0,
+              avgCost: matchingPos?.entryPrice || 0,
+              pnlUsdt: matchingPos ? calculatePositionUnrealizedPnl(matchingPos, price) : 0,
               pnlPercent: 0,
             };
           }
         }
       }
-      spotHoldingsValue = cryptoVal;
-      totalEquity = Math.max(0, freeCash + spotHoldingsValue);
+      spotHoldingsValue = Math.max(cryptoVal, inTradeMargin);
+      const computedSpotEquity = freeCash + spotHoldingsValue + effectiveFloatingPnl;
+      totalEquity = Math.max(rawTotalEquity, computedSpotEquity, freeCash + inTradeMargin + effectiveFloatingPnl);
     }
   } else {
-    // PAPER Simulation / Sandbox
+    // PAPER Simulation & BINANCE_TESTNET Sandbox
     realizedPnl = paperWallet?.realizedPnl ?? 0;
     const baseDeposit = (paperWallet as any)?.initialDeposit || 1000;
     const totalCapital = baseDeposit + realizedPnl;
 
-    // Margin is strictly deducted from available cash whenever positions are open
+    // Root Fix: Free Cash = Total Capital (Deposit + Realized PnL) - In-Trade Margin
     freeCash = Math.max(0, Math.round((totalCapital - inTradeMargin) * 100) / 100);
     effectiveInTradeMargin = inTradeMargin;
     effectiveFloatingPnl = floatingPnl;
@@ -181,6 +181,7 @@ export function calculatePortfolioMetrics(
       spotHoldingsValue = Math.max(0, inTradeMargin + effectiveFloatingPnl);
       totalEquity = Math.max(0, Math.round((freeCash + spotHoldingsValue) * 100) / 100);
     } else {
+      // Exact User Requirement: Total Equity = Free Cash + In-Trade Margin + Floating P&L
       totalEquity = Math.max(0, Math.round((freeCash + inTradeMargin + effectiveFloatingPnl) * 100) / 100);
     }
   }
