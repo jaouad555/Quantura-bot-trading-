@@ -769,7 +769,17 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
               `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة (canTrade: OK)' : '🔴 مقيدة (راجع مفاتيح API)'}\n` +
               `• <b>زمن الاستجابة:</b> ${realAcc.latencyMs || 20}ms\n`;
           } else {
-            balText += `⚠️ <b>خطأ في الاتصال ببايننس:</b> ${realAcc.error || 'يرجى مراجعة المفاتيح وصلاحياتها'}\n`;
+            const walletStr = await kv.get('btc_paper_wallet');
+            const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+            const paperEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
+            
+            balText += `⚠️ <b>مفاتيح Binance API غير متصلة بالسيرفر:</b>\n` +
+              `• لم يتم العثور على مفاتيح API صالحة محفوظة على السيرفر لوضع <b>${netName}</b>.\n` +
+              `• <b>لربط المفاتيح:</b> افتح نافذة <b>Binance API Settings</b> في التطبيق، وأدخل مفاتيحك ثم اضغط <b>Save / حفظ</b>.\n` +
+              `• <b>أو للتبديل لوضع المحاكاة:</b> أرسل الأمر <code>/paper</code>.\n\n` +
+              `📝 <b>رصيد محفظة المحاكاة (Paper Sandbox):</b>\n` +
+              `• <b>الرصيد المتاح (Free):</b> $${wallet.balance.toFixed(2)} USDT\n` +
+              `• <b>إجمالي قيمة المحفظة (Equity):</b> $${paperEquity.toFixed(2)} USDT\n`;
           }
         } else {
           const walletStr = await kv.get('btc_paper_wallet');
