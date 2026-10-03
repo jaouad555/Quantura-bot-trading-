@@ -167,43 +167,21 @@ export function calculatePortfolioMetrics(
       totalEquity = Math.max(0, freeCash + spotHoldingsValue);
     }
   } else {
-    // PAPER Simulation
-    if (marketType === 'SPOT') {
-      // Paper Spot Wallet
-      const spotWallet = paperWallet?.spotWallet;
-      freeCash = spotWallet ? Math.max(0, spotWallet.usdtBalance) : (paperWallet?.spotBalance ?? paperWallet?.balance ?? 1000);
-      realizedPnl = spotWallet ? spotWallet.realizedPnlUsdt : (paperWallet?.realizedPnl ?? 0);
+    // PAPER Simulation / Sandbox
+    realizedPnl = paperWallet?.realizedPnl ?? 0;
+    const baseDeposit = (paperWallet as any)?.initialDeposit || 1000;
+    const totalCapital = baseDeposit + realizedPnl;
 
-      // Compute holdings value
-      if (spotWallet?.holdings) {
-        for (const [coin, h] of Object.entries(spotWallet.holdings)) {
-          if (h.qty > 0) {
-            const sym = `${coin}USDT`;
-            const currentP = (selectedSymbol && sym === selectedSymbol.toUpperCase() && liveTickerPrice)
-              ? liveTickerPrice
-              : (priceLookup && priceLookup[sym] ? priceLookup[sym] : h.avgBuyPrice);
-            const currentVal = h.qty * currentP;
-            const costVal = h.totalCostUsdt || (h.qty * h.avgBuyPrice);
-            const pnl = currentVal - costVal;
-            const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
-            spotHoldingsValue += currentVal;
-            holdingsSummary[coin] = {
-              qty: h.qty,
-              valueUsdt: Math.round(currentVal * 100) / 100,
-              avgCost: h.avgBuyPrice,
-              pnlUsdt: Math.round(pnl * 100) / 100,
-              pnlPercent: Math.round(pnlPct * 10) / 10,
-            };
-          }
-        }
-      }
-      totalEquity = Math.max(0, freeCash + spotHoldingsValue);
+    // Margin is strictly deducted from available cash whenever positions are open
+    freeCash = Math.max(0, Math.round((totalCapital - inTradeMargin) * 100) / 100);
+    effectiveInTradeMargin = inTradeMargin;
+    effectiveFloatingPnl = floatingPnl;
+    
+    if (marketType === 'SPOT') {
+      spotHoldingsValue = Math.max(0, inTradeMargin + effectiveFloatingPnl);
+      totalEquity = Math.max(0, Math.round((freeCash + spotHoldingsValue) * 100) / 100);
     } else {
-      // Paper Futures Wallet
-      const futuresWallet = paperWallet?.futuresWallet;
-      freeCash = futuresWallet ? Math.max(0, futuresWallet.availableBalanceUsdt) : (paperWallet?.futuresBalance ?? paperWallet?.balance ?? 1000);
-      realizedPnl = futuresWallet ? futuresWallet.realizedPnlUsdt : (paperWallet?.realizedPnl ?? 0);
-      totalEquity = Math.max(0, freeCash + inTradeMargin + floatingPnl);
+      totalEquity = Math.max(0, Math.round((freeCash + inTradeMargin + effectiveFloatingPnl) * 100) / 100);
     }
   }
 
