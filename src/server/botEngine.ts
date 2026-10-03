@@ -227,6 +227,8 @@ export const getTelegramCredentials = async () => {
   return { token, chatId };
 };
 
+const sentTelegramMessageCache = new Map<string, number>();
+
 export const startTelegramSync = () => {
   if (telegramInterval) clearInterval(telegramInterval);
 
@@ -247,14 +249,13 @@ export const startTelegramSync = () => {
       const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
       
       // --- STRICT MODE & MARKET SEPARATION ---
-      const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode);
+      const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode && (p.marketType || 'SPOT') === marketType);
 
       const now = Date.now();
-      const countChanged = positions.length !== lastSyncPositionsCount;
-      const isIntervalElapsed = now - lastSyncTimestamp >= 30 * 60 * 1000; // 30 minutes periodic health sync
+      const isIntervalElapsed = now - lastSyncTimestamp >= 60 * 60 * 1000; // 1 hour periodic health sync
 
-      // Only send periodic summary if positions count changed or 30 minutes elapsed while trades are open
-      if (!countChanged && !isIntervalElapsed) return;
+      // Only send periodic summary once per hour (never duplicate individual trade alerts)
+      if (!isIntervalElapsed) return;
 
       lastSyncPositionsCount = positions.length;
       lastSyncTimestamp = now;
@@ -263,7 +264,6 @@ export const startTelegramSync = () => {
       const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
       let unrealizedPnl = 0;
-      let realizedPnl = wallet.realizedPnl || 0;
       let availableBalance = wallet.balance || 0;
       let totalEquity = wallet.balance || 1000;
 
@@ -275,48 +275,68 @@ export const startTelegramSync = () => {
         }
       }
 
+      let inTradeMargin = 0;
       if (positions.length > 0) {
         for (const pos of positions) {
           const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || marketType);
-          if (currentP && currentP > 0) {
-            unrealizedPnl += calculatePnl(pos, currentP);
-          }
+          const posPnl = pos.unrealizedPnlUsdt !== undefined ? pos.unrealizedPnlUsdt : (currentP && currentP > 0 ? calculatePnl(pos, currentP) : 0);
+          unrealizedPnl += posPnl;
+          inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
         }
       }
 
-      const totalPnl = isExchange ? unrealizedPnl : (realizedPnl + unrealizedPnl);
-      const estTotalValue = isExchange ? totalEquity : (wallet.balance + unrealizedPnl);
+      if (!isExchange) {
+        totalEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
+      }
 
       const modeTitle = isLive ? '⚡ Binance Live (حقيقي)' : (isTestnet ? '🧪 Binance Testnet (تجريبي)' : '📝 Paper Trading (وهمي)');
       const marketTitle = marketType === 'SPOT' ? '🪙 Spot Market (سبوت)' : '⚡ USDT-M Futures (عقود)';
 
-      const message = `🤖 <b>Quantura AI Bot - تقرير المزامنة الدورية</b>\n\n` +
+      const message = `🤖 <b>Quantura AI Bot - تقرير المزامنة الدورية (ساعة)</b>\n\n` +
                       `🌐 <b>البيئة:</b> ${modeTitle}\n` +
                       `🎯 <b>السوق:</b> ${marketTitle}\n` +
                       `📊 <b>الصفقات النشطة:</b> ${positions.length} صفقة\n` +
                       `📈 <b>الربح اللحظي (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
                       `💵 <b>الرصيد المتاح:</b> $${availableBalance.toFixed(2)} USDT\n` +
-                      `🏦 <b>إجمالي قيمة المحفظة:</b> $${estTotalValue.toFixed(2)} USDT`;
+                      `🏦 <b>إجمالي قيمة المحفظة:</b> $${totalEquity.toFixed(2)} USDT`;
 
       await sendServerTelegramNotification(message);
 
     } catch (error) {
       console.error('Telegram Sync Error:', error);
     }
-  }, 60000); // Check loop runs every minute, throttled to 30 mins to avoid rate limits
+  }, 60000);
 
   console.log('📢 Telegram Periodic Smart Sync Started!');
   startTelegramCommandListener();
 };
 
 /**
- * Instant Telegram Notification Helper for Trade Events with Auto-Retry & Plaintext Fallback
+ * Instant Telegram Notification Helper for Trade Events with Deduplication & Plaintext Fallback
  */
 export const sendServerTelegramNotification = async (text: string, targetChatId?: string) => {
   try {
     const { token, chatId } = await getTelegramCredentials();
     const destinationChatId = targetChatId || chatId;
     if (!token || !destinationChatId || !text) return;
+
+    // Strict 8-second deduplication: normalized text prevents duplicate identical alerts
+    const now = Date.now();
+    const normalizedText = text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const dedupeKey = `${destinationChatId}_${normalizedText}`;
+    const lastSentTime = sentTelegramMessageCache.get(dedupeKey);
+    if (lastSentTime && (now - lastSentTime < 8000)) {
+      console.log(`[TELEGRAM DEDUPE] Dropped duplicate message to ${destinationChatId}`);
+      return;
+    }
+    sentTelegramMessageCache.set(dedupeKey, now);
+
+    // Garbage collect cache
+    if (sentTelegramMessageCache.size > 200) {
+      for (const [k, v] of sentTelegramMessageCache.entries()) {
+        if (now - v > 45000) sentTelegramMessageCache.delete(k);
+      }
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
@@ -344,7 +364,7 @@ export const sendServerTelegramNotification = async (text: string, targetChatId?
           body: JSON.stringify({ chat_id: destinationChatId, text: plainText }),
         }).catch(() => {});
       } else if (res.status === 429) {
-        console.warn(`[TELEGRAM RATE LIMIT] 429 received from Telegram API: ${errData?.description || 'Too many requests'}. Notification queued.`);
+        console.warn(`[TELEGRAM RATE LIMIT] 429 received from Telegram API: ${errData?.description || 'Too many requests'}.`);
       } else {
         console.warn(`[TELEGRAM ERROR] ${errData?.description || res.statusText}`);
       }
@@ -660,21 +680,22 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
         const positionsStr = await kv.get('btc_active_bot_positions');
         const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
-        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode);
+        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode && (p.marketType || 'SPOT') === marketType);
 
         let unrealizedPnl = 0;
+        let inTradeMargin = 0;
         for (const pos of positions) {
           const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || marketType);
-          if (currentP && currentP > 0) {
-            unrealizedPnl += calculatePnl(pos, currentP);
-          }
+          const pnl = pos.unrealizedPnlUsdt !== undefined ? pos.unrealizedPnlUsdt : (currentP && currentP > 0 ? calculatePnl(pos, currentP) : 0);
+          unrealizedPnl += pnl;
+          inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
         }
 
         const walletStr = await kv.get('btc_paper_wallet');
         const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
         let availableBalance = wallet.balance || 0;
-        let totalEquity = wallet.balance + unrealizedPnl;
+        let totalEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
         let canTradeStatus = true;
         let latencyMs = 24;
 
@@ -682,7 +703,8 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           const realAccount = await fetchRealBinanceAccountDirect();
           if (realAccount.success) {
             availableBalance = realAccount.freeUsdt || 0;
-            totalEquity = (realAccount.totalUsdtEquity || realAccount.freeUsdt || 0) + (isLive ? 0 : unrealizedPnl);
+            totalEquity = realAccount.totalUsdtEquity || realAccount.freeUsdt || 0;
+            inTradeMargin = realAccount.inTradeMargin || inTradeMargin;
             canTradeStatus = realAccount.canTrade ?? true;
             latencyMs = realAccount.latencyMs || 24;
           }
@@ -698,8 +720,10 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           `• <b>نوع السوق:</b> ${marketLabel}\n` +
           `• <b>الصفقات النشطة:</b> ${positions.length} / ${config.maxOpenTrades || 3} صفقات\n` +
           `• <b>الربح اللحظي العائم:</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
-          `• <b>الرصيد المتاح:</b> $${availableBalance.toFixed(2)} USDT\n` +
-          `• <b>إجمالي قيمة المحفظة:</b> $${totalEquity.toFixed(2)} USDT\n` +
+          `• <b>الرصيد المتاح (Free):</b> $${availableBalance.toFixed(2)} USDT\n` +
+          `• <b>الهامش في الصفقات:</b> $${inTradeMargin.toFixed(2)} USDT\n` +
+          `• <b>إجمالي قيمة المحفظة (Equity):</b> $${totalEquity.toFixed(2)} USDT\n` +
+          `• <b>الأرباح المحققة:</b> $${(wallet.realizedPnl || 0).toFixed(2)} USDT\n` +
           `• <b>الاستراتيجيات النشطة:</b> ${activeStrats.length} استراتيجية\n` +
           `• <b>صلاحية التداول:</b> ${canTradeStatus ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
           `• <b>سرعة الاستجابة:</b> ${latencyMs}ms\n` +
@@ -718,6 +742,19 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         const kvMarketType = await kv.get('app_binance_market_type');
         const marketType = kvMarketType || 'SPOT';
 
+        const positionsStr = await kv.get('btc_active_bot_positions');
+        const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
+        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode && (p.marketType || 'SPOT') === marketType);
+
+        let unrealizedPnl = 0;
+        let inTradeMargin = 0;
+        for (const pos of positions) {
+          const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || marketType);
+          const pnl = pos.unrealizedPnlUsdt !== undefined ? pos.unrealizedPnlUsdt : (currentP && currentP > 0 ? calculatePnl(pos, currentP) : 0);
+          unrealizedPnl += pnl;
+          inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
+        }
+
         let balText = `💼 <b>تقرير رصيد المحفظة الشامل</b>\n\n`;
 
         if (isExchange) {
@@ -725,9 +762,10 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           const netName = isTestnet ? 'Binance Testnet Sandbox' : 'Binance Mainnet Live';
           if (realAcc.success) {
             balText += `🌐 <b>شبكة: ${netName} (${realAcc.marketType || marketType})</b>\n` +
-              `• <b>الرصيد المتاح للتداول:</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
-              `• <b>إجمالي قيمة الأصول:</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
-              `• <b>الهامش المستثمر في الصفقات:</b> $${(realAcc.inTradeMargin || 0).toFixed(2)} USDT\n` +
+              `• <b>الرصيد المتاح للتداول (Free USDT):</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
+              `• <b>إجمالي قيمة المحفظة (Total Equity):</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
+              `• <b>الهامش المستثمر في الصفقات:</b> $${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT\n` +
+              `• <b>الربح اللحظي العائم (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
               `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة (canTrade: OK)' : '🔴 مقيدة (راجع مفاتيح API)'}\n` +
               `• <b>زمن الاستجابة:</b> ${realAcc.latencyMs || 20}ms\n`;
           } else {
@@ -736,10 +774,14 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         } else {
           const walletStr = await kv.get('btc_paper_wallet');
           const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+          const paperEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
           balText += `📝 <b>محفظة المحاكاة الوهمية (Paper Sandbox):</b>\n` +
-            `• <b>الرصيد المتاح:</b> $${wallet.balance.toFixed(2)} USDT\n` +
-            `• <b>الأرباح المحققة:</b> $${wallet.realizedPnl.toFixed(2)} USDT\n` +
-            `• <b>القيمة الأولية:</b> $1,000.00 USDT\n`;
+            `• <b>الرصيد المتاح (Free Cash):</b> $${wallet.balance.toFixed(2)} USDT\n` +
+            `• <b>الهامش في الصفقات (In-Trade):</b> $${inTradeMargin.toFixed(2)} USDT\n` +
+            `• <b>الربح اللحظي العائم (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
+            `• <b>إجمالي قيمة المحفظة (Total Equity):</b> $${paperEquity.toFixed(2)} USDT\n` +
+            `• <b>الأرباح المحققة (Realized PnL):</b> $${wallet.realizedPnl.toFixed(2)} USDT\n` +
+            `• <b>الإيداع المبدئي:</b> $1,000.00 USDT\n`;
         }
 
         balText += `\n⏱️ <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
@@ -755,13 +797,13 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
         const positionsStr = await kv.get('btc_active_bot_positions');
         const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
-        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode);
+        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode && (p.marketType || 'SPOT') === defaultMt);
 
         const modeName = mode === 'BINANCE_LIVE' ? 'Live' : (mode === 'BINANCE_TESTNET' ? 'Testnet' : 'Paper');
 
         if (!Array.isArray(positions) || positions.length === 0) {
           await sendServerTelegramNotification(
-            `ℹ️ <b>لا توجد صفقات مفتوحة حالياً في وضع ${modeName}.</b>\n` +
+            `ℹ️ <b>لا توجد صفقات مفتوحة حالياً في وضع ${modeName} لسوق ${defaultMt}.</b>\n` +
             `رادار السوق في حالة ترصد وبانتظار تشكل فرص ذات موثوقية عالية.`,
             chatId
           );
@@ -773,19 +815,19 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           const pos = positions[i];
           const posMt = pos.marketType || defaultMt;
           const currentP = await fetchSymbolPrice(pos.symbol, posMt);
-          const pnl = currentP ? calculatePnl(pos, currentP) : 0;
+          const posPrice = (currentP && currentP > 0) ? currentP : (pos.currentPrice || pos.entryPrice);
+          const pnl = pos.unrealizedPnlUsdt !== undefined ? pos.unrealizedPnlUsdt : (posPrice ? calculatePnl(pos, posPrice) : 0);
           const isLong = pos.decision === 'LONG' || pos.side === 'BUY' || !pos.decision;
           const lev = posMt === 'SPOT' ? 1 : (pos.leverage || 1);
-          const pnlPct = (pos.entryPrice && currentP) 
-            ? (((currentP - pos.entryPrice) / pos.entryPrice) * (isLong ? 1 : -1) * lev * 100)
-            : 0;
+          const margin = pos.marginUsdt || pos.remainingAmountUsdt || 0;
+          const roe = pos.roePercent !== undefined ? pos.roePercent : (margin > 0 ? (pnl / margin) * 100 : 0);
           const sign = pnl >= 0 ? '+' : '';
 
           msg += `<b>${i + 1}. ${pos.symbol}</b> [${isLong ? '🟢 LONG' : '🔴 SHORT'} ${lev}x - ${posMt}]\n` +
             `• <b>سعر الدخول:</b> $${pos.entryPrice}\n` +
-            `• <b>السعر اللحظي:</b> $${currentP ? currentP.toFixed(currentP < 10 ? 4 : 2) : 'N/A'}\n` +
-            `• <b>الربح اللحظي:</b> ${sign}$${pnl.toFixed(2)} (${sign}${pnlPct.toFixed(2)}%)\n` +
-            `• <b>الهامش:</b> $${(pos.marginUsdt || pos.remainingAmountUsdt || 0).toFixed(2)} USDT\n` +
+            `• <b>السعر اللحظي:</b> $${posPrice ? posPrice.toFixed(posPrice < 10 ? 4 : 2) : 'N/A'}\n` +
+            `• <b>الربح اللحظي:</b> ${sign}$${pnl.toFixed(2)} (${sign}${roe.toFixed(1)}% ROE)\n` +
+            `• <b>الهامش:</b> $${margin.toFixed(2)} USDT\n` +
             `• <b>الهدف TP1:</b> $${pos.tp1 || '-'}\n` +
             `• <b>وقف الخسارة SL:</b> $${pos.stopLoss || '-'}\n` +
             `• <b>الاستراتيجية:</b> ${pos.strategyName || 'Quantitative Signal'}\n\n`;
@@ -1984,11 +2026,12 @@ export const startBotEngine = () => {
           stateChanged = true;
 
           sendServerTelegramNotification(
-            `🎯 <b>TP1 Target Achieved!</b>\n\n` +
-            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
-            `💰 Closed: 50% at $${currentP.toLocaleString()}\n` +
-            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}% Net ROE)\n` +
-            `🛡️ Stop Loss secured at Fee-Aware Breakeven ($${pos.stopLoss?.toLocaleString()})`
+            `🎯 <b>تم تحقيق الهدف الأول (TP1) بنجاح!</b>\n\n` +
+            `• <b>الزوج:</b> <b>${pos.symbol}</b> (${pos.decision || 'LONG'})\n` +
+            `• <b>سعر الإغلاق الجزئي:</b> $${currentP.toFixed(currentP < 10 ? 4 : 2)}\n` +
+            `• <b>الكمية المغلقة:</b> 50% تأمين أرباح\n` +
+            `• <b>الربح المحقق:</b> +$${tranchePnl.toFixed(2)} USDT (+${roeMetrics.netROE.toFixed(1)}% ROE)\n` +
+            `• <b>حماية رأس المال:</b> تم رفع وقف الخسارة SL إلى نقطة الدخول عند $${(pos.stopLoss || pos.entryPrice).toFixed(currentP < 10 ? 4 : 2)}`
           );
 
           recordPushAlertDirect({
@@ -2051,11 +2094,12 @@ export const startBotEngine = () => {
           stateChanged = true;
 
           sendServerTelegramNotification(
-            `🎯 <b>TP2 Target Hit! (Runner Secured)</b>\n\n` +
-            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
-            `💰 Closed: 50% remaining at $${currentP.toLocaleString()}\n` +
-            `📈 Realized PnL: +$${tranchePnl.toFixed(2)} (+${roeMetrics.netROE.toFixed(1)}%)\n` +
-            `🛡️ Stop Loss advanced to TP1 (${(pos.tp1 || 0).toLocaleString()})`
+            `🎯 <b>تم تحقيق الهدف الثاني (TP2)!</b>\n\n` +
+            `• <b>الزوج:</b> <b>${pos.symbol}</b> (${pos.decision || 'LONG'})\n` +
+            `• <b>سعر الإغلاق الجزئي:</b> $${currentP.toFixed(currentP < 10 ? 4 : 2)}\n` +
+            `• <b>الكمية المغلقة:</b> 50% من المتبقي\n` +
+            `• <b>الربح المحقق:</b> +$${tranchePnl.toFixed(2)} USDT (+${roeMetrics.netROE.toFixed(1)}% ROE)\n` +
+            `• <b>تأمين الأرباح:</b> تم رفع وقف الخسارة SL إلى سعر الهدف الأول TP1 عند $${(pos.tp1 || 0).toFixed(currentP < 10 ? 4 : 2)}`
           );
 
           recordPushAlertDirect({
@@ -2113,16 +2157,17 @@ export const startBotEngine = () => {
           const logType = isTp3 ? 'AUTO_SELL_TP3' : (pos.isTrailingActive ? 'AUTO_TRAILING_SL' : 'AUTO_SL');
           
           const closeTitle = isTp3 
-            ? '🏆 <b>TP3 Final Moonbag Target Achieved!</b>' 
-            : (pos.isTrailingActive ? '⚡ <b>Trailing Stop Executed (Profit Locked)</b>' : '🛑 <b>Stop Loss Triggered</b>');
+            ? '🏆 <b>تم تحقيق الهدف النهائي بالكامل (TP3)!</b>' 
+            : (pos.isTrailingActive ? '⚡ <b>تم تفعيل وقف الخسارة المتحرك وتأمين الأرباح (Trailing SL)</b>' : '🛑 <b>تم تفعيل وقف الخسارة (Stop Loss)</b>');
           const pnlSign = totalTradePnl >= 0 ? '+' : '';
 
           sendServerTelegramNotification(
             `${closeTitle}\n\n` +
-            `🔹 Pair: <b>${pos.symbol}</b> (${pos.decision})\n` +
-            `📊 Exit Price: $${currentP.toLocaleString()}\n` +
-            `💵 Net Trade PnL: ${pnlSign}$${totalTradePnl.toFixed(2)}\n` +
-            `⏱ Strategy: ${pos.strategyName || 'Quantitative'}`
+            `• <b>الزوج:</b> <b>${pos.symbol}</b> (${pos.decision || 'LONG'})\n` +
+            `• <b>سعر الدخول:</b> $${pos.entryPrice}\n` +
+            `• <b>سعر الخروج:</b> $${currentP.toFixed(currentP < 10 ? 4 : 2)}\n` +
+            `• <b>صافي النتيجة:</b> ${pnlSign}$${totalTradePnl.toFixed(2)} USDT\n` +
+            `• <b>الاستراتيجية:</b> ${pos.strategyName || 'Quantitative AI'}`
           );
 
           recordPushAlertDirect({

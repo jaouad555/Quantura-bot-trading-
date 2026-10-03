@@ -809,14 +809,20 @@ async function processTradingSignal(
     
     // Dispatch instant Telegram Notification
     const sideEmoji = signal.decision === 'LONG' ? '🟢' : '🔴';
+    const modeLabel = isExchangeMode ? (mode === 'BINANCE_LIVE' ? 'Binance Live (حقيقي)' : 'Binance Testnet (تجريبي)') : 'Paper Sandbox (وهمي)';
+    const marketLabel = marketType === 'SPOT' ? 'Spot (سبوت)' : `Futures (عقود x${lev})`;
+    
     sendServerTelegramNotification(
-      `🤖 <b>New Position Opened (${isExchangeMode ? mode : 'PAPER'})</b>\n\n` +
-      `${sideEmoji} Pair: <b>${symUpper}</b> (${signal.decision})\n` +
-      `⚡ Strategy: <b>${signal.strategyName}</b> (${signal.confidence}% Confidence)\n` +
-      `💵 Entry Price: $${currentPrice.toLocaleString()}\n` +
-      `💰 Margin: $${margin.toFixed(2)} (x${lev})\n` +
-      `🎯 TP1: $${safeTp1.toLocaleString()} | TP2: $${safeTp2.toLocaleString()} | TP3: $${safeTp3.toLocaleString()}\n` +
-      `🛑 SL: $${safeSl.toLocaleString()}`
+      `🤖 <b>تم فتح صفقة جديدة | ${symUpper}</b>\n\n` +
+      `• <b>نوع الصفقة:</b> ${sideEmoji} ${signal.decision} (${marketLabel})\n` +
+      `• <b>بيئة التداول:</b> ${modeLabel}\n` +
+      `• <b>الاستراتيجية:</b> ${signal.strategyName} (ثقة: ${signal.confidence}%)\n` +
+      `• <b>سعر الدخول:</b> $${currentPrice.toFixed(currentPrice < 10 ? 4 : 2)}\n` +
+      `• <b>الهامش المستثمر:</b> $${margin.toFixed(2)} USDT\n` +
+      `• <b>الهدف الأول TP1:</b> $${safeTp1.toFixed(safeTp1 < 10 ? 4 : 2)}\n` +
+      `• <b>الهدف الثاني TP2:</b> $${safeTp2.toFixed(safeTp2 < 10 ? 4 : 2)}\n` +
+      `• <b>الهدف النهائي TP3:</b> $${safeTp3.toFixed(safeTp3 < 10 ? 4 : 2)}\n` +
+      `• <b>وقف الخسارة SL:</b> $${safeSl.toFixed(safeSl < 10 ? 4 : 2)}`
     );
 
     recordPushAlertDirect({

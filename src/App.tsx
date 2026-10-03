@@ -751,13 +751,6 @@ export const App: React.FC = () => {
 
   const addBotLog = useCallback((newLog: AutoTradeLog) => {
     setBotLogs((prev) => [newLog, ...(prev || []).slice(0, 49)]);
-    
-    if (telegramBotTokenRef.current && telegramChatIdRef.current) {
-      const modeText = newLog.mode === 'BINANCE_LIVE' ? 'LIVE' : 'PAPER';
-      const pnlText = newLog.pnlUsdt ? `\nPnL: $${newLog.pnlUsdt.toFixed(2)}` : '';
-      const message = `<b>Quantura Bot Action (${modeText})</b>\n\nPair: ${newLog.symbol}\nAction: ${newLog.type}\nReason: ${newLog.reason}\nPrice: $${newLog.price}${pnlText}`;
-      sendTelegramMessage(telegramBotTokenRef.current, telegramChatIdRef.current, message);
-    }
   }, []);
 
   // Selected Trading Pair (Supports BTC + 6 Respected Pairs)
@@ -1151,12 +1144,6 @@ export const App: React.FC = () => {
         playAudioChime();
       }
       
-      // Telegram Notification
-      if (telegramBotTokenRef.current && telegramChatIdRef.current) {
-        const tgMessage = `<b>${title}</b>\n\n${body}`;
-        sendTelegramMessage(telegramBotTokenRef.current, telegramChatIdRef.current, tgMessage);
-      }
-
       // Native Browser Notification (if granted and enabled)
       if (notificationsEnabledRef.current && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         try {
