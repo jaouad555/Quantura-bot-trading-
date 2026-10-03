@@ -2374,10 +2374,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               <DollarSign className="w-3.5 h-3.5 text-brand-400" />
               <span>
                 {isArabic 
-                  ? (isSpot ? 'إجمالي محفظة السبوت (Spot Equity)' : (isTestnetMode ? 'محفظة التجريبي (Testnet Equity)' : 'إجمالي محفظة العقود (Futures Equity)')) 
+                  ? 'الرصيد الحر المتاح (Free Solde)' 
                   : (isFrench 
-                      ? (isSpot ? 'Solde Portefeuille Spot' : (isTestnetMode ? 'Solde Testnet Equity' : 'Solde Portefeuille Futures')) 
-                      : (isSpot ? 'Spot Wallet Equity' : (isTestnetMode ? 'Testnet Wallet Equity' : 'Futures Wallet Equity')))}
+                      ? 'Solde Libre Disponible (Free Solde)' 
+                      : 'Available Free Balance (Free Solde)')}
               </span>
             </div>
             {!isLiveMode && onOpenCustomBalanceModal && (
@@ -2391,14 +2391,14 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
             )}
           </div>
           <div 
-            className="text-base sm:text-lg font-bold text-white font-mono"
-            title={isArabic ? 'إجمالي المحفظة = المبلغ المتبقي (Free) + أرصدة الصفقات المفتوحة + الأرباح/الخسائر العائمة' : 'Total Equity = Free Cash + Open Positions Margin + Floating PnL'}
+            className="text-base sm:text-lg font-bold text-emerald-400 font-mono"
+            title={isArabic ? 'الرصيد الحر المتاح لفتح صفقات جديدة (Free Balance)' : 'Available Free Cash for new positions'}
           >
-            ${(Number(totalEquity) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(Number(metrics.freeCash) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800/80 flex items-center justify-between font-mono">
-            <span title={isArabic ? 'المبلغ المتبقي المتاح (Free)' : 'Free Cash Available'}>
-              {isArabic ? 'المتبقي:' : 'Free:'} <span className="text-emerald-400 font-bold">${(Number(metrics.freeCash) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span title={isArabic ? 'إجمالي المحفظة = الرصيد المتاح + الصفقات المفتوحة + الأرباح/الخسائر العائمة' : 'Total Equity = Free Cash + In Trade + Floating PnL'}>
+              {isArabic ? 'الإجمالي (Total):' : 'Total:'} <span className="text-white font-bold">${(Number(totalEquity) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </span>
             {displayPositions.length > 0 && (
               <span title={isArabic ? (isSpot ? 'قيمة الأصول المشترات في الصفقات' : 'هوامش الصفقات المفتوحة') : (isSpot ? 'Holdings in trades' : 'Margin locked in trades')}>
@@ -2406,7 +2406,7 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
               </span>
             )}
             {floatingPnl !== 0 && (
-              <span title={isArabic ? 'أرباح أو خسائر الصفقات المفتوحة' : 'Floating PnL'}>
+              <span title={isArabic ? 'أرباح أو خسائر الصفقات المفتوحة العائمة' : 'Floating PnL'}>
                 {isArabic ? 'عائم:' : 'PnL:'} <span className={`font-bold ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {floatingPnl >= 0 ? '+' : ''}${(Number(floatingPnl) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
