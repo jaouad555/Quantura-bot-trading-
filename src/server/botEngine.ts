@@ -290,16 +290,16 @@ export const startTelegramSync = () => {
         totalEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
       }
 
-      const modeTitle = isLive ? '⚡ Binance Live (حقيقي)' : (isTestnet ? '🧪 Binance Testnet (تجريبي)' : '📝 Paper Trading (وهمي)');
-      const marketTitle = marketType === 'SPOT' ? '🪙 Spot Market (سبوت)' : '⚡ USDT-M Futures (عقود)';
+      const modeTitle = isLive ? 'Binance Live (حقيقي)' : (isTestnet ? 'Binance Testnet (تجريبي)' : 'Paper Sandbox (محاكاة)');
+      const marketTitle = marketType === 'SPOT' ? 'Spot (سبوت)' : 'USDT-M Futures (عقود)';
 
-      const message = `🤖 <b>Quantura AI Bot - تقرير المزامنة الدورية (ساعة)</b>\n\n` +
-                      `🌐 <b>البيئة:</b> ${modeTitle}\n` +
-                      `🎯 <b>السوق:</b> ${marketTitle}\n` +
-                      `📊 <b>الصفقات النشطة:</b> ${positions.length} صفقة\n` +
-                      `📈 <b>الربح اللحظي (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
-                      `💵 <b>الرصيد المتاح:</b> $${availableBalance.toFixed(2)} USDT\n` +
-                      `🏦 <b>إجمالي قيمة المحفظة:</b> $${totalEquity.toFixed(2)} USDT`;
+      const message = `🤖 <b>Quantura AI Bot - تقرير المزامنة الدورية</b>\n\n` +
+                      `• <b>البيئة:</b> <code>${modeTitle}</code>\n` +
+                      `• <b>السوق:</b> <code>${marketTitle}</code>\n` +
+                      `• <b>الصفقات النشطة:</b> <code>${positions.length} صفقات</code>\n` +
+                      `• <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+                      `• <b>الرصيد المتاح للتداول:</b> <code>${availableBalance.toFixed(2)} USDT</code>\n` +
+                      `• <b>إجمالي قيمة المحفظة:</b> <code>${totalEquity.toFixed(2)} USDT</code>`;
 
       await sendServerTelegramNotification(message);
 
@@ -721,18 +721,17 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
         let statusText = `📊 <b>Quantura Trading Engine - الحالة العامة</b>\n\n` +
           `• <b>تشغيل الروبوت:</b> ${isBotEnabled ? '🟢 مفعل (ON)' : '🔴 متوقف (OFF)'}\n` +
-          `• <b>بيئة التنفيذ:</b> ${modeLabel}\n` +
-          `• <b>نوع السوق:</b> ${marketLabel}\n` +
-          `• <b>الصفقات النشطة:</b> ${positions.length} / ${config.maxOpenTrades || 3} صفقات\n` +
-          `• <b>الربح اللحظي العائم:</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
-          `• <b>الرصيد المتاح (Free):</b> $${availableBalance.toFixed(2)} USDT\n` +
-          `• <b>الهامش في الصفقات:</b> $${inTradeMargin.toFixed(2)} USDT\n` +
-          `• <b>إجمالي قيمة المحفظة (Equity):</b> $${totalEquity.toFixed(2)} USDT\n` +
-          `• <b>الأرباح المحققة:</b> $${(wallet.realizedPnl || 0).toFixed(2)} USDT\n` +
-          `• <b>الاستراتيجيات النشطة:</b> ${activeStrats.length} استراتيجية\n` +
+          `• <b>بيئة التنفيذ:</b> <code>${modeLabel}</code>\n` +
+          `• <b>نوع السوق:</b> <code>${marketLabel}</code>\n` +
+          `• <b>الصفقات النشطة:</b> <code>${positions.length} / ${config.maxOpenTrades || 3} صفقات</code>\n` +
+          `• <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+          `• <b>الرصيد المتاح للتداول:</b> <code>${availableBalance.toFixed(2)} USDT</code>\n` +
+          `• <b>الهامش في الصفقات:</b> <code>${inTradeMargin.toFixed(2)} USDT</code>\n` +
+          `• <b>إجمالي قيمة المحفظة:</b> <code>${totalEquity.toFixed(2)} USDT</code>\n` +
+          `• <b>الأرباح المحققة:</b> <code>${(wallet.realizedPnl || 0).toFixed(2)} USDT</code>\n` +
+          `• <b>الاستراتيجيات النشطة:</b> <code>${activeStrats.length} استراتيجية</code>\n` +
           `• <b>صلاحية التداول:</b> ${canTradeStatus ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
-          `• <b>سرعة الاستجابة:</b> ${latencyMs}ms\n` +
-          `• <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
+          `• <b>سرعة الاستجابة:</b> <code>${latencyMs}ms</code>`;
 
         await sendServerTelegramNotification(statusText, chatId);
         break;
@@ -764,15 +763,15 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
         if (isExchange) {
           const realAcc = await fetchRealBinanceAccountDirect();
-          const netName = isTestnet ? 'Binance Testnet Sandbox' : 'Binance Mainnet Live';
+          const netName = isTestnet ? 'Binance Testnet' : 'Binance Live';
           if (realAcc.success) {
-            balText += `🌐 <b>شبكة: ${netName} (${realAcc.marketType || marketType})</b>\n` +
-              `• <b>الرصيد المتاح للتداول (Free USDT):</b> $${realAcc.freeUsdt.toFixed(2)} USDT\n` +
-              `• <b>إجمالي قيمة المحفظة (Total Equity):</b> $${realAcc.totalUsdtEquity.toFixed(2)} USDT\n` +
-              `• <b>الهامش المستثمر في الصفقات:</b> $${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT\n` +
-              `• <b>الربح اللحظي العائم (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
-              `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة (canTrade: OK)' : '🔴 مقيدة (راجع مفاتيح API)'}\n` +
-              `• <b>زمن الاستجابة:</b> ${realAcc.latencyMs || 20}ms\n`;
+            balText += `🌐 <b>الشبكة:</b> <code>${netName} (${realAcc.marketType || marketType})</code>\n` +
+              `• <b>الرصيد المتاح للتداول:</b> <code>${realAcc.freeUsdt.toFixed(2)} USDT</code>\n` +
+              `• <b>إجمالي قيمة المحفظة:</b> <code>${realAcc.totalUsdtEquity.toFixed(2)} USDT</code>\n` +
+              `• <b>الهامش المستثمر:</b> <code>${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT</code>\n` +
+              `• <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+              `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
+              `• <b>زمن الاستجابة:</b> <code>${realAcc.latencyMs || 20}ms</code>\n`;
           } else {
             const walletStr = await kv.get('btc_paper_wallet');
             const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
@@ -782,9 +781,9 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
               `• لم يتم العثور على مفاتيح API صالحة محفوظة على السيرفر لوضع <b>${netName}</b>.\n` +
               `• <b>لربط المفاتيح:</b> افتح نافذة <b>Binance API Settings</b> في التطبيق، وأدخل مفاتيحك ثم اضغط <b>Save / حفظ</b>.\n` +
               `• <b>أو للتبديل لوضع المحاكاة:</b> أرسل الأمر <code>/paper</code>.\n\n` +
-              `📝 <b>رصيد محفظة المحاكاة (Paper Sandbox):</b>\n` +
-              `• <b>الرصيد المتاح (Free):</b> $${wallet.balance.toFixed(2)} USDT\n` +
-              `• <b>إجمالي قيمة المحفظة (Equity):</b> $${paperEquity.toFixed(2)} USDT\n`;
+              `📝 <b>رصيد محفظة المحاكاة (Paper):</b>\n` +
+              `• <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
+              `• <b>إجمالي قيمة المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n`;
           }
         } else {
           const walletStr = await kv.get('btc_paper_wallet');
@@ -1447,7 +1446,8 @@ export const serverExecuteOrder = async (
   leverage: number = 3,
   reduceOnly: boolean = false,
   stopLossPrice?: number,
-  takeProfitPrice?: number
+  takeProfitPrice?: number,
+  marketTypeParam?: 'SPOT' | 'FUTURES'
 ) => {
     const config = await getBinanceConfig();
     if (!config.isConnected) {
@@ -1456,11 +1456,17 @@ export const serverExecuteOrder = async (
     
     try {
         const normSymbol = symbol.toUpperCase().replace('/', '').trim();
-        const effectiveMt = (config.marketType === 'FUTURES' ? 'FUTURES' : 'SPOT') as 'SPOT' | 'FUTURES';
-        const formattedQty = formatBinancePrecisionQty(normSymbol, quantity, effectiveMt);
+        const effectiveMt = (marketTypeParam || config.marketType || 'SPOT') as 'SPOT' | 'FUTURES';
+        
+        let effQty = quantity;
+        if ((!effQty || effQty <= 0 || isNaN(effQty)) && currentPrice > 0 && quoteOrderQty > 0) {
+          effQty = quoteOrderQty / currentPrice;
+        }
+
+        const formattedQty = formatBinancePrecisionQty(normSymbol, effQty, effectiveMt);
 
         if (formattedQty === '0' || parseFloat(formattedQty) <= 0) {
-          return { success: false, error: `Position size too small for ${normSymbol} (Min Qty not met). Try increasing margin or leverage.` };
+          return { success: false, error: `Position size too small for ${normSymbol} (Min Qty not met: computed ${effQty}). Try increasing margin or leverage.` };
         }
 
         console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly} Mode: ${effectiveMt}`);
@@ -1468,30 +1474,32 @@ export const serverExecuteOrder = async (
         if (effectiveMt === 'FUTURES') {
           const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
           
-          // 1. Ensure symbol leverage and margin type are configured
-          try {
-            const now = Date.now();
+          if (!reduceOnly) {
+            // 1. Ensure symbol leverage and margin type are configured
             try {
-              const marginQuery = `symbol=${normSymbol}&marginType=ISOLATED&timestamp=${now}&recvWindow=10000`;
-              const marginSig = createBinanceSignature(marginQuery, config.apiSecret!);
-              await fetch(`${baseUrl}/fapi/v1/marginType?${marginQuery}&signature=${marginSig}`, {
-                method: 'POST',
-                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
-              });
-            } catch (mErr) { /* Ignore "No need to change margin type" */ }
+              const now = Date.now();
+              try {
+                const marginQuery = `symbol=${normSymbol}&marginType=ISOLATED&timestamp=${now}&recvWindow=10000`;
+                const marginSig = createBinanceSignature(marginQuery, config.apiSecret!);
+                await fetch(`${baseUrl}/fapi/v1/marginType?${marginQuery}&signature=${marginSig}`, {
+                  method: 'POST',
+                  headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
+                });
+              } catch (mErr) { /* Ignore "No need to change margin type" */ }
 
-            const targetLev = Math.max(1, Math.min(50, leverage || 3));
-            const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${now}&recvWindow=10000`;
-            const levSig = createBinanceSignature(levQuery, config.apiSecret!);
-            await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}&signature=${levSig}`, {
-              method: 'POST',
-              headers: {
-                'X-MBX-APIKEY': config.apiKey!,
-                'Content-Type': 'application/json',
-              },
-            });
-          } catch (levErr) {
-            console.warn(`[SERVER ENGINE] Setup notice for ${normSymbol}:`, levErr);
+              const targetLev = Math.max(1, Math.min(50, leverage || 3));
+              const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${now}&recvWindow=10000`;
+              const levSig = createBinanceSignature(levQuery, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}&signature=${levSig}`, {
+                method: 'POST',
+                headers: {
+                  'X-MBX-APIKEY': config.apiKey!,
+                  'Content-Type': 'application/json',
+                },
+              });
+            } catch (levErr) {
+              console.warn(`[SERVER ENGINE] Setup notice for ${normSymbol}:`, levErr);
+            }
           }
 
           // 2. Prepare Futures order parameters
@@ -1532,6 +1540,21 @@ export const serverExecuteOrder = async (
 
           console.log(`[SERVER ENGINE] Binance Futures Order SUCCESS:`, data);
           const primaryOrderId = data.orderId || Date.now().toString();
+
+          // If closing or reduceOnly, clean up any open conditional orders (SL / TP) on Binance
+          if (reduceOnly) {
+            try {
+              const cancelQuery = `symbol=${normSymbol}&timestamp=${Date.now()}&recvWindow=10000`;
+              const cancelSig = createBinanceSignature(cancelQuery, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/allOpenOrders?${cancelQuery}&signature=${cancelSig}`, {
+                method: 'DELETE',
+                headers: { 'X-MBX-APIKEY': config.apiKey! },
+              });
+              console.log(`[SERVER ENGINE] Cleaned up open conditional orders on Binance for ${normSymbol}`);
+            } catch (cErr) {
+              console.warn(`[SERVER ENGINE] Conditional orders cleanup notice:`, cErr);
+            }
+          }
 
           // 3. Place native Conditional Stop Loss on Binance Futures so it appears in "Open Orders"
           if (!reduceOnly && stopLossPrice && stopLossPrice > 0) {
@@ -1910,7 +1933,8 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, pos.remainingAmountBtc, currentP, lev, true);
+              const execQty = pos.remainingAmountBtc || ((marginLost * lev) / currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginLost * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
             }
           } else {
             // Margin lost entirely; zero returned to paper wallet
@@ -2018,7 +2042,8 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP, lev, true);
+              const execQty = (pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (marginClosed * lev) / currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2029,7 +2054,7 @@ export const startBotEngine = () => {
           pos.remainingAmountUsdt -= marginClosed;
           pos.marginUsdt = pos.remainingAmountUsdt;
           pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
-          pos.remainingAmountBtc *= 0.5;
+          pos.remainingAmountBtc = pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (pos.remainingAmountUsdt * lev) / currentP;
           pos.realizedPnlUsdt += tranchePnl;
 
           // Protect capital: move stop loss to fee-aware breakeven, NEVER lowering an already higher trailing SL
@@ -2085,7 +2110,8 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc * 0.5, currentP, lev, true);
+              const execQty = (pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (marginClosed * lev) / currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2096,7 +2122,7 @@ export const startBotEngine = () => {
           pos.remainingAmountUsdt -= marginClosed;
           pos.marginUsdt = pos.remainingAmountUsdt;
           pos.positionSizeUsdt = pos.remainingAmountUsdt * lev;
-          pos.remainingAmountBtc *= 0.5;
+          pos.remainingAmountBtc = pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (pos.remainingAmountUsdt * lev) / currentP;
           pos.realizedPnlUsdt += tranchePnl;
 
           // Lock SL at TP1 price to guarantee massive gain on the remaining runner
@@ -2163,7 +2189,8 @@ export const startBotEngine = () => {
 
           if (isPosLive) {
             if (binanceConfig.isConnected) {
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP, lev, true);
+              const execQty = pos.remainingAmountBtc || ((marginClosed * lev) / currentP);
+              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2380,7 +2407,11 @@ export const closePositionDirect = async (
 
     if (isPosExchange) {
       if (binanceConfig.isConnected) {
-        await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, pos.remainingAmountBtc, currentP, lev, true);
+        const execQty = pos.remainingAmountBtc || ((marginClosed * lev) / currentP);
+        const orderRes = await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+        if (!orderRes.success) {
+          console.warn(`[SERVER ENGINE] Warning closing Binance order for ${pos.symbol}:`, orderRes.error);
+        }
       }
     }
 

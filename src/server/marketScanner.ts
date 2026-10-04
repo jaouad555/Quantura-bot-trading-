@@ -673,7 +673,7 @@ async function processTradingSignal(
     let binanceOrderId = null;
     if (isExchangeMode) {
       const orderSide = isLong ? 'BUY' : 'SELL';
-      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false, safeSl, safeTp1);
+      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false, safeSl, safeTp1, isFutures ? 'FUTURES' : 'SPOT');
       if (!orderRes.success || !orderRes.orderId) {
         console.error(`[EXECUTION] ${symbol} ${mode} ORDER FAILED:`, orderRes.error);
         const errorMsg = orderRes.error || 'Unknown Binance Error';
