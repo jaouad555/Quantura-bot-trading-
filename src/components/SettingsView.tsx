@@ -607,9 +607,9 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
       id: 'chatgpt' as SettingsSection,
       label: 'ChatGPT (OpenAI)',
       desc: isArabic ? 'نموذج ChatGPT للتحليل الكمي الذكي' : 'ChatGPT AI model status & connectivity',
-      icon: (props: any) => <ChatGPTLogo {...props} active={openAiConfig?.isConnected ?? true} />,
+      icon: (props: any) => <ChatGPTLogo {...props} active={openAiConfig?.isConnected ?? false} />,
       badge: openAiConfig?.isConnected ? 'ACTIVE' : null,
-      badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+      badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30'
     },
     {
       id: 'backup' as SettingsSection,
@@ -2472,8 +2472,8 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
             {activeSection === 'chatgpt' && (
               <div key="section-chatgpt" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
-                  <div className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    <ChatGPTLogo active={true} className="w-5 h-5" />
+                  <div className="p-2.5 rounded-2xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                    <ChatGPTLogo active={openAiConfig?.isConnected ?? false} className="w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-white">ChatGPT (OpenAI GPT-4o)</h2>
@@ -2484,7 +2484,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                 </div>
                 <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <ChatGPTLogo active={true} className="w-6 h-6" />
+                    <ChatGPTLogo active={openAiConfig?.isConnected ?? false} className="w-6 h-6" />
                     <div>
                       <div className="text-sm font-bold text-white font-mono">OPENAI_API_KEY (.env)</div>
                       <div className="text-xs text-slate-400">
@@ -2492,7 +2492,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                       </div>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                     gpt-4o
                   </span>
                 </div>

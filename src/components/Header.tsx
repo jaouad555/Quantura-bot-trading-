@@ -1593,16 +1593,16 @@ export const Header: React.FC<HeaderProps> = ({
               {/* 4. ChatGPT */}
               <div className={`p-3.5 rounded-xl border ${
                 aiStatus.chatGptConfigured
-                  ? 'bg-emerald-950/20 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                  ? 'bg-cyan-950/20 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
                   : 'bg-slate-950/60 border-slate-800'
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-emerald-500/30 flex items-center justify-center p-1 shrink-0">
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-cyan-500/30 flex items-center justify-center p-1 shrink-0">
                       <ChatGPTLogo active={aiStatus.chatGptConfigured} className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-white text-sm font-mono">ChatGPT (OpenAI)</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 font-mono font-medium">
                       Smart
                     </span>
                   </div>
@@ -1621,7 +1621,7 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'Interactive AI analysis and chat powered by OpenAI.'}
                 </p>
                 <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
-                  <span>Model: <strong className="text-emerald-300">gpt-4o</strong></span>
+                  <span>Model: <strong className="text-cyan-300">gpt-4o</strong></span>
                   <span>Status: <strong className={aiStatus.chatGptConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.chatGptConfigured ? 'Configured' : 'Optional'}</strong></span>
                 </div>
               </div>
