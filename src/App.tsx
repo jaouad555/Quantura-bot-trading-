@@ -4136,23 +4136,38 @@ export const App: React.FC = () => {
               history={[
                 ...(activeBotPositions || [])
                   .filter(p => (p.mode || 'PAPER') === executionMode)
-                  .map(pos => ({
-                    id: pos.id,
-                    timestamp: pos.openedAt,
-                    symbol: pos.symbol,
-                    decision: pos.decision,
-                    timeframe: timeframe,
-                    entryPrice: pos.entryPrice,
-                    currentPrice: (pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice),
-                    tp1: pos.tp1,
-                    tp2: pos.tp2,
-                    tp3: pos.tp3,
-                    stopLoss: pos.stopLoss,
-                    status: 'ACTIVE' as const,
-                    profitPercent: 0,
-                    confidence: activeSignal?.confidence || 75,
-                    pnlHistory: pos.pnlHistory,
-                  })),
+                  .map(pos => {
+                    const liveP = (pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice);
+                    const isLong = pos.decision === 'LONG';
+                    const lev = pos.marketType === 'SPOT' ? 1 : (pos.leverage || 1);
+                    const rawDelta = pos.entryPrice > 0 ? ((isLong ? liveP - pos.entryPrice : pos.entryPrice - liveP) / pos.entryPrice) * 100 : 0;
+                    const calcRoe = typeof pos.netROE === 'number' ? pos.netROE : (typeof pos.roePercent === 'number' ? pos.roePercent : rawDelta * lev);
+                    const marginVal = pos.remainingAmountUsdt || pos.initialAmountUsdt || 0;
+                    const calcUsdt = typeof pos.unrealizedPnlUsdt === 'number' ? pos.unrealizedPnlUsdt : (marginVal * calcRoe) / 100;
+                    return {
+                      id: pos.id,
+                      timestamp: pos.openedAt,
+                      symbol: pos.symbol,
+                      decision: pos.decision,
+                      timeframe: timeframe,
+                      entryPrice: pos.entryPrice,
+                      currentPrice: liveP,
+                      tp1: pos.tp1,
+                      tp2: pos.tp2,
+                      tp3: pos.tp3,
+                      stopLoss: pos.stopLoss,
+                      status: 'ACTIVE' as const,
+                      profitPercent: calcRoe,
+                      profitUsdt: calcUsdt,
+                      marketType: pos.marketType || (lev > 1 ? 'FUTURES' : 'SPOT'),
+                      leverage: lev,
+                      strategyName: pos.strategyName,
+                      reason: pos.lastAction,
+                      confidence: activeSignal?.confidence || 80,
+                      pnlHistory: pos.pnlHistory,
+                      mode: pos.mode || executionMode,
+                    };
+                  }),
                 ...(tradeHistory || [])
                   .filter(t => t.status !== 'ACTIVE')
               ]}
