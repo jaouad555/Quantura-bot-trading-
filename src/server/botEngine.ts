@@ -719,19 +719,23 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         const modeLabel = isLive ? '⚡ Binance Live (حقيقي)' : (isTestnet ? '🧪 Binance Testnet (تجريبي)' : '📝 Paper Sandbox (وهمي)');
         const marketLabel = marketType === 'SPOT' ? '🪙 Spot Market (سبوت)' : `⚡ USDT-M Futures (${config.leverage || 5}x)`;
 
-        let statusText = `📊 <b>Quantura Trading Engine - الحالة العامة</b>\n\n` +
-          `• <b>تشغيل الروبوت:</b> ${isBotEnabled ? '🟢 مفعل (ON)' : '🔴 متوقف (OFF)'}\n` +
-          `• <b>بيئة التنفيذ:</b> <code>${modeLabel}</code>\n` +
-          `• <b>نوع السوق:</b> <code>${marketLabel}</code>\n` +
-          `• <b>الصفقات النشطة:</b> <code>${positions.length} / ${config.maxOpenTrades || 3} صفقات</code>\n` +
-          `• <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
-          `• <b>الرصيد المتاح للتداول:</b> <code>${availableBalance.toFixed(2)} USDT</code>\n` +
-          `• <b>الهامش في الصفقات:</b> <code>${inTradeMargin.toFixed(2)} USDT</code>\n` +
-          `• <b>إجمالي قيمة المحفظة:</b> <code>${totalEquity.toFixed(2)} USDT</code>\n` +
-          `• <b>الأرباح المحققة:</b> <code>${(wallet.realizedPnl || 0).toFixed(2)} USDT</code>\n` +
-          `• <b>الاستراتيجيات النشطة:</b> <code>${activeStrats.length} استراتيجية</code>\n` +
-          `• <b>صلاحية التداول:</b> ${canTradeStatus ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
-          `• <b>سرعة الاستجابة:</b> <code>${latencyMs}ms</code>`;
+        let statusText = `📊 <b>حالة البوت العامة | Quantura Trading Engine</b>\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `▫️ <b>حالة الروبوت:</b> ${isBotEnabled ? '🟢 يعمل (ON)' : '🔴 متوقف (OFF)'}\n` +
+          `▫️ <b>بيئة التنفيذ:</b> <code>${modeLabel}</code>\n` +
+          `▫️ <b>نوع السوق:</b> <code>${marketLabel}</code>\n\n` +
+          `💼 <b>أرصدة المحفظة:</b>\n` +
+          `├ <b>الرصيد المتاح:</b> <code>${availableBalance.toFixed(2)} USDT</code>\n` +
+          `├ <b>الهامش المستثمر:</b> <code>${inTradeMargin.toFixed(2)} USDT</code>\n` +
+          `├ <b>إجمالي المحفظة:</b> <code>${totalEquity.toFixed(2)} USDT</code>\n` +
+          `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+          `└ <b>الأرباح المحققة:</b> <code>${(wallet.realizedPnl || 0).toFixed(2)} USDT</code>\n\n` +
+          `⚡ <b>النظام والتداول:</b>\n` +
+          `├ <b>الصفقات المفتوحة:</b> <code>${positions.length} / ${config.maxOpenTrades || 3}</code>\n` +
+          `├ <b>الاستراتيجيات:</b> <code>${activeStrats.length} نشطة</code>\n` +
+          `├ <b>صلاحية التداول:</b> ${canTradeStatus ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
+          `└ <b>سرعة الاستجابة:</b> <code>${latencyMs}ms</code>\n` +
+          `━━━━━━━━━━━━━━━━━━`;
 
         await sendServerTelegramNotification(statusText, chatId);
         break;
@@ -759,19 +763,19 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
         }
 
-        let balText = `💼 <b>تقرير رصيد المحفظة الشامل</b>\n\n`;
+        let balText = `💼 <b>تقرير رصيد المحفظة الشامل</b>\n━━━━━━━━━━━━━━━━━━\n`;
 
         if (isExchange) {
           const realAcc = await fetchRealBinanceAccountDirect();
           const netName = isTestnet ? 'Binance Testnet' : 'Binance Live';
           if (realAcc.success) {
-            balText += `🌐 <b>الشبكة:</b> <code>${netName} (${realAcc.marketType || marketType})</code>\n` +
-              `• <b>الرصيد المتاح للتداول:</b> <code>${realAcc.freeUsdt.toFixed(2)} USDT</code>\n` +
-              `• <b>إجمالي قيمة المحفظة:</b> <code>${realAcc.totalUsdtEquity.toFixed(2)} USDT</code>\n` +
-              `• <b>الهامش المستثمر:</b> <code>${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT</code>\n` +
-              `• <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
-              `• <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
-              `• <b>زمن الاستجابة:</b> <code>${realAcc.latencyMs || 20}ms</code>\n`;
+            balText += `🌐 <b>الشبكة:</b> <code>${netName} (${realAcc.marketType || marketType})</code>\n\n` +
+              `├ <b>الرصيد المتاح:</b> <code>${realAcc.freeUsdt.toFixed(2)} USDT</code>\n` +
+              `├ <b>إجمالي المحفظة:</b> <code>${realAcc.totalUsdtEquity.toFixed(2)} USDT</code>\n` +
+              `├ <b>الهامش المستثمر:</b> <code>${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT</code>\n` +
+              `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+              `├ <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
+              `└ <b>زمن الاستجابة:</b> <code>${realAcc.latencyMs || 20}ms</code>\n`;
           } else {
             const walletStr = await kv.get('btc_paper_wallet');
             const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
@@ -782,23 +786,22 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
               `• <b>لربط المفاتيح:</b> افتح نافذة <b>Binance API Settings</b> في التطبيق، وأدخل مفاتيحك ثم اضغط <b>Save / حفظ</b>.\n` +
               `• <b>أو للتبديل لوضع المحاكاة:</b> أرسل الأمر <code>/paper</code>.\n\n` +
               `📝 <b>رصيد محفظة المحاكاة (Paper):</b>\n` +
-              `• <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
-              `• <b>إجمالي قيمة المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n`;
+              `├ <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
+              `└ <b>إجمالي قيمة المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n`;
           }
         } else {
           const walletStr = await kv.get('btc_paper_wallet');
           const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
           const paperEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
-          balText += `📝 <b>محفظة المحاكاة الوهمية (Paper Sandbox):</b>\n` +
-            `• <b>الرصيد المتاح (Free Cash):</b> $${wallet.balance.toFixed(2)} USDT\n` +
-            `• <b>الهامش في الصفقات (In-Trade):</b> $${inTradeMargin.toFixed(2)} USDT\n` +
-            `• <b>الربح اللحظي العائم (Floating PnL):</b> ${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} USDT\n` +
-            `• <b>إجمالي قيمة المحفظة (Total Equity):</b> $${paperEquity.toFixed(2)} USDT\n` +
-            `• <b>الأرباح المحققة (Realized PnL):</b> $${wallet.realizedPnl.toFixed(2)} USDT\n` +
-            `• <b>الإيداع المبدئي:</b> $1,000.00 USDT\n`;
+          balText += `📝 <b>محفظة المحاكاة الوهمية (Paper Sandbox):</b>\n\n` +
+            `├ <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
+            `├ <b>الهامش المستثمر:</b> <code>${inTradeMargin.toFixed(2)} USDT</code>\n` +
+            `├ <b>إجمالي المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n` +
+            `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
+            `└ <b>الأرباح المحققة:</b> <code>${wallet.realizedPnl.toFixed(2)} USDT</code>\n`;
         }
 
-        balText += `\n⏱️ <b>التوقيت:</b> ${new Date().toLocaleTimeString()}`;
+        balText += `━━━━━━━━━━━━━━━━━━`;
         await sendServerTelegramNotification(balText, chatId);
         break;
       }
