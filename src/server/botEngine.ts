@@ -1049,8 +1049,9 @@ export const startTelegramCommandListener = async () => {
             await kv.set('telegram_poller_lease', JSON.stringify({ instanceId: localInstanceId, expiresAt: now + 12000 }));
             isLeader = true;
           }
-        } catch {
-          isLeader = true;
+        } catch (e) {
+          console.error('[TELEGRAM LOCK] Lease check failed:', e);
+          isLeader = false;
         }
 
         if (!isLeader) {
