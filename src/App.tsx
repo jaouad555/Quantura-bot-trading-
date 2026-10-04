@@ -13,6 +13,7 @@ import {
   TradeHistoryItem,
   AutoBotConfig,
   ActiveBotPosition,
+  OpenAiConfig,
   AutoTradeLog,
   PushAlert,
   BinanceApiConfig,
@@ -644,6 +645,7 @@ export const App: React.FC = () => {
 
 
   const [isBinanceModalOpen, setIsBinanceModalOpen] = useState(false);
+  const [openAiConfig, setOpenAiConfig] = useState<OpenAiConfig>({ isConnected: false });
   const [isCustomBalanceModalOpen, setIsCustomBalanceModalOpen] = useState(false);
 
   // Auto-Trading Bot State
@@ -3657,6 +3659,7 @@ export const App: React.FC = () => {
             isAndroidView={isAndroidView}
             onOpenHelp={() => setIsHelpModalOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            isOpenAiConnected={openAiConfig.isConnected}
           />
 
           {/* Main Workspace */}

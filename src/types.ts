@@ -749,6 +749,11 @@ export interface BinanceAccountInfo {
   unrealizedProfit?: number;
 }
 
+export interface OpenAiConfig {
+  apiKey?: string;
+  isConnected: boolean;
+}
+
 export interface BinanceApiConfig {
   apiKey: string;
   apiSecret: string;

@@ -295,59 +295,60 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
   };
 
   return (
-    <div className={`space-y-4 sm:space-y-5 pb-6 ${isArabic ? 'rtl' : 'ltr'}`}>
-      {/* 1. Header & Paper Wallet Summary Overview */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-5 shadow-lg relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80 relative z-10">
-          <div>
-            <div className="flex items-center gap-2 text-brand-400 mb-0.5">
-              <Wallet className="w-4 h-4" />
-              <h2 className="font-bold text-base sm:text-lg text-white tracking-tight">
-                {isLive ? (isArabic ? 'حساب Binance المباشر' : 'Portefeuille Binance Réel') : t.paperWalletTitle}
-              </h2>
-              <span className="text-[9px] sm:text-[10px] font-mono font-bold uppercase bg-brand-500/10 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-full">
-                {isLive ? 'Binance Live Stream' : 'Paper Trading (Local)'}
-              </span>
+    <div className={`space-y-6 pb-6 ${isArabic ? 'rtl' : 'ltr'}`}>
+      {/* 1. HEADER: ADAPTIVE CAPITAL SYSTEM */}
+      <div className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl transition-all">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-3 rounded-xl ${isLive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
+              {isLive ? <ShieldCheck className="w-6 h-6" /> : <Wallet className="w-6 h-6" />}
             </div>
-            <p className="text-[11px] text-slate-400 max-w-2xl">
-              {isLive ? (isArabic ? 'أرصدتك الحقيقية المتزامنة مباشرة من منصة Binance.' : 'Vos soldes réels synchronisés en direct depuis Binance.') : t.paperWalletDesc}
-            </p>
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                {isLive ? (isArabic ? 'رأس مال التداول الحقيقي' : 'Live Real Capital') : (isArabic ? 'رأس مال التداول التجريبي' : 'Paper Trading Capital')}
+              </h2>
+              <p className="text-xs text-slate-400">
+                {isLive ? (isArabic ? 'التحكم الكامل في حساب باينانس الحقيقي' : 'Full Control over Binance Live') : (isArabic ? 'محفظة تداول افتراضية للمحاكاة' : 'Simulated Trading Portfolio')}
+              </p>
+            </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {!isLive && (
-              <>
-                {onOpenCustomBalanceModal && (
-                  <button
-                    onClick={onOpenCustomBalanceModal}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-[11px] rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
-                  >
-                    <Wallet className="w-3.5 h-3.5" />
-                    <span>{isArabic ? 'تخصيص الرصيد' : 'Solde Personnalisé'}</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsDepositModalOpen(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold text-[11px] rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>{t.depositTitle}</span>
-                </button>
-                <button
-                  onClick={() => setIsResetModalOpen(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-[11px] rounded-lg border border-slate-700 transition active:scale-95 cursor-pointer"
-                  title="Reset Wallet"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>{t.resetWallet}</span>
-                </button>
-              </>
-            )}
+          <div className={`px-4 py-1.5 rounded-full text-xs font-bold ${isLive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'}`}>
+            {isLive ? 'LIVE REAL' : 'VIRTUAL SIM'}
           </div>
         </div>
 
-        {/* Wallet Key Metrics Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-4 relative z-10 font-mono">
+        {/* Buttons section (kept consistent but styled as cards) */}
+        {!isLive && (
+          <div className="flex flex-wrap items-center gap-2 pt-6">
+            {onOpenCustomBalanceModal && (
+              <button
+                onClick={onOpenCustomBalanceModal}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-[11px] rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'تخصيص الرصيد' : 'Solde Personnalisé'}</span>
+              </button>
+            )}
+            <button
+              onClick={() => setIsDepositModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[11px] rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t.depositTitle}</span>
+            </button>
+            <button
+              onClick={() => setIsResetModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-[11px] rounded-lg border border-slate-700 transition active:scale-95 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t.resetWallet}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Wallet Key Metrics Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 relative z-10 font-mono">
           {/* Total Net Equity */}
           <div className="col-span-2 sm:col-span-1 bg-slate-950 p-3 rounded-lg border border-brand-500/30">
             <div className="flex items-center justify-between text-slate-400 text-[10px] mb-0.5">
@@ -416,7 +417,6 @@ export const RiskCalculatorView: React.FC<RiskCalculatorViewProps> = ({
             </span>
           </div>
         </div>
-      </div>
 
       {/* 2. Position Sizing & Risk Management Calculator */}
       <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-3.5 sm:p-5 shadow-lg space-y-4">

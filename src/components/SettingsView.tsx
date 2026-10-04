@@ -9,7 +9,8 @@ import {
   APP_VERSION_TAG,
   AutoBotConfig,
   ActiveBotPosition,
-  BotTimeframe
+  BotTimeframe,
+  OpenAiConfig
 } from '../types';
 import { translations } from '../utils/translations';
 import { apiStorage } from '../utils/apiStorage';
@@ -70,6 +71,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { ChatGPTLogo } from './AiLogos';
 import { calculateMultiMarketPortfolio } from '../utils/portfolioCalc';
 import {
   getOrCreate2FASecret,
@@ -95,6 +97,7 @@ export interface SettingsViewProps {
   binanceConfig?: BinanceApiConfig;
   executionMode?: TradingExecutionMode;
   paperWallet?: PaperWallet;
+  openAiConfig?: OpenAiConfig;
   displayMode?: DisplayMode;
   botConfig?: AutoBotConfig;
   activeBotPositions?: ActiveBotPosition[];
@@ -118,7 +121,7 @@ export interface SettingsViewProps {
   onFullReset?: () => void | Promise<void>;
 }
 
-type SettingsSection = 'general' | 'binance' | 'wallet' | 'bot' | 'security' | 'notifications' | 'backup';
+type SettingsSection = 'general' | 'binance' | 'wallet' | 'bot' | 'security' | 'notifications' | 'backup' | 'chatgpt';
 
 const AVAILABLE_PAIRS = RESPECTED_TRADING_PAIRS.map((p) => ({
   symbol: p.symbol,
@@ -138,6 +141,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   binanceConfig,
   executionMode = 'PAPER',
   paperWallet,
+  openAiConfig,
   displayMode = 'standard',
   botConfig,
   activeBotPositions = [],
@@ -598,6 +602,14 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
       label: isArabic ? 'التنبيهات وتليجرام' : isEn ? 'Alerts & Telegram' : 'Alertes & Telegram',
       desc: isArabic ? 'إشعارات الصفقات، بوت تليجرام، وحدود الثقة' : isEn ? 'Trade notifications, Telegram alerts, confidence' : 'Alertes push, notifications Telegram, seuils',
       icon: Send,
+    },
+    {
+      id: 'chatgpt' as SettingsSection,
+      label: 'ChatGPT (OpenAI)',
+      desc: isArabic ? 'نموذج ChatGPT للتحليل الكمي الذكي' : 'ChatGPT AI model status & connectivity',
+      icon: (props: any) => <ChatGPTLogo {...props} active={openAiConfig?.isConnected ?? true} />,
+      badge: openAiConfig?.isConnected ? 'ACTIVE' : null,
+      badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
     },
     {
       id: 'backup' as SettingsSection,
@@ -2452,6 +2464,37 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION: CHATGPT (OPENAI) */}
+            {activeSection === 'chatgpt' && (
+              <div key="section-chatgpt" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
+                  <div className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    <ChatGPTLogo active={true} className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">ChatGPT (OpenAI GPT-4o)</h2>
+                    <p className="text-xs text-slate-400">
+                      {isArabic ? 'حالة ربط نموذج ChatGPT عبر متغيرات البيئة (.env)' : 'OpenAI ChatGPT model integration via server environment (.env)'}
+                    </p>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ChatGPTLogo active={true} className="w-6 h-6" />
+                    <div>
+                      <div className="text-sm font-bold text-white font-mono">OPENAI_API_KEY (.env)</div>
+                      <div className="text-xs text-slate-400">
+                        {isArabic ? 'يتم قراءة المفتاح تلقائياً من ملف .env على السيرفر لتشغيل نموذج GPT-4o.' : 'Automatically loaded from server .env to power GPT-4o quantitative analysis.'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    gpt-4o
+                  </span>
                 </div>
               </div>
             )}

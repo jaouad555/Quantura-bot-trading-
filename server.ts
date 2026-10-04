@@ -1694,14 +1694,18 @@ app.get('/api/ai/status', async (req, res) => {
   const hasQwenKey = !!(process.env.QWEN_API_KEY && process.env.QWEN_API_KEY !== 'YOUR_QWEN_API_KEY');
   const dsKeyKv = await kv.get('DEEPSEEK_API_KEY');
   const hasDeepSeekKey = !!((process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY !== 'YOUR_DEEPSEEK_API_KEY') || (dsKeyKv && dsKeyKv.trim() !== ''));
-  const provider = hasGeminiKey ? 'gemini' : (hasQwenKey ? 'qwen' : (hasDeepSeekKey ? 'deepseek' : 'deterministic'));
+  const openAiKeyKv = await kv.get('OPENAI_API_KEY');
+  const hasOpenAiKey = !!((process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY' && process.env.OPENAI_API_KEY.trim() !== '') || (openAiKeyKv && openAiKeyKv.trim() !== ''));
+  const provider = hasGeminiKey ? 'gemini' : (hasQwenKey ? 'qwen' : (hasDeepSeekKey ? 'deepseek' : (hasOpenAiKey ? 'chatgpt' : 'deterministic')));
   res.json({
     status: 'ok',
     provider,
     geminiConfigured: hasGeminiKey,
     qwenConfigured: hasQwenKey,
     deepseekConfigured: hasDeepSeekKey,
-    activeModel: hasGeminiKey ? 'gemini-2.5-flash' : (hasQwenKey ? 'qwen-2.5-32b' : (hasDeepSeekKey ? 'deepseek-chat' : 'quant-deterministic')),
+    chatGptConfigured: hasOpenAiKey,
+    openaiConfigured: hasOpenAiKey,
+    activeModel: hasGeminiKey ? 'gemini-2.5-flash' : (hasQwenKey ? 'qwen-2.5-32b' : (hasDeepSeekKey ? 'deepseek-chat' : (hasOpenAiKey ? 'gpt-4o' : 'quant-deterministic'))),
   });
 });
 

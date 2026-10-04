@@ -55,7 +55,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { GeminiLogo, QwenLogo, DeepSeekLogo, QuantMathCoreLogo } from './AiLogos';
+import { GeminiLogo, QwenLogo, DeepSeekLogo, ChatGPTLogo, QuantMathCoreLogo } from './AiLogos';
 import { SentimentalBotAvatar } from './SentimentalBotAvatar';
 
 interface HeaderProps {
@@ -165,10 +165,11 @@ export const Header: React.FC<HeaderProps> = ({
   // AI Provider & Connectivity Status State
   const [aiStatus, setAiStatus] = useState<{
     status: string;
-    provider: 'gemini' | 'qwen' | 'deepseek' | 'deterministic';
+    provider: 'gemini' | 'qwen' | 'deepseek' | 'chatgpt' | 'deterministic';
     geminiConfigured: boolean;
     qwenConfigured: boolean;
     deepseekConfigured: boolean;
+    chatGptConfigured: boolean;
     activeModel: string;
     lastChecked: number;
     latencyMs: number;
@@ -179,6 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
     geminiConfigured: false,
     qwenConfigured: false,
     deepseekConfigured: false,
+    chatGptConfigured: false,
     activeModel: 'gemini-2.5-flash',
     lastChecked: Date.now(),
     latencyMs: 24,
@@ -201,6 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
           geminiConfigured: !!data.geminiConfigured,
           qwenConfigured: !!data.qwenConfigured,
           deepseekConfigured: !!data.deepseekConfigured,
+          chatGptConfigured: !!data.chatGptConfigured || !!data.openaiConfigured,
           activeModel: data.activeModel || 'gemini-2.5-flash',
           lastChecked: Date.now(),
           latencyMs: Math.max(8, Math.round(t1 - t0)),
@@ -231,6 +234,7 @@ export const Header: React.FC<HeaderProps> = ({
         geminiConfigured: !!data.geminiConfigured,
         qwenConfigured: !!data.qwenConfigured,
         deepseekConfigured: !!data.deepseekConfigured,
+        chatGptConfigured: !!data.chatGptConfigured || !!data.openaiConfigured,
         activeModel: data.activeModel || 'gemini-2.5-flash',
         lastChecked: Date.now(),
         latencyMs: Math.max(12, Math.round(t1 - t0)),
@@ -971,7 +975,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={() => setIsAiStatusModalOpen(true)}
             className="h-8 flex items-center gap-1.5 px-2.5 rounded-xl border bg-slate-900/90 text-slate-200 border-slate-700 hover:border-purple-500/50 transition shadow-xs shrink-0 cursor-pointer active:scale-95"
-            title={isArabic ? 'حالة نماذج الذكاء الاصطناعي (Gemini + Qwen + DeepSeek + Quant)' : 'AI Models Status (Gemini + Qwen + DeepSeek + Quant)'}
+            title={isArabic ? 'حالة نماذج الذكاء الاصطناعي (Gemini + Qwen + DeepSeek + ChatGPT + Quant)' : 'AI Models Status (Gemini + Qwen + DeepSeek + ChatGPT + Quant)'}
           >
             <div className="flex items-center gap-1.5 font-mono text-[10px]">
               {/* Gemini Logo */}
@@ -987,6 +991,11 @@ export const Header: React.FC<HeaderProps> = ({
               {/* DeepSeek Logo */}
               <div title="DeepSeek V3 / R1" className="flex items-center">
                 <DeepSeekLogo active={aiStatus.deepseekConfigured} className="w-4 h-4" />
+              </div>
+              <span className="text-slate-600 font-bold select-none">+</span>
+              {/* ChatGPT Logo */}
+              <div title="ChatGPT (OpenAI)" className="flex items-center">
+                <ChatGPTLogo active={aiStatus.chatGptConfigured} className="w-4 h-4" />
               </div>
               <span className="text-slate-600 font-bold select-none">+</span>
               {/* Quant Math Core (Processor / CPU icon) */}
@@ -1581,7 +1590,43 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* 4. High-Frequency Quant Deterministic Core */}
+              {/* 4. ChatGPT */}
+              <div className={`p-3.5 rounded-xl border ${
+                aiStatus.chatGptConfigured
+                  ? 'bg-emerald-950/20 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                  : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-slate-900 border border-emerald-500/30 flex items-center justify-center p-1 shrink-0">
+                      <ChatGPTLogo active={aiStatus.chatGptConfigured} className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-white text-sm font-mono">ChatGPT (OpenAI)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono font-medium">
+                      Smart
+                    </span>
+                  </div>
+                  <span className={`flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                    aiStatus.chatGptConfigured
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${aiStatus.chatGptConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                    {aiStatus.chatGptConfigured ? (isArabic ? 'متصل ونشط' : 'ONLINE') : (isArabic ? 'وضع الاستعداد' : 'STANDBY')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mb-1">
+                  {isArabic
+                    ? 'تحليل ذكي ومحادثة تفاعلية باستخدام نماذج OpenAI.'
+                    : 'Interactive AI analysis and chat powered by OpenAI.'}
+                </p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Model: <strong className="text-emerald-300">gpt-4o</strong></span>
+                  <span>Status: <strong className={aiStatus.chatGptConfigured ? 'text-emerald-400' : 'text-amber-400'}>{aiStatus.chatGptConfigured ? 'Configured' : 'Optional'}</strong></span>
+                </div>
+              </div>
+
+              {/* 5. High-Frequency Quant Deterministic Core */}
               <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">

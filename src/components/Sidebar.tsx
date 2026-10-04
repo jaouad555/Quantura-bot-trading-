@@ -61,6 +61,7 @@ interface SidebarProps {
   isAndroidView?: boolean;
   onOpenHelp?: () => void;
   onOpenSettings?: () => void;
+  isOpenAiConnected?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -81,6 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isAndroidView = false,
   onOpenHelp,
   onOpenSettings,
+  isOpenAiConnected = false,
 }) => {
   const t = translations[language] || translations.en;
   const isArabic = language === 'ar';

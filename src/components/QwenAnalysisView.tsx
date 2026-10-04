@@ -4,7 +4,7 @@ import { translations } from '../utils/translations';
 import { formatCoinPrice } from '../utils/tradingPairs';
 import { callDeepSeekAPI } from '../utils/deepseek';
 import { apiStorage } from '../utils/apiStorage';
-import { GeminiLogo, QwenLogo, DeepSeekLogo } from './AiLogos';
+import { GeminiLogo, QwenLogo, DeepSeekLogo, ChatGPTLogo } from './AiLogos';
 import {
   Sparkles,
   Activity,
@@ -58,12 +58,12 @@ export const QwenAnalysisView: React.FC<QwenAnalysisViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [selectedLangTab, setSelectedLangTab] = useState<Language>(language);
   const [activeSubSection, setActiveSubSection] = useState<'SUMMARY' | 'INDICATORS' | 'PLAYBOOK'>('SUMMARY');
-  const [selectedAiModel, setSelectedAiModel] = useState<'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner'>('qwen');
+  const [selectedAiModel, setSelectedAiModel] = useState<'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner' | 'chatgpt'>('qwen');
   const [aiResponseText, setAiResponseText] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const handleModelChange = async (model: 'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner') => {
+  const handleModelChange = async (model: 'qwen' | 'gemini' | 'deepseek-chat' | 'deepseek-reasoner' | 'chatgpt') => {
     setSelectedAiModel(model);
     if (model === 'deepseek-chat' || model === 'deepseek-reasoner') {
       const apiKey = apiStorage.getItem('DEEPSEEK_API_KEY');
@@ -367,7 +367,7 @@ ${detailedText}
             {/* AI Model Selector */}
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-800">
               <span className="text-xs font-bold text-slate-400">AI Model:</span>
-              {(['qwen', 'gemini', 'deepseek-chat', 'deepseek-reasoner'] as const).map((m) => {
+              {(['qwen', 'gemini', 'deepseek-chat', 'deepseek-reasoner', 'chatgpt'] as const).map((m) => {
                 const isSelected = selectedAiModel === m;
                 return (
                   <button
@@ -382,7 +382,8 @@ ${detailedText}
                     {m === 'qwen' && <QwenLogo active={isSelected} className="w-3.5 h-3.5" />}
                     {m === 'gemini' && <GeminiLogo active={isSelected} className="w-3.5 h-3.5" />}
                     {m.startsWith('deepseek') && <DeepSeekLogo active={isSelected} className="w-3.5 h-3.5" />}
-                    <span>{m === 'qwen' ? 'Qwen 2.5' : m === 'gemini' ? 'Gemini 3.8 Pro' : m === 'deepseek-chat' ? 'DeepSeek V3' : 'DeepSeek R1 (Reasoner)'}</span>
+                    {m === 'chatgpt' && <ChatGPTLogo active={isSelected} className="w-3.5 h-3.5" />}
+                    <span>{m === 'qwen' ? 'Qwen 2.5' : m === 'gemini' ? 'Gemini 3.8 Pro' : m === 'deepseek-chat' ? 'DeepSeek V3' : m === 'deepseek-reasoner' ? 'DeepSeek R1 (Reasoner)' : 'ChatGPT (GPT-4o)'}</span>
                   </button>
                 );
               })}
