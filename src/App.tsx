@@ -838,17 +838,43 @@ export const App: React.FC = () => {
   const t = translations[language] || translations.fr;
   const isArabic = language === 'ar';
 
-  const handleUpdateCustomBalance = (newBalance: number, resetHistory?: boolean) => {
+  const handleUpdateCustomBalance = (newBalance: number, resetHistory?: boolean, targetMarket?: MarketType | 'ALL') => {
+    const market = targetMarket || botConfigRef.current.marketType || 'FUTURES';
+
+    // 1. Post to backend dedicated wallet updater
+    fetch('/api/wallet/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketType: market, newBalance, resetHistory })
+    }).then(r => r.json()).then(data => {
+      if (data && data.success && data.activeWallet) {
+        setPaperWallet(data.activeWallet);
+        paperWalletRef.current = data.activeWallet;
+      }
+    }).catch(() => {});
+
+    // 2. Immediate optimistic state update
     if (resetHistory) {
-      updateBotPositionsSync((prev) => prev.filter((p) => p.mode === 'BINANCE_LIVE'));
-      updatePaperWalletSync(() => ({
+      if (market === 'ALL') {
+        updateBotPositionsSync((prev) => prev.filter((p) => p.mode === 'BINANCE_LIVE'));
+        setTradeHistory([]);
+        try { apiStorage.setItem('btc_trade_history', '[]'); } catch {}
+      } else {
+        updateBotPositionsSync((prev) => prev.filter((p) => p.mode === 'BINANCE_LIVE' || (p.marketType || 'SPOT') !== market));
+        setTradeHistory((prev) => prev.filter((h) => (h.marketType || (h.leverage && h.leverage > 1 ? 'FUTURES' : 'SPOT')) !== market));
+      }
+      updatePaperWalletSync((prev) => ({
+        ...prev,
         balance: newBalance,
         realizedPnl: 0,
+        initialDeposit: newBalance,
         openPosition: null,
         history: [],
       }));
     } else {
-      const activePaperPositions = (activeBotPositionsRef.current || []).filter((p) => !p.mode || p.mode === 'PAPER');
+      const activePaperPositions = (activeBotPositionsRef.current || []).filter((p) => 
+        (!p.mode || p.mode === 'PAPER') && (market === 'ALL' || (p.marketType || 'FUTURES') === market)
+      );
       const inTradeMargin = activePaperPositions.reduce(
         (sum, p) => sum + (typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0 ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0)),
         0
@@ -857,6 +883,7 @@ export const App: React.FC = () => {
       updatePaperWalletSync((prev) => ({
         ...prev,
         balance: freeBalance,
+        initialDeposit: newBalance,
       }));
     }
   };
@@ -2881,13 +2908,18 @@ export const App: React.FC = () => {
                      } catch (e) {}
                  }
                  
-                 // Check if wallet changed on server
-                 if (serverData.btc_paper_wallet) {
+                 // Check if wallet changed on server (market-aware)
+                 const currentMt = botConfigRef.current.marketType || 'FUTURES';
+                 const targetKey = currentMt === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+                 const serverWalletStr = serverData[targetKey] || serverData.btc_paper_wallet;
+                 if (serverWalletStr) {
                      const currentLocal = JSON.stringify(paperWalletRef.current);
-                     if (serverData.btc_paper_wallet !== currentLocal) {
-                         const wallet = JSON.parse(serverData.btc_paper_wallet);
-                         setPaperWallet(wallet);
-                         paperWalletRef.current = wallet;
+                     if (serverWalletStr !== currentLocal) {
+                         try {
+                             const wallet = JSON.parse(serverWalletStr);
+                             setPaperWallet(wallet);
+                             paperWalletRef.current = wallet;
+                         } catch (e) {}
                      }
                  }
                  
@@ -3157,6 +3189,22 @@ export const App: React.FC = () => {
       ...prev,
       marketType: newMarketType,
     }));
+
+    // Switch the active paper wallet view to the matching dedicated market wallet
+    try {
+      const targetKey = newMarketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+      const dedicatedStr = apiStorage.getItem(targetKey);
+      if (dedicatedStr) {
+        const parsed = JSON.parse(dedicatedStr);
+        setPaperWallet((prev) => ({
+          ...prev,
+          balance: typeof parsed.balance === 'number' ? parsed.balance : prev.balance,
+          realizedPnl: typeof parsed.realizedPnl === 'number' ? parsed.realizedPnl : prev.realizedPnl,
+          initialDeposit: typeof parsed.initialDeposit === 'number' ? parsed.initialDeposit : (prev.initialDeposit || 1000),
+          marketType: newMarketType,
+        }));
+      }
+    } catch {}
 
     // Explicitly notify server to switch marketType, purge other price cache, and disconnect other WebSocket
     fetch('/api/config/binance', {
@@ -4236,6 +4284,7 @@ export const App: React.FC = () => {
           }}
           onToggleExecutionMode={handleSetExecutionMode}
           onSyncBinancePositions={syncBinanceLivePositions}
+          onToggleMarketType={handleToggleMarketType}
         />
 
         {/* Binance Real API Trading Connection Modal */}

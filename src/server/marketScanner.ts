@@ -521,15 +521,21 @@ async function processTradingSignal(
           totalEquity = realAcc.totalUsdtEquity;
           availableBalance = realAcc.freeUsdt;
         } else {
-          const walletStr = await kv.get('btc_paper_wallet');
-          let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
+          // Market-specific paper wallet check (SPOT vs FUTURES)
+          const walletKey = effectiveMarketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+          const walletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
+          let wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0, initialDeposit: 1000 };
           wallet.balance = typeof wallet.balance === 'number' && !isNaN(wallet.balance) ? Math.max(0, wallet.balance) : 1000;
           wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
 
-          totalEquity = wallet.balance;
-          currentModePositions.forEach((p: any) => {
-            totalEquity += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
+          // In-Trade margin for this specific market type
+          const marketPositions = currentModePositions.filter((p: any) => (p.marketType || 'FUTURES') === effectiveMarketType);
+          let marketInTradeMargin = 0;
+          marketPositions.forEach((p: any) => {
+            marketInTradeMargin += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
           });
+
+          totalEquity = wallet.totalEquity || (wallet.balance + marketInTradeMargin);
           availableBalance = wallet.balance;
         }
 
@@ -699,9 +705,11 @@ async function processTradingSignal(
         quantity = parseFloat(orderRes.executedQty);
       }
     } else {
-      const freshWalletStr = await kv.get('btc_paper_wallet');
-      let freshWallet = freshWalletStr ? JSON.parse(freshWalletStr) : { balance: 1000, realizedPnl: 0 };
-      freshWallet.balance = Math.max(0, Math.round((freshWallet.balance - margin) * 100) / 100);
+      const walletKey = effectiveMarketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+      const freshWalletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
+      let freshWallet = freshWalletStr ? JSON.parse(freshWalletStr) : { balance: 1000, realizedPnl: 0, initialDeposit: 1000 };
+      freshWallet.balance = Math.max(0, Math.round(((freshWallet.balance || 1000) - margin) * 100) / 100);
+      await kv.set(walletKey, JSON.stringify(freshWallet));
       await kv.set('btc_paper_wallet', JSON.stringify(freshWallet));
     }
 

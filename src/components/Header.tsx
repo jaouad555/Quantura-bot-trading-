@@ -782,49 +782,39 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* Paper Wallet / Binance Live Real Equity Balance Button */}
+          {/* Multi-Market Dedicated Wallet Button */}
           {onOpenCustomBalanceModal && (
             <button
               type="button"
-              onClick={() => {
-                if ((executionMode === 'BINANCE_LIVE' || executionMode === 'BINANCE_TESTNET') && onOpenBinanceModal) {
-                  onOpenBinanceModal();
-                } else if (onOpenCustomBalanceModal) {
-                  onOpenCustomBalanceModal();
-                }
-              }}
+              onClick={onOpenCustomBalanceModal}
               className={`h-8 flex items-center gap-1.5 px-2 sm:px-2.5 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition shadow-xs shrink-0 cursor-pointer active:scale-95 ${
                 executionMode === 'BINANCE_LIVE'
                   ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
                   : executionMode === 'BINANCE_TESTNET'
                   ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
-                  : portfolioMetrics.totalNetPnl > 0
+                  : marketType === 'SPOT'
                   ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-                  : portfolioMetrics.totalNetPnl < 0
-                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 hover:border-amber-500/60'
-                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50'
+                  : 'bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border-cyan-500/40 hover:border-cyan-500/60 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
               }`}
               title={
-                executionMode === 'BINANCE_LIVE'
-                  ? (isArabic
-                      ? `رصيد بايننس الحقيقي (Live): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)})`
-                      : `Binance Live Real Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Margin: $${portfolioMetrics.inTradeMargin.toFixed(2)})`)
-                  : executionMode === 'BINANCE_TESTNET'
-                  ? (isArabic
-                      ? `رصيد شبكة الاختبار (Testnet): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT`
-                      : `Binance Testnet Equity: $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT`)
-                  : (isArabic
-                      ? `إجمالي قيمة المحفظة التجريبية (${marketType}): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | في الصفقات: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الربح/الخسارة: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`
-                      : `Total Paper Portfolio Equity (${marketType}): $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In Trades: $${portfolioMetrics.inTradeMargin.toFixed(2)} | Net PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)})`)
+                isArabic
+                  ? `محفظة ${marketType === 'SPOT' ? 'السبوت الفوري' : 'العقود الآجلة'}: الرصيد العام $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (المتاح: $${portfolioMetrics.freeCash.toFixed(2)} | المستثمر: $${portfolioMetrics.inTradeMargin.toFixed(2)} | صافي الأرباح: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)}) - اضغط لإدارة كافة المحافظ`
+                  : `${marketType} Portfolio: Total Equity $${portfolioMetrics.totalPortfolioEquity.toFixed(2)} USDT (Free: $${portfolioMetrics.freeCash.toFixed(2)} | In-Trade: $${portfolioMetrics.inTradeMargin.toFixed(2)} | PnL: ${portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}$${portfolioMetrics.totalNetPnl.toFixed(2)}) - Click to open Portfolio Hub`
               }
             >
-              <Wallet className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : executionMode === 'BINANCE_TESTNET' ? 'text-amber-400' : 'text-emerald-400'}`} strokeWidth={2} />
-              <span className={`text-[8px] font-bold px-1 py-0.2 rounded uppercase ${
-                executionMode === 'BINANCE_LIVE' ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40' : executionMode === 'BINANCE_TESTNET' ? 'bg-amber-500/30 text-amber-200 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300'
+              <Wallet className={`w-3.5 h-3.5 shrink-0 ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400' : executionMode === 'BINANCE_TESTNET' ? 'text-amber-400' : marketType === 'SPOT' ? 'text-emerald-400' : 'text-cyan-400'}`} strokeWidth={2} />
+              
+              {/* Market Badge (SPOT or FUTURES) */}
+              <span className={`text-[8px] font-bold px-1 py-0.2 rounded uppercase flex items-center gap-0.5 ${
+                marketType === 'SPOT' 
+                  ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/30' 
+                  : 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/30'
               }`}>
-                {executionMode === 'BINANCE_LIVE' ? 'LIVE' : executionMode === 'BINANCE_TESTNET' ? 'TESTNET' : 'PAPER'}
+                <span>{marketType === 'SPOT' ? '🪙 SPOT' : '⚡ FUT'}</span>
               </span>
+
               <span className="font-bold">${portfolioMetrics.totalPortfolioEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              
               {(portfolioMetrics.totalNetPnl !== 0 || portfolioMetrics.inTradeMargin > 0) && (
                 <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
                   portfolioMetrics.totalNetPnl >= 0 ? 'bg-emerald-500/25 text-emerald-300' : 'bg-rose-500/25 text-rose-300'
@@ -832,7 +822,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {portfolioMetrics.totalNetPnl >= 0 ? '+' : ''}${portfolioMetrics.totalNetPnl.toFixed(1)}
                 </span>
               )}
-              <span className={`text-[9px] font-normal hidden sm:inline ${executionMode === 'BINANCE_LIVE' ? 'text-rose-400/80' : 'text-emerald-400/80'}`}>USDT</span>
+              <span className="text-[9px] font-normal hidden sm:inline text-slate-400">USDT</span>
             </button>
           )}
 

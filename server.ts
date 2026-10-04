@@ -41,7 +41,7 @@ import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
-import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect, resetBotEngineState } from './src/server/botEngine';
+import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect, resetBotEngineState, reconcilePaperWalletDirect } from './src/server/botEngine';
 import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider, inFlightExecutionLocks, symbolCooldownMap } from './src/server/marketScanner';
 import { binanceWs } from './src/server/binanceWebSocket';
 import { binanceRestCache } from './src/server/binanceRestCache';
@@ -2437,6 +2437,108 @@ app.get('/api/server-ip', async (_req, res) => {
 
 app.get('/api/binance/account', handleBinanceAccountFetch);
 app.post('/api/binance/account', handleBinanceAccountFetch);
+
+/**
+ * Multi-Market Dedicated Wallets Summary Endpoint
+ * Returns Spot Wallet, Futures Wallet, and Combined Global Portfolio metrics
+ */
+app.get('/api/wallet/summary', async (_req, res) => {
+  try {
+    const multiPortfolioStr = await kv.get('btc_multi_market_portfolio');
+    const spotWalletStr = await kv.get('btc_paper_wallet_spot');
+    const futuresWalletStr = await kv.get('btc_paper_wallet_futures');
+    const activeWalletStr = await kv.get('btc_paper_wallet');
+    const positionsStr = await kv.get('btc_active_bot_positions');
+    const positions = positionsStr ? JSON.parse(positionsStr) : [];
+    const executionMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const activeMarketType = (await kv.get('app_binance_market_type')) || 'FUTURES';
+
+    let multiPortfolio = multiPortfolioStr ? JSON.parse(multiPortfolioStr) : null;
+    let spotWallet = spotWalletStr ? JSON.parse(spotWalletStr) : null;
+    let futuresWallet = futuresWalletStr ? JSON.parse(futuresWalletStr) : null;
+    let activeWallet = activeWalletStr ? JSON.parse(activeWalletStr) : null;
+
+    if (!multiPortfolio || !spotWallet || !futuresWallet) {
+      const rec = await reconcilePaperWalletDirect();
+      if (rec) {
+        spotWallet = rec.spotWallet;
+        futuresWallet = rec.futuresWallet;
+        activeWallet = rec.activeWallet;
+        multiPortfolio = {
+          spot: spotWallet,
+          futures: futuresWallet,
+          combined: rec.combined,
+          activeMarketType,
+          executionMode,
+          lastUpdated: Date.now(),
+        };
+      }
+    }
+
+    return res.json({
+      success: true,
+      multiPortfolio,
+      spotWallet,
+      futuresWallet,
+      activeWallet,
+      activeMarketType,
+      executionMode,
+      openPositionsCount: positions.length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Dedicated Wallet Balance Updater & Reset
+ * Allows modifying initial capital or resetting Spot or Futures independently
+ */
+app.post('/api/wallet/update', async (req, res) => {
+  try {
+    const { marketType, newBalance, resetHistory } = req.body;
+    const targetMarket = marketType === 'SPOT' ? 'SPOT' : (marketType === 'FUTURES' ? 'FUTURES' : 'ALL');
+    const numBalance = Number(newBalance);
+    if (isNaN(numBalance) || numBalance < 10) {
+      return res.status(400).json({ error: 'Valid balance required (minimum 10 USDT)' });
+    }
+
+    if (targetMarket === 'SPOT' || targetMarket === 'ALL') {
+      await kv.set('paper_wallet_initial_deposit_spot', String(numBalance));
+    }
+    if (targetMarket === 'FUTURES' || targetMarket === 'ALL') {
+      await kv.set('paper_wallet_initial_deposit_futures', String(numBalance));
+    }
+    await kv.set('paper_wallet_initial_deposit', String(numBalance));
+
+    if (resetHistory) {
+      const histStr = await kv.get('btc_trade_history');
+      const history = histStr ? JSON.parse(histStr) : [];
+      const filteredHist = targetMarket === 'ALL'
+        ? []
+        : history.filter((h: any) => (h.marketType || (h.leverage && h.leverage > 1 ? 'FUTURES' : 'SPOT')) !== targetMarket);
+      await kv.set('btc_trade_history', JSON.stringify(filteredHist));
+
+      const posStr = await kv.get('btc_active_bot_positions');
+      const positions = posStr ? JSON.parse(posStr) : [];
+      const filteredPos = targetMarket === 'ALL'
+        ? positions.filter((p: any) => p.mode === 'BINANCE_LIVE')
+        : positions.filter((p: any) => p.mode === 'BINANCE_LIVE' || (p.marketType || 'SPOT') !== targetMarket);
+      await kv.set('btc_active_bot_positions', JSON.stringify(filteredPos));
+    }
+
+    const rec = await reconcilePaperWalletDirect();
+    return res.json({
+      success: true,
+      spotWallet: rec?.spotWallet,
+      futuresWallet: rec?.futuresWallet,
+      combined: rec?.combined,
+      activeWallet: rec?.activeWallet,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // =====================================================
 // QUANTURA RISK MANAGEMENT ENGINE REST API ENDPOINTS

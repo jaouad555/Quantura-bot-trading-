@@ -758,58 +758,100 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         const isLive = mode === 'BINANCE_LIVE';
         const isTestnet = mode === 'BINANCE_TESTNET';
         const isExchange = isLive || isTestnet;
-        const kvMarketType = await kv.get('app_binance_market_type');
-        const marketType = kvMarketType || 'SPOT';
 
         const positionsStr = await kv.get('btc_active_bot_positions');
         const allPositions = positionsStr ? JSON.parse(positionsStr) : [];
-        const positions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode && (p.marketType || 'SPOT') === marketType);
+        const modePositions = allPositions.filter((p: any) => (p.mode || 'PAPER') === mode);
 
-        let unrealizedPnl = 0;
-        let inTradeMargin = 0;
-        for (const pos of positions) {
-          const currentP = await fetchSymbolPrice(pos.symbol, pos.marketType || marketType);
-          const pnl = pos.unrealizedPnlUsdt !== undefined ? pos.unrealizedPnlUsdt : (currentP && currentP > 0 ? calculatePnl(pos, currentP) : 0);
-          unrealizedPnl += pnl;
-          inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
+        const histStr = await kv.get('btc_trade_history');
+        const allHistory = histStr ? JSON.parse(histStr) : [];
+
+        // 1. SPOT METRICS
+        const spotPositions = modePositions.filter((p: any) => (p.marketType || 'SPOT') === 'SPOT');
+        let spotFloating = 0;
+        let spotInvested = 0;
+        for (const p of spotPositions) {
+          const cp = await fetchSymbolPrice(p.symbol, 'SPOT');
+          const pnl = typeof p.unrealizedPnlUsdt === 'number' && !isNaN(p.unrealizedPnlUsdt) ? p.unrealizedPnlUsdt : (cp > 0 ? calculatePnl(p, cp) : 0);
+          spotFloating += pnl;
+          spotInvested += (p.remainingAmountUsdt || p.marginUsdt || p.initialAmountUsdt || 0);
         }
 
-        let balText = `💼 <b>تقرير رصيد المحفظة الشامل</b>\n━━━━━━━━━━━━━━━━━━\n`;
+        // 2. FUTURES METRICS
+        const futuresPositions = modePositions.filter((p: any) => p.marketType === 'FUTURES');
+        let futuresFloating = 0;
+        let futuresInvested = 0;
+        for (const p of futuresPositions) {
+          const cp = await fetchSymbolPrice(p.symbol, 'FUTURES');
+          const pnl = typeof p.unrealizedPnlUsdt === 'number' && !isNaN(p.unrealizedPnlUsdt) ? p.unrealizedPnlUsdt : (cp > 0 ? calculatePnl(p, cp) : 0);
+          futuresFloating += pnl;
+          futuresInvested += (p.remainingAmountUsdt || p.marginUsdt || p.initialAmountUsdt || 0);
+        }
+
+        let balText = `💼 <b>تقرير المحافظ المالية المخصصة | Quantura</b>\n` +
+          `━━━━━━━━━━━━━━━━━━\n`;
 
         if (isExchange) {
           const realAcc = await fetchRealBinanceAccountDirect();
           const netName = isTestnet ? 'Binance Testnet' : 'Binance Live';
+          
           if (realAcc.success) {
-            balText += `🌐 <b>الشبكة:</b> <code>${netName} (${realAcc.marketType || marketType})</code>\n\n` +
-              `├ <b>الرصيد المتاح:</b> <code>${realAcc.freeUsdt.toFixed(2)} USDT</code>\n` +
-              `├ <b>إجمالي المحفظة:</b> <code>${realAcc.totalUsdtEquity.toFixed(2)} USDT</code>\n` +
-              `├ <b>الهامش المستثمر:</b> <code>${(realAcc.inTradeMargin || inTradeMargin).toFixed(2)} USDT</code>\n` +
-              `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
-              `├ <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
-              `└ <b>زمن الاستجابة:</b> <code>${realAcc.latencyMs || 20}ms</code>\n`;
+            balText += `🌐 <b>البيئة:</b> <code>${netName}</code>\n\n` +
+              `🪙 <b>محفظة السوق الفوري (Spot Wallet):</b>\n` +
+              `├ <b>الرصيد المتاح:</b> <code>${realAcc.marketType === 'SPOT' ? realAcc.freeUsdt.toFixed(2) : '--'} USDT</code>\n` +
+              `├ <b>الأصول المستثمرة:</b> <code>${spotInvested.toFixed(2)} USDT</code>\n` +
+              `├ <b>الأرباح العائمة:</b> <code>${spotFloating >= 0 ? '+' : ''}${spotFloating.toFixed(2)} USDT</code>\n` +
+              `└ <b>إجمالي السبوت:</b> <code>${realAcc.marketType === 'SPOT' ? realAcc.totalUsdtEquity.toFixed(2) : (spotInvested + spotFloating).toFixed(2)} USDT</code>\n\n` +
+              `⚡ <b>محفظة العقود الآجلة (Futures Wallet):</b>\n` +
+              `├ <b>الهامش المتاح:</b> <code>${realAcc.marketType === 'FUTURES' ? realAcc.freeUsdt.toFixed(2) : '--'} USDT</code>\n` +
+              `├ <b>الهامش المحجوز:</b> <code>${(realAcc.inTradeMargin || futuresInvested).toFixed(2)} USDT</code>\n` +
+              `├ <b>الأرباح العائمة:</b> <code>${futuresFloating >= 0 ? '+' : ''}${futuresFloating.toFixed(2)} USDT</code>\n` +
+              `└ <b>إجمالي العقود:</b> <code>${realAcc.marketType === 'FUTURES' ? realAcc.totalUsdtEquity.toFixed(2) : (futuresInvested + futuresFloating).toFixed(2)} USDT</code>\n\n` +
+              `📊 <b>المحفظة الشاملة (Combined Equity):</b>\n` +
+              `├ <b>إجمالي الرصيد العام:</b> <code>${realAcc.totalUsdtEquity.toFixed(2)} USDT</code>\n` +
+              `├ <b>سرعة الاستجابة:</b> <code>${realAcc.latencyMs || 25}ms</code>\n` +
+              `└ <b>صلاحية التداول:</b> ${realAcc.canTrade ? '🟢 مفعّلة' : '🔴 مقيدة'}\n`;
           } else {
-            const walletStr = await kv.get('btc_paper_wallet');
-            const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
-            const paperEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
-            
-            balText += `⚠️ <b>مفاتيح Binance API غير متصلة بالسيرفر:</b>\n` +
-              `• لم يتم العثور على مفاتيح API صالحة محفوظة على السيرفر لوضع <b>${netName}</b>.\n` +
-              `• <b>لربط المفاتيح:</b> افتح نافذة <b>Binance API Settings</b> في التطبيق، وأدخل مفاتيحك ثم اضغط <b>Save / حفظ</b>.\n` +
-              `• <b>أو للتبديل لوضع المحاكاة:</b> أرسل الأمر <code>/paper</code>.\n\n` +
-              `📝 <b>رصيد محفظة المحاكاة (Paper):</b>\n` +
-              `├ <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
-              `└ <b>إجمالي قيمة المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n`;
+            balText += `⚠️ <b>Binance API غير متصلة</b> (استخدم <code>/paper</code> لوضع المحاكاة)\n`;
           }
         } else {
-          const walletStr = await kv.get('btc_paper_wallet');
-          const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
-          const paperEquity = Math.round((wallet.balance + inTradeMargin + unrealizedPnl) * 100) / 100;
-          balText += `📝 <b>محفظة المحاكاة الوهمية (Paper Sandbox):</b>\n\n` +
-            `├ <b>الرصيد المتاح:</b> <code>${wallet.balance.toFixed(2)} USDT</code>\n` +
-            `├ <b>الهامش المستثمر:</b> <code>${inTradeMargin.toFixed(2)} USDT</code>\n` +
-            `├ <b>إجمالي المحفظة:</b> <code>${paperEquity.toFixed(2)} USDT</code>\n` +
-            `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
-            `└ <b>الأرباح المحققة:</b> <code>${wallet.realizedPnl.toFixed(2)} USDT</code>\n`;
+          // Dedicated Paper Wallets
+          const spotWalletStr = await kv.get('btc_paper_wallet_spot');
+          const spotWallet = spotWalletStr ? JSON.parse(spotWalletStr) : { balance: 1000, realizedPnl: 0, initialDeposit: 1000, inTradeMargin: 0 };
+          const futuresWalletStr = await kv.get('btc_paper_wallet_futures');
+          const futuresWallet = futuresWalletStr ? JSON.parse(futuresWalletStr) : { balance: 1000, realizedPnl: 0, initialDeposit: 1000, inTradeMargin: 0 };
+
+          const spotFree = typeof spotWallet.balance === 'number' ? spotWallet.balance : 1000;
+          const spotRealized = typeof spotWallet.realizedPnl === 'number' ? spotWallet.realizedPnl : 0;
+          const spotEquity = Math.round((spotFree + spotInvested + spotFloating) * 100) / 100;
+
+          const futuresFree = typeof futuresWallet.balance === 'number' ? futuresWallet.balance : 1000;
+          const futuresRealized = typeof futuresWallet.realizedPnl === 'number' ? futuresWallet.realizedPnl : 0;
+          const futuresEquity = Math.round((futuresFree + futuresInvested + futuresFloating) * 100) / 100;
+
+          const combinedEquity = Math.round((spotEquity + futuresEquity) * 100) / 100;
+          const combinedFree = Math.round((spotFree + futuresFree) * 100) / 100;
+          const combinedInvested = Math.round((spotInvested + futuresInvested) * 100) / 100;
+          const combinedNetPnl = Math.round((spotRealized + spotFloating + futuresRealized + futuresFloating) * 100) / 100;
+
+          balText += `📝 <b>بيئة المحاكاة الافتراضية (Paper Sandbox)</b>\n\n` +
+            `🪙 <b>1. محفظة السوق الفوري (Spot Wallet):</b>\n` +
+            `├ <b>الرصيد المتاح (الكاش):</b> <code>${spotFree.toFixed(2)} USDT</code>\n` +
+            `├ <b>الرصيد المستثمر (الأصول):</b> <code>${spotInvested.toFixed(2)} USDT</code>\n` +
+            `├ <b>الأرباح العائمة:</b> <code>${spotFloating >= 0 ? '+' : ''}${spotFloating.toFixed(2)} USDT</code>\n` +
+            `├ <b>الأرباح المحققة:</b> <code>${spotRealized >= 0 ? '+' : ''}${spotRealized.toFixed(2)} USDT</code>\n` +
+            `└ <b>الرصيد العام (Spot Equity):</b> <code>${spotEquity.toFixed(2)} USDT</code>\n\n` +
+            `⚡ <b>2. محفظة العقود الآجلة (Futures Wallet):</b>\n` +
+            `├ <b>الرصيد المتاح (الهامش الحر):</b> <code>${futuresFree.toFixed(2)} USDT</code>\n` +
+            `├ <b>الهامش المستثمر:</b> <code>${futuresInvested.toFixed(2)} USDT</code>\n` +
+            `├ <b>الأرباح العائمة:</b> <code>${futuresFloating >= 0 ? '+' : ''}${futuresFloating.toFixed(2)} USDT</code>\n` +
+            `├ <b>الأرباح المحققة:</b> <code>${futuresRealized >= 0 ? '+' : ''}${futuresRealized.toFixed(2)} USDT</code>\n` +
+            `└ <b>الرصيد العام (Futures Equity):</b> <code>${futuresEquity.toFixed(2)} USDT</code>\n\n` +
+            `🌐 <b>3. إجمالي المحفظة الشاملة (Combined Portfolio):</b>\n` +
+            `├ <b>الرصيد العام المشترك:</b> <code>${combinedEquity.toFixed(2)} USDT</code>\n` +
+            `├ <b>إجمالي الرصيد المتاح:</b> <code>${combinedFree.toFixed(2)} USDT</code>\n` +
+            `├ <b>إجمالي المستثمر:</b> <code>${combinedInvested.toFixed(2)} USDT</code>\n` +
+            `└ <b>صافي الأرباح الكلي:</b> <code>${combinedNetPnl >= 0 ? '+' : ''}${combinedNetPnl.toFixed(2)} USDT</code>\n`;
         }
 
         balText += `━━━━━━━━━━━━━━━━━━`;
@@ -1741,6 +1783,8 @@ export const reconcilePaperWalletDirect = async () => {
     // Deduplicate history by trade id or key to ensure PnL is counted strictly once
     const seenHistoryIds = new Set<string>();
     const currentMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const activeMarketType = (await kv.get('app_binance_market_type')) || 'SPOT';
+
     const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER' || h.mode === currentMode);
     const uniquePaperTrades = paperTrades.filter((h: any) => {
       const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
@@ -1749,36 +1793,137 @@ export const reconcilePaperWalletDirect = async () => {
       return true;
     });
 
-    const totalRealizedPnl = uniquePaperTrades.reduce((acc: number, h: any) => acc + (Number(h.profitUsdt) || 0), 0);
-    
     // Get active open positions
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
     const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER' || p.mode === currentMode));
-    
-    const inTradeMargin = activePaperPositions.reduce((acc: number, p: any) => {
+
+    const baseCapitalStr = await kv.get('paper_wallet_initial_deposit');
+    const defaultBaseCapital = baseCapitalStr ? (Number(baseCapitalStr) || 1000) : 1000;
+
+    // --- 1. DEDICATED SPOT WALLET RECONCILIATION ---
+    const spotTrades = uniquePaperTrades.filter((h: any) => (h.marketType || (h.leverage && h.leverage > 1 ? 'FUTURES' : 'SPOT')) === 'SPOT');
+    const spotRealizedPnl = spotTrades.reduce((acc: number, h: any) => acc + (Number(h.profitUsdt || h.pnlUsdt) || 0), 0);
+    const spotPositions = activePaperPositions.filter((p: any) => (p.marketType || 'SPOT') === 'SPOT');
+    const spotInTradeMargin = spotPositions.reduce((acc: number, p: any) => {
       const m = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
         ? p.remainingAmountUsdt
         : (p.marginUsdt || p.initialAmountUsdt || 0);
       return acc + Math.max(0, m);
     }, 0);
+    const spotFloatingPnl = spotPositions.reduce((acc: number, p: any) => {
+      const pnl = typeof p.unrealizedPnlUsdt === 'number' && !isNaN(p.unrealizedPnlUsdt) ? p.unrealizedPnlUsdt : 0;
+      return acc + pnl;
+    }, 0);
+    const spotBaseDepositStr = await kv.get('paper_wallet_initial_deposit_spot');
+    const spotBaseCapital = spotBaseDepositStr ? (Number(spotBaseDepositStr) || defaultBaseCapital) : defaultBaseCapital;
+    const spotFreeCash = Math.max(0, Math.round((spotBaseCapital + spotRealizedPnl - spotInTradeMargin) * 100) / 100);
+    const spotTotalEquity = Math.max(0, Math.round((spotFreeCash + spotInTradeMargin + spotFloatingPnl) * 100) / 100);
+    const spotWinCount = spotTrades.filter((h: any) => (Number(h.profitUsdt || h.pnlUsdt) || 0) > 0).length;
+    const spotLossCount = spotTrades.filter((h: any) => (Number(h.profitUsdt || h.pnlUsdt) || 0) < 0).length;
+    const spotWinRate = spotTrades.length > 0 ? Math.round((spotWinCount / spotTrades.length) * 1000) / 10 : 0;
 
-    const baseCapitalStr = await kv.get('paper_wallet_initial_deposit');
-    const baseCapital = baseCapitalStr ? (Number(baseCapitalStr) || 1000) : 1000;
-
-    const reconciledFreeCash = Math.max(0, Math.round((baseCapital + totalRealizedPnl - inTradeMargin) * 100) / 100);
-    const reconciledRealizedPnl = Math.round(totalRealizedPnl * 100) / 100;
-
-    const reconciledWallet = {
-      balance: reconciledFreeCash,
-      realizedPnl: reconciledRealizedPnl,
+    const reconciledSpotWallet = {
+      marketType: 'SPOT',
+      initialDeposit: spotBaseCapital,
+      balance: spotFreeCash, // Available free cash
+      inTradeMargin: Math.round(spotInTradeMargin * 100) / 100, // Invested balance
+      realizedPnl: Math.round(spotRealizedPnl * 100) / 100, // Realized PnL
+      floatingPnl: Math.round(spotFloatingPnl * 100) / 100, // Unrealized PnL
+      totalEquity: spotTotalEquity, // General balance
+      netPnl: Math.round((spotRealizedPnl + spotFloatingPnl) * 100) / 100,
+      tradeCount: spotTrades.length,
+      winCount: spotWinCount,
+      lossCount: spotLossCount,
+      winRate: spotWinRate,
+      lastUpdated: Date.now(),
       openPosition: null,
       history: [],
     };
+    await kv.set('btc_paper_wallet_spot', JSON.stringify(reconciledSpotWallet));
 
-    await kv.set('btc_paper_wallet', JSON.stringify(reconciledWallet));
-    console.log(`[ACCOUNTING RECONCILE] Paper Wallet Restored to Truth: Free Balance: $${reconciledFreeCash}, Realized PnL: $${reconciledRealizedPnl}, In-Trade Margin: $${inTradeMargin}`);
-    return reconciledWallet;
+    // --- 2. DEDICATED FUTURES WALLET RECONCILIATION ---
+    const futuresTrades = uniquePaperTrades.filter((h: any) => (h.marketType || (h.leverage && h.leverage > 1 ? 'FUTURES' : 'SPOT')) === 'FUTURES');
+    const futuresRealizedPnl = futuresTrades.reduce((acc: number, h: any) => acc + (Number(h.profitUsdt || h.pnlUsdt) || 0), 0);
+    const futuresPositions = activePaperPositions.filter((p: any) => p.marketType === 'FUTURES');
+    const futuresInTradeMargin = futuresPositions.reduce((acc: number, p: any) => {
+      const m = typeof p.remainingAmountUsdt === 'number' && p.remainingAmountUsdt >= 0
+        ? p.remainingAmountUsdt
+        : (p.marginUsdt || p.initialAmountUsdt || 0);
+      return acc + Math.max(0, m);
+    }, 0);
+    const futuresFloatingPnl = futuresPositions.reduce((acc: number, p: any) => {
+      const pnl = typeof p.unrealizedPnlUsdt === 'number' && !isNaN(p.unrealizedPnlUsdt) ? p.unrealizedPnlUsdt : 0;
+      return acc + pnl;
+    }, 0);
+    const futuresBaseDepositStr = await kv.get('paper_wallet_initial_deposit_futures');
+    const futuresBaseCapital = futuresBaseDepositStr ? (Number(futuresBaseDepositStr) || defaultBaseCapital) : defaultBaseCapital;
+    const futuresFreeMargin = Math.max(0, Math.round((futuresBaseCapital + futuresRealizedPnl - futuresInTradeMargin) * 100) / 100);
+    const futuresTotalEquity = Math.max(0, Math.round((futuresFreeMargin + futuresInTradeMargin + futuresFloatingPnl) * 100) / 100);
+    const futuresWinCount = futuresTrades.filter((h: any) => (Number(h.profitUsdt || h.pnlUsdt) || 0) > 0).length;
+    const futuresLossCount = futuresTrades.filter((h: any) => (Number(h.profitUsdt || h.pnlUsdt) || 0) < 0).length;
+    const futuresWinRate = futuresTrades.length > 0 ? Math.round((futuresWinCount / futuresTrades.length) * 1000) / 10 : 0;
+
+    const reconciledFuturesWallet = {
+      marketType: 'FUTURES',
+      initialDeposit: futuresBaseCapital,
+      balance: futuresFreeMargin, // Available free margin
+      inTradeMargin: Math.round(futuresInTradeMargin * 100) / 100, // Invested margin
+      realizedPnl: Math.round(futuresRealizedPnl * 100) / 100, // Realized PnL
+      floatingPnl: Math.round(futuresFloatingPnl * 100) / 100, // Unrealized PnL
+      totalEquity: futuresTotalEquity, // General balance
+      netPnl: Math.round((futuresRealizedPnl + futuresFloatingPnl) * 100) / 100,
+      tradeCount: futuresTrades.length,
+      winCount: futuresWinCount,
+      lossCount: futuresLossCount,
+      winRate: futuresWinRate,
+      lastUpdated: Date.now(),
+      openPosition: null,
+      history: [],
+    };
+    await kv.set('btc_paper_wallet_futures', JSON.stringify(reconciledFuturesWallet));
+
+    // --- 3. COMBINED MULTI-MARKET PORTFOLIO ---
+    const totalTradesCombined = spotTrades.length + futuresTrades.length;
+    const totalWinsCombined = spotWinCount + futuresWinCount;
+    const combinedSummary = {
+      totalEquity: Math.round((spotTotalEquity + futuresTotalEquity) * 100) / 100,
+      freeBalance: Math.round((spotFreeCash + futuresFreeMargin) * 100) / 100,
+      investedMargin: Math.round((spotInTradeMargin + futuresInTradeMargin) * 100) / 100,
+      realizedPnl: Math.round((spotRealizedPnl + futuresRealizedPnl) * 100) / 100,
+      floatingPnl: Math.round((spotFloatingPnl + futuresFloatingPnl) * 100) / 100,
+      totalNetPnl: Math.round((spotRealizedPnl + spotFloatingPnl + futuresRealizedPnl + futuresFloatingPnl) * 100) / 100,
+      totalTrades: totalTradesCombined,
+      winCount: totalWinsCombined,
+      lossCount: spotLossCount + futuresLossCount,
+      winRate: totalTradesCombined > 0 ? Math.round((totalWinsCombined / totalTradesCombined) * 1000) / 10 : 0,
+    };
+
+    const multiMarketPortfolio = {
+      spot: reconciledSpotWallet,
+      futures: reconciledFuturesWallet,
+      combined: combinedSummary,
+      activeMarketType,
+      executionMode: currentMode,
+      lastUpdated: Date.now(),
+    };
+    await kv.set('btc_multi_market_portfolio', JSON.stringify(multiMarketPortfolio));
+
+    // --- 4. SYNCHRONIZE ACTIVE MARKET TYPE WALLET (BACKWARD COMPATIBILITY) ---
+    const activeWallet = {
+      ...(activeMarketType === 'SPOT' ? reconciledSpotWallet : reconciledFuturesWallet),
+      spotWallet: reconciledSpotWallet,
+      futuresWallet: reconciledFuturesWallet,
+    };
+    await kv.set('btc_paper_wallet', JSON.stringify(activeWallet));
+
+    console.log(`[ACCOUNTING RECONCILE] Dedicated Wallets Restored: Spot Free: $${spotFreeCash} (Equity: $${spotTotalEquity}), Futures Free: $${futuresFreeMargin} (Equity: $${futuresTotalEquity}), Combined Equity: $${combinedSummary.totalEquity}`);
+    return {
+      spotWallet: reconciledSpotWallet,
+      futuresWallet: reconciledFuturesWallet,
+      combined: combinedSummary,
+      activeWallet,
+    };
   } catch (err) {
     console.error('[ACCOUNTING RECONCILE] Error reconciling paper wallet:', err);
     return null;

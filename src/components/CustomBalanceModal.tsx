@@ -15,10 +15,27 @@ import {
   ShieldCheck,
   Server,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Layers,
+  PieChart,
+  RotateCcw,
+  Sparkles,
+  Percent,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
-import { Language, PaperWallet, ActiveBotPosition, MarketType, TradingExecutionMode, BinanceApiConfig } from '../types';
-import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
+import { 
+  Language, 
+  PaperWallet, 
+  ActiveBotPosition, 
+  MarketType, 
+  TradingExecutionMode, 
+  BinanceApiConfig,
+  DedicatedMarketWallet,
+  MultiMarketPortfolio,
+  CombinedPortfolioSummary
+} from '../types';
+import { calculateDedicatedMarketWallet, calculateMultiMarketPortfolio } from '../utils/portfolioCalc';
 
 interface CustomBalanceModalProps {
   isOpen: boolean;
@@ -28,12 +45,17 @@ interface CustomBalanceModalProps {
   marketType?: MarketType;
   executionMode?: TradingExecutionMode;
   binanceConfig?: BinanceApiConfig;
-  onUpdateBalance: (newBalance: number, resetHistory?: boolean) => void;
+  onUpdateBalance: (newBalance: number, resetHistory?: boolean, targetMarket?: MarketType | 'ALL') => void;
   activeBotPositions?: ActiveBotPosition[];
   onOpenBinanceModal?: () => void;
   onToggleExecutionMode?: (mode: TradingExecutionMode) => void;
   onSyncBinancePositions?: () => Promise<void> | void;
+  spotWallet?: DedicatedMarketWallet | null;
+  futuresWallet?: DedicatedMarketWallet | null;
+  onToggleMarketType?: (marketType: MarketType) => void;
 }
+
+type ModalViewTab = 'FUTURES' | 'SPOT' | 'COMBINED';
 
 export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   isOpen,
@@ -48,25 +70,52 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   onOpenBinanceModal,
   onToggleExecutionMode,
   onSyncBinancePositions,
+  spotWallet: propSpotWallet,
+  futuresWallet: propFuturesWallet,
+  onToggleMarketType,
 }) => {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
+  const isFr = language === 'fr';
 
-  const [activeMarket, setActiveMarket] = useState<MarketType>(marketType);
-  const [inputVal, setInputVal] = useState<string>(paperWallet.balance.toString());
+  const [activeTab, setActiveTab] = useState<ModalViewTab>(marketType === 'SPOT' ? 'SPOT' : 'FUTURES');
+  const [inputVal, setInputVal] = useState<string>('1000');
   const [resetPnL, setResetPnL] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // Sync state on open
+  // Compute live multi-market portfolio
+  const multiPortfolio: MultiMarketPortfolio = React.useMemo(() => {
+    return calculateMultiMarketPortfolio(
+      activeBotPositions,
+      paperWallet?.history || [],
+      paperWallet,
+      executionMode,
+      binanceConfig?.accountInfo,
+      activeTab === 'SPOT' ? 'SPOT' : 'FUTURES'
+    );
+  }, [activeBotPositions, paperWallet, executionMode, binanceConfig, activeTab]);
+
+  const activeWalletMetrics = activeTab === 'SPOT' ? multiPortfolio.spot : multiPortfolio.futures;
+
+  // Sync state when opening or switching tabs
   useEffect(() => {
     if (isOpen) {
-      setActiveMarket(marketType);
-      setInputVal(paperWallet.balance.toString());
+      if (activeTab === 'SPOT') {
+        const val = multiPortfolio.spot.initialDeposit || 1000;
+        setInputVal(val.toString());
+      } else if (activeTab === 'FUTURES') {
+        const val = multiPortfolio.futures.initialDeposit || 1000;
+        setInputVal(val.toString());
+      } else {
+        const val = (multiPortfolio.combined.totalEquity || 2000);
+        setInputVal(val.toString());
+      }
       setResetPnL(false);
       setError(null);
     }
-  }, [isOpen, paperWallet.balance, marketType]);
+  }, [isOpen, activeTab, multiPortfolio.spot.initialDeposit, multiPortfolio.futures.initialDeposit]);
 
   // Handle ESC key
   useEffect(() => {
@@ -108,8 +157,27 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
       return;
     }
 
-    onUpdateBalance(num, resetPnL);
-    onClose();
+    const target = activeTab === 'COMBINED' ? 'ALL' : activeTab;
+    onUpdateBalance(num, resetPnL, target);
+
+    setSuccessToast(
+      isArabic
+        ? `تم تحديث محفظة ${activeTab === 'SPOT' ? 'السبوت' : activeTab === 'FUTURES' ? 'العقود الآجلة' : 'كلا السوقين'} بنجاح!`
+        : `Wallet updated successfully!`
+    );
+
+    setTimeout(() => {
+      setSuccessToast(null);
+      onClose();
+    }, 800);
+  };
+
+  const handleSelectTab = (tab: ModalViewTab) => {
+    setActiveTab(tab);
+    setError(null);
+    if (tab !== 'COMBINED' && onToggleMarketType) {
+      onToggleMarketType(tab);
+    }
   };
 
   if (!isOpen) return null;
@@ -118,31 +186,18 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
   const isLiveMode = executionMode === 'BINANCE_LIVE';
   const isPaperMode = executionMode === 'PAPER';
 
-  const metrics = calculatePortfolioMetrics(
-    paperWallet, 
-    activeBotPositions, 
-    undefined, 
-    undefined, 
-    isLiveMode, 
-    binanceConfig?.accountInfo || null, 
-    activeMarket, 
-    executionMode
-  );
+  const spot = multiPortfolio.spot;
+  const futures = multiPortfolio.futures;
+  const combined = multiPortfolio.combined;
 
-  const testnetFreeUsdt = binanceConfig?.accountInfo?.freeUsdt ?? 0;
-  const testnetTotalEquity = binanceConfig?.accountInfo?.totalUsdtEquity ?? 0;
-
-  const currentNum = parseFloat(inputVal) || 0;
-  const inTradeMargin = metrics.inTradeMargin;
-  const floatingPnl = metrics.floatingPnl;
-  const totalEquity = metrics.totalEquity;
-
-  const diff = currentNum - paperWallet.balance;
-  const diffPercent = paperWallet.balance > 0 ? (diff / paperWallet.balance) * 100 : 0;
+  // Percentage allocation
+  const totalEquities = (spot.totalEquity + futures.totalEquity) || 1;
+  const spotSharePct = Math.round((spot.totalEquity / totalEquities) * 100);
+  const futuresSharePct = 100 - spotSharePct;
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-xs transition-opacity duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -150,33 +205,29 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
       }}
     >
       <div 
-        className={`bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all duration-200 ${
+        className={`bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all duration-200 ${
           isArabic ? 'rtl text-right' : 'ltr text-left'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header - Dynamically tailored to active mode */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/80 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-xl border ${
+        {/* Header with Mode & Title */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/90 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-2xl border ${
               isTestnetMode
                 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                 : isLiveMode
                 ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                 : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
             }`}>
-              <Wallet className="w-4 h-4" />
+              <Wallet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-white text-xs sm:text-sm flex items-center gap-2">
+              <h3 className="font-black text-white text-sm sm:text-base flex items-center gap-2">
                 <span>
-                  {isTestnetMode 
-                    ? (isArabic ? 'تفاصيل محفظة Binance Testnet' : 'Binance Testnet Sandbox Wallet')
-                    : isLiveMode
-                    ? (isArabic ? 'تفاصيل محفظة Binance Live' : 'Binance Live Real Wallet')
-                    : (isArabic ? 'تخصيص رصيد المحفظة التجريبية (Paper)' : 'Custom Paper Trading Wallet')}
+                  {isArabic ? 'مركز إدارة المحافظ والأسواق (Portfolio Hub)' : 'Dedicated Multi-Market Portfolio Hub'}
                 </span>
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold border uppercase ${
+                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold border uppercase ${
                   isTestnetMode
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                     : isLiveMode
@@ -186,438 +237,528 @@ export const CustomBalanceModal: React.FC<CustomBalanceModalProps> = ({
                   {executionMode}
                 </span>
               </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isArabic 
+                  ? 'محفظة مخصصة ومستقلة لكل نوع سوق مع ضبط شامل للأرصدة والأرباح والخسائر' 
+                  : 'Isolated portfolio per market type with precise accounting reconciliation'}
+              </p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* ========================================================================= */}
-        {/* VIEW 1: BINANCE TESTNET WALLET VIEW (NO CONFUSION WITH PAPER)             */}
-        {/* ========================================================================= */}
-        {isTestnetMode ? (
-          <div className="p-4 space-y-4 font-mono text-xs">
-            {/* Status notification banner */}
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start gap-2.5">
-              <FlaskConical className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div className="font-sans text-[11px] leading-relaxed">
-                <p className="font-bold text-amber-200">
-                  {isArabic ? 'أنت الآن في وضع شبكة اختبار بايننس (Binance Testnet)' : 'You are currently in Binance Testnet Sandbox mode'}
-                </p>
-                <p className="text-amber-300/80 mt-0.5">
-                  {isArabic 
-                    ? 'هذا الرصيد مرتبط بحساب Testnet الرسمي في Binance ويتم جلبه مباشرة عبر API بدون استخدام أموالك الحقيقية.'
-                    : 'This balance reflects your official Binance Testnet sandbox account fetched live via API.'}
-                </p>
-              </div>
-            </div>
+        {/* 3-Way Market Selector Tabs (FUTURES vs SPOT vs COMBINED) */}
+        <div className="px-5 pt-3.5 pb-2 bg-slate-950/50 border-b border-slate-800/80">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800">
+            {/* Tab 1: FUTURES */}
+            <button
+              type="button"
+              onClick={() => handleSelectTab('FUTURES')}
+              className={`py-2 px-3 rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'FUTURES'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-4 h-4 text-cyan-400" />
+              <span>{isArabic ? 'العقود الآجلة (Futures)' : 'USDT-M Futures'}</span>
+            </button>
 
-            {/* Testnet Balances Cards (4-way comprehensive balance metrics) */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'الرصيد المتاح (Free USDT):' : 'Available Free Cash:'}
-                </span>
-                <span className="text-base font-black text-amber-400 font-mono">
-                  ${testnetFreeUsdt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-[9px] text-slate-500 block mt-0.5">Binance Testnet</span>
-              </div>
+            {/* Tab 2: SPOT */}
+            <button
+              type="button"
+              onClick={() => handleSelectTab('SPOT')}
+              className={`py-2 px-3 rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'SPOT'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Coins className="w-4 h-4 text-emerald-400" />
+              <span>{isArabic ? 'السوق الفوري (Spot)' : 'Spot Market'}</span>
+            </button>
 
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'في الصفقات (In Trades):' : 'In-Trade Margin:'}
-                </span>
-                <span className="text-base font-black text-cyan-400 font-mono">
-                  ${inTradeMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-[9px] text-slate-500 block mt-0.5">
-                  {(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === 'BINANCE_TESTNET').length} {isArabic ? 'صفقات نشطة' : 'open trades'}
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'أرباح الصفقات (Floating PnL):' : 'Unrealized PnL:'}
-                </span>
-                <span className={`text-base font-black font-mono ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-[9px] text-slate-500 block mt-0.5">Mark Price Live</span>
-              </div>
-
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'إجمالي المحفظة (Equity):' : 'Total Equity:'}
-                </span>
-                <span className="text-base font-black text-white font-mono">
-                  ${totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-[9px] text-slate-500 block mt-0.5">{marketType} Account</span>
-              </div>
-            </div>
-
-            {/* Network Details */}
-            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">{isArabic ? 'الشبكة النشطة:' : 'Active Network:'}</span>
-                <span className="text-amber-400 font-bold flex items-center gap-1 font-mono text-[10px]">
-                  <Server className="w-3 h-3" />
-                  <span>{marketType === 'FUTURES' ? 'testnet.binancefuture.com' : 'testnet.binance.vision'}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">{isArabic ? 'نوع السوق:' : 'Market Type:'}</span>
-                <span className="text-cyan-400 font-bold">{marketType}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">{isArabic ? 'حالة الاتصال:' : 'Connection Status:'}</span>
-                <span className={binanceConfig?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {binanceConfig?.isConnected ? (isArabic ? '● متصل بنجاح' : '● Connected') : (isArabic ? '○ غير متصل' : '○ Standby')}
-                </span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="space-y-2 pt-1 font-sans">
-              {onSyncBinancePositions && (
-                <button
-                  type="button"
-                  disabled={isSyncing}
-                  onClick={async () => {
-                    setIsSyncing(true);
-                    try {
-                      await onSyncBinancePositions();
-                    } finally {
-                      setIsSyncing(false);
-                    }
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition flex items-center justify-center gap-2 cursor-pointer text-xs active:scale-[0.99]"
-                >
-                  <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>
-                    {isSyncing 
-                      ? (isArabic ? 'جارٍ المزامنة مع بايننس Testnet...' : 'Syncing with Binance Testnet...') 
-                      : (isArabic ? 'مزامنة فورية للصفقات والأرصدة مع بايننس' : 'Instant Sync with Binance Testnet')}
-                  </span>
-                </button>
-              )}
-
-              {onOpenBinanceModal && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenBinanceModal();
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-amber-500/20 text-xs"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>{isArabic ? 'فتح إعدادات وأرصدة Binance Testnet API' : 'Open Binance Testnet API Settings'}</span>
-                </button>
-              )}
-
-              {onToggleExecutionMode && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToggleExecutionMode('PAPER');
-                    onClose();
-                  }}
-                  className="w-full py-2 px-3 rounded-xl font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-                >
-                  <FlaskConical className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{isArabic ? 'التبديل إلى وضع المحاكاة الافتراضية (Paper Trading)' : 'Switch back to Simulated Paper Trading'}</span>
-                </button>
-              )}
-            </div>
+            {/* Tab 3: COMBINED OVERVIEW */}
+            <button
+              type="button"
+              onClick={() => handleSelectTab('COMBINED')}
+              className={`py-2 px-3 rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'COMBINED'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <PieChart className="w-4 h-4 text-purple-400" />
+              <span>{isArabic ? 'المحفظة الشاملة' : 'Combined'}</span>
+            </button>
           </div>
-        ) : isLiveMode ? (
-          /* ========================================================================= */
-          /* VIEW 2: BINANCE LIVE REAL WALLET VIEW                                     */
-          /* ========================================================================= */
-          <div className="p-4 space-y-4 font-mono text-xs">
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-2.5 font-sans">
-              <Flame className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-[11px] leading-relaxed">
-                <p className="font-bold text-rose-200">
-                  {isArabic ? 'أنت الآن في وضع التداول الحقيقي المباشر (Binance Live)' : 'You are in Binance Live Real Trading mode'}
-                </p>
-                <p className="text-rose-300/80 mt-0.5">
-                  {isArabic 
-                    ? 'الأرصدة المعروضة هي أموالك الفعلية الحقيقية في محفظة منصة Binance.'
-                    : 'These balances reflect your genuine real-money Binance portfolio.'}
-                </p>
-              </div>
+        </div>
+
+        {/* Scrollable Content Body */}
+        <div className="p-5 space-y-4 overflow-y-auto no-scrollbar flex-1">
+          {successToast && (
+            <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs font-bold animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{successToast}</span>
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'الرصيد المتاح (Free USDT):' : 'Available Free USDT:'}
-                </span>
-                <span className="text-base font-black text-emerald-400">
-                  ${(binanceConfig?.accountInfo?.freeUsdt ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">
-                  {isArabic ? 'إجمالي الرصيد (Total Equity):' : 'Total USDT Equity:'}
-                </span>
-                <span className="text-base font-black text-white">
-                  ${(binanceConfig?.accountInfo?.totalUsdtEquity ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
-
-            {onOpenBinanceModal && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenBinanceModal();
-                }}
-                className="w-full py-2.5 px-4 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer shadow-md text-xs font-sans"
-              >
-                <Zap className="w-4 h-4" />
-                <span>{isArabic ? 'إدارة إعدادات وربط Binance Live API' : 'Manage Binance Live API Settings'}</span>
-              </button>
-            )}
-          </div>
-        ) : (
-          /* ========================================================================= */
-          /* VIEW 3: SIMULATED PAPER WALLET CUSTOMIZATION (ONLY IN PAPER MODE)         */
-          /* ========================================================================= */
-          <form onSubmit={handleSubmit} className="p-3.5 space-y-3 overflow-y-auto no-scrollbar flex-1">
-            {/* Market Type Selector (Futures vs Spot) */}
-            <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 gap-1">
-              <button
-                type="button"
-                onClick={() => setActiveMarket('FUTURES')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  activeMarket === 'FUTURES'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                <span>FUTURES USDT-M</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveMarket('SPOT')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  activeMarket === 'SPOT'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                <span>SPOT MARKET</span>
-              </button>
-            </div>
-
-            {/* Portfolio Equity Overview Card */}
-            <div className="bg-slate-950/80 p-2.5 rounded-xl border border-cyan-500/30 font-mono space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-cyan-300 font-sans font-medium">
-                  {isArabic ? `إجمالي قيمة محفظة ${activeMarket} (Total Equity):` : `Total ${activeMarket} Portfolio Equity:`}
-                </span>
-                <span className="text-sm font-bold text-cyan-300">
-                  ${totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] pt-1.5 border-t border-slate-800/80">
-                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                  <span className="text-slate-400 block">{isArabic ? 'السيولة المتاحة (Free):' : 'Free Cash:'}</span>
-                  <span className="text-emerald-300 font-bold">${metrics.freeCash.toFixed(2)}</span>
-                </div>
-                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                  <span className="text-slate-400 block">{activeMarket === 'FUTURES' ? (isArabic ? 'في صفقات الهامش:' : 'In Margin:') : (isArabic ? 'قيمة الأصول المشتراة:' : 'Spot Holdings:')}</span>
-                  <span className="text-amber-300 font-bold">${activeMarket === 'FUTURES' ? inTradeMargin.toFixed(2) : metrics.spotHoldingsValue.toFixed(2)}</span>
-                </div>
-                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                  <span className="text-slate-400 block">{isArabic ? 'أرباح مفتوحة:' : 'Unrealized PnL:'}</span>
-                  <span className={`font-bold ${floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {floatingPnl >= 0 ? '+' : ''}${floatingPnl.toFixed(2)}
+          {/* ========================================================================= */}
+          {/* TAB 1 & 2: DEDICATED MARKET VIEW (FUTURES OR SPOT)                        */}
+          {/* ========================================================================= */}
+          {activeTab !== 'COMBINED' ? (
+            <div className="space-y-4">
+              {/* Market Badge Banner */}
+              <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
+                activeTab === 'FUTURES'
+                  ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {activeTab === 'FUTURES' ? <Zap className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
+                  <span className="font-bold">
+                    {activeTab === 'FUTURES' 
+                      ? (isArabic ? 'محفظة العقود الآجلة المستقلة (USDT-M Futures)' : 'Isolated USDT-M Futures Portfolio')
+                      : (isArabic ? 'محفظة السوق الفوري المستقلة (Spot Market)' : 'Isolated Spot Market Portfolio')}
                   </span>
                 </div>
-                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                  <span className="text-slate-400 block">{isArabic ? 'الأرباح المحققة:' : 'Realized PnL:'}</span>
-                  <span className={`font-bold ${(paperWallet.realizedPnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {(paperWallet.realizedPnl || 0) >= 0 ? '+' : ''}${(paperWallet.realizedPnl || 0).toFixed(2)}
+                <span className="font-mono text-[11px] opacity-80">
+                  {activeTab === 'FUTURES' 
+                    ? (isArabic ? 'رافعة مالية وعقود Long/Short' : 'Leveraged Long/Short')
+                    : (isArabic ? 'شراء أصول فورية 1x (Long Only)' : 'Spot Cash 1x Long Only')}
+                </span>
+              </div>
+
+              {/* Comprehensive 4-Card Balance Accounting Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 1. Available / Free Balance */}
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-sans">
+                    {activeTab === 'FUTURES' 
+                      ? (isArabic ? 'الهامش الحر المتاح:' : 'Free Margin:') 
+                      : (isArabic ? 'الرصيد الكاش المتاح:' : 'Free Cash:')}
+                  </span>
+                  <span className="text-base font-black text-emerald-400 font-mono block mt-0.5">
+                    ${activeWalletMetrics.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block mt-1 font-mono">
+                    {isArabic ? 'جاهز لصفقات جديدة' : 'Available for trades'}
+                  </span>
+                </div>
+
+                {/* 2. Invested Balance / In Trades */}
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-sans">
+                    {activeTab === 'FUTURES' 
+                      ? (isArabic ? 'الهامش المستثمر:' : 'In-Trade Margin:') 
+                      : (isArabic ? 'قيمة الأصول المستثمرة:' : 'Spot Invested:')}
+                  </span>
+                  <span className="text-base font-black text-amber-400 font-mono block mt-0.5">
+                    ${activeWalletMetrics.inTradeMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block mt-1 font-mono">
+                    {activeTab === 'FUTURES' ? (isArabic ? 'محجوز في عقود نشطة' : 'Locked in margin') : (isArabic ? 'قيمة شراء العملات' : 'Cost of crypto held')}
+                  </span>
+                </div>
+
+                {/* 3. Profits & Losses (Realized & Floating) */}
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-sans">
+                    {isArabic ? 'الأرباح والخسائر:' : 'Net P&L:'}
+                  </span>
+                  <span className={`text-base font-black font-mono block mt-0.5 ${
+                    activeWalletMetrics.netPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {activeWalletMetrics.netPnl >= 0 ? '+' : ''}${activeWalletMetrics.netPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-[9px] text-slate-500 mt-1 font-mono">
+                    <span>{isArabic ? 'عائم:' : 'Float:'} <b className={activeWalletMetrics.floatingPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{activeWalletMetrics.floatingPnl >= 0 ? '+' : ''}${activeWalletMetrics.floatingPnl.toFixed(1)}</b></span>
+                  </div>
+                </div>
+
+                {/* 4. General / Total Balance (Total Equity) */}
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl ring-1 ring-cyan-500/20">
+                  <span className="text-[10px] text-cyan-300 block font-sans font-bold">
+                    {isArabic ? 'الرصيد العام (Total Equity):' : 'Total Equity:'}
+                  </span>
+                  <span className="text-base font-black text-white font-mono block mt-0.5">
+                    ${activeWalletMetrics.totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[9px] text-slate-400 block mt-1 font-mono">
+                    {isArabic ? 'المتاح + المستثمر + العائم' : 'Free + Margin + Float'}
                   </span>
                 </div>
               </div>
-            </div>
 
-            {/* Current & Target Dynamic Preview */}
-            <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs font-mono">
-              <div>
-                <span className="text-[10px] text-slate-400 block">
-                  {isArabic ? 'السيولة المتاحة الحالية:' : isEn ? 'Current Free Cash:' : 'Solde Libre Actuel :'}
-                </span>
-                <span className="text-slate-200 font-bold text-xs">
-                  ${paperWallet.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-
-              {diff !== 0 && (
-                <div className="text-right rtl:text-left">
-                  <span className="text-[10px] text-slate-400 block">
-                    {isArabic ? 'الفارق:' : isEn ? 'Difference:' : 'Écart :'}
+              {/* Spot Holdings Sub-panel (Only for SPOT when crypto assets exist) */}
+              {activeTab === 'SPOT' && activeWalletMetrics.holdings && Object.keys(activeWalletMetrics.holdings).length > 0 && (
+                <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isArabic ? 'تفاصيل أصول السبوت المشتراة:' : 'Spot Asset Holdings Details:'}</span>
                   </span>
-                  <span className={`text-[11px] font-bold inline-flex items-center gap-0.5 ${diff > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {diff > 0 ? '+' : ''}${Math.abs(diff).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    <span className="text-[9px] opacity-80">({diff > 0 ? '+' : ''}{diffPercent.toFixed(0)}%)</span>
-                  </span>
+                  <div className="space-y-1.5">
+                    {Object.entries(activeWalletMetrics.holdings).map(([asset, item]) => (
+                      <div key={asset} className="flex items-center justify-between text-xs font-mono p-2 bg-slate-900 rounded-xl">
+                        <span className="font-bold text-white">{asset}</span>
+                        <span className="text-slate-400">{item.qty} {asset}</span>
+                        <span className="font-bold text-amber-300">${item.valueUsdt.toFixed(2)} USDT</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Amount Input */}
-            <div>
-              <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                {isArabic ? `المبلغ الجديد لمحفظة ${activeMarket} (USDT):` : `New ${activeMarket} Balance (USDT):`}
-              </label>
+              {/* Paper Customization Form (Only in Paper Mode) */}
+              {isPaperMode ? (
+                <form onSubmit={handleSubmit} className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-brand-400" />
+                      <span>
+                        {isArabic 
+                          ? `تخصيص رصيد الإيداع الأولي لمحفظة ${activeTab === 'FUTURES' ? 'العقود الآجلة' : 'السبوت'}:`
+                          : `Configure Base Capital for ${activeTab === 'FUTURES' ? 'Futures' : 'Spot'} Wallet:`}
+                      </span>
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {isArabic ? `الحالي: $${activeWalletMetrics.initialDeposit}` : `Current: $${activeWalletMetrics.initialDeposit}`}
+                    </span>
+                  </div>
 
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 rtl:left-auto rtl:right-0 pl-2.5 rtl:pl-0 rtl:pr-2.5 flex items-center pointer-events-none text-slate-400 font-mono font-bold text-xs">
-                  $
-                </div>
-                <input
-                  type="number"
-                  min="10"
-                  max="10000000"
-                  step="any"
-                  value={inputVal}
-                  onChange={(e) => {
-                    setInputVal(e.target.value);
-                    setError(null);
-                  }}
-                  className={`w-full bg-slate-950 border ${
-                    error ? 'border-rose-500' : 'border-slate-800 focus:border-cyan-500'
-                  } rounded-xl pl-7 pr-3 rtl:pl-3 rtl:pr-7 py-2 text-white font-mono text-sm focus:outline-hidden transition`}
-                  placeholder="10000"
-                />
-              </div>
+                  {/* Input field */}
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <DollarSign className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <input
+                      type="number"
+                      step="any"
+                      min="10"
+                      value={inputVal}
+                      onChange={(e) => {
+                        setInputVal(e.target.value);
+                        setError(null);
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700/80 focus:border-cyan-500 rounded-xl py-2.5 pl-9 pr-16 text-white font-mono font-bold text-sm focus:outline-none transition shadow-inner"
+                      placeholder="1000"
+                    />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <span className="text-xs font-mono font-bold text-slate-400">USDT</span>
+                    </div>
+                  </div>
 
-              {error && (
-                <p className="text-rose-400 text-[10px] mt-1 font-medium">{error}</p>
-              )}
-            </div>
-
-            {/* Quick Adjust Buttons */}
-            <div>
-              <span className="text-[10px] text-slate-400 block mb-1">
-                {isArabic ? 'تعديل سريع:' : isEn ? 'Quick Adjust:' : 'Ajustement Rapide :'}
-              </span>
-              <div className="grid grid-cols-4 gap-1 font-mono text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => handleAdjust(-1000)}
-                  className="py-1 bg-slate-800/90 hover:bg-slate-700 text-rose-400 hover:text-rose-300 rounded-lg border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
-                >
-                  -1,000$
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAdjust(-100)}
-                  className="py-1 bg-slate-800/90 hover:bg-slate-700 text-rose-400 hover:text-rose-300 rounded-lg border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
-                >
-                  -100$
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAdjust(100)}
-                  className="py-1 bg-slate-800/90 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
-                >
-                  +100$
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAdjust(1000)}
-                  className="py-1 bg-slate-800/90 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg border border-slate-700/60 transition font-bold active:scale-95 cursor-pointer text-center"
-                >
-                  +1,000$
-                </button>
-              </div>
-            </div>
-
-            {/* Presets - Compact grid */}
-            <div>
-              <span className="text-[10px] text-slate-400 block mb-1">
-                {isArabic ? 'مبالغ شائعة:' : isEn ? 'Presets:' : 'Montants Prédéfinis :'}
-              </span>
-              <div className="grid grid-cols-4 gap-1 font-mono text-[10px]">
-                {presets.map((preset) => {
-                  const isSelected = parseFloat(inputVal) === preset;
-                  return (
+                  {/* Quick delta modifiers */}
+                  <div className="flex items-center gap-1.5">
                     <button
-                      key={preset}
                       type="button"
-                      onClick={() => handleApplyPreset(preset)}
-                      className={`py-1 rounded-lg border font-semibold transition active:scale-95 cursor-pointer text-center ${
-                        isSelected
-                          ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-xs'
-                          : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
-                      }`}
+                      onClick={() => handleAdjust(-500)}
+                      className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-mono text-slate-300 border border-slate-800 transition cursor-pointer"
                     >
-                      ${preset >= 1000 ? `${preset / 1000}k` : preset}
+                      -500
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => handleAdjust(-100)}
+                      className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-mono text-slate-300 border border-slate-800 transition cursor-pointer"
+                    >
+                      -100
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjust(100)}
+                      className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-mono text-emerald-300 border border-slate-800 transition cursor-pointer"
+                    >
+                      +100
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjust(500)}
+                      className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-mono text-emerald-300 border border-slate-800 transition cursor-pointer"
+                    >
+                      +500
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjust(1000)}
+                      className="flex-1 py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-mono text-emerald-300 border border-slate-800 transition cursor-pointer"
+                    >
+                      +1,000
+                    </button>
+                  </div>
+
+                  {/* Presets */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {presets.slice(0, 4).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handleApplyPreset(p)}
+                        className={`py-1.5 rounded-lg text-xs font-mono font-bold transition border cursor-pointer ${
+                          inputVal === p.toString()
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            : 'bg-slate-900 hover:bg-slate-850 text-slate-400 border-slate-800'
+                        }`}
+                      >
+                        ${p.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Reset History checkbox */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="resetPnlCheckbox"
+                      checked={resetPnL}
+                      onChange={(e) => setResetPnL(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                    />
+                    <label htmlFor="resetPnlCheckbox" className="text-xs text-slate-300 cursor-pointer select-none">
+                      {isArabic 
+                        ? `تصفير سجل الصفقات والأرباح المحققة لمحفظة ${activeTab === 'FUTURES' ? 'العقود الآجلة' : 'السبوت'} فقط`
+                        : `Reset trade history and realized P&L for this ${activeTab} wallet`}
+                    </label>
+                  </div>
+
+                  {error && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 px-4 rounded-xl font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition flex items-center justify-center gap-2 cursor-pointer shadow-md text-xs shadow-cyan-500/20"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>
+                      {isArabic 
+                        ? `حفظ وتحديث محفظة ${activeTab === 'FUTURES' ? 'العقود الآجلة' : 'السبوت'}`
+                        : `Save and Apply ${activeTab} Wallet Balance`}
+                    </span>
+                  </button>
+                </form>
+              ) : (
+                /* Exchange Mode details banner */
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">{isArabic ? 'حالة حساب بايننس الرسمي:' : 'Binance Exchange Status:'}</span>
+                    <span className={binanceConfig?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                      {binanceConfig?.isConnected ? '● Connected' : '○ Standby'}
+                    </span>
+                  </div>
+                  {onSyncBinancePositions && (
+                    <button
+                      type="button"
+                      disabled={isSyncing}
+                      onClick={async () => {
+                        setIsSyncing(true);
+                        try {
+                          await onSyncBinancePositions();
+                        } finally {
+                          setIsSyncing(false);
+                        }
+                      }}
+                      className="w-full py-2 px-3 rounded-xl font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition flex items-center justify-center gap-2 text-xs cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isArabic ? 'مزامنة فورية للأرصدة مع بايننس' : 'Instant Sync with Binance'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ========================================================================= */
+            /* TAB 3: COMBINED GLOBAL PORTFOLIO (SPOT + FUTURES)                         */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              {/* Global Total Balance Spotlight Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/40 via-slate-950 to-slate-900 border border-purple-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <PieChart className="w-4 h-4 text-purple-400" />
+                    <span className="text-xs font-bold text-purple-200">
+                      {isArabic ? 'الرصيد العام المشترك لكافة المحافظ (Global Equity)' : 'Global Multi-Market Combined Equity'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
+                    SPOT + FUTURES
+                  </span>
+                </div>
+
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                    ${combined.totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${
+                    combined.totalNetPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {combined.totalNetPnl >= 0 ? '+' : ''}${combined.totalNetPnl.toFixed(2)} Net PnL
+                  </span>
+                </div>
+
+                {/* Capital Allocation Visual Progress Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-cyan-300 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      <span>Futures: ${futures.totalEquity.toFixed(0)} ({futuresSharePct}%)</span>
+                    </span>
+                    <span className="text-emerald-300 flex items-center gap-1">
+                      <Coins className="w-3 h-3" />
+                      <span>Spot: ${spot.totalEquity.toFixed(0)} ({spotSharePct}%)</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-900 overflow-hidden flex border border-slate-800">
+                    <div 
+                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" 
+                      style={{ width: `${futuresSharePct}%` }} 
+                    />
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" 
+                      style={{ width: `${spotSharePct}%` }} 
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Reset Options Checkbox */}
-            <div className="pt-1.5 border-t border-slate-800">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={resetPnL}
-                  onChange={(e) => setResetPnL(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-0 cursor-pointer accent-cyan-500"
-                />
-                <span className="text-[10px] text-slate-400 hover:text-slate-300 leading-tight">
-                  {isArabic 
-                    ? 'تصفير الأرباح والخسائر السابقة (بدء جلسة جديدة)' 
-                    : isEn 
-                    ? 'Reset realized P&L to 0 for a clean session' 
-                    : 'Réinitialiser le P&L réalisé à 0'}
-                </span>
-              </label>
-            </div>
+              {/* Side-by-Side Comparison: Spot vs Futures */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Spot Card */}
+                <div className="p-3.5 bg-slate-950 border border-emerald-500/30 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-emerald-400" />
+                      <span>{isArabic ? 'محفظة السبوت (Spot)' : 'Spot Portfolio'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTab('SPOT')}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                    >
+                      {isArabic ? 'إدارة' : 'Manage'}
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-xs font-mono">
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'الرصيد المتاح:' : 'Free Cash:'}</span>
+                      <span className="text-white font-bold">${spot.balance.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'الرصيد المستثمر:' : 'In Trades:'}</span>
+                      <span className="text-amber-400 font-bold">${spot.inTradeMargin.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'صافي الربح/الخسارة:' : 'Net P&L:'}</span>
+                      <span className={spot.netPnl >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                        {spot.netPnl >= 0 ? '+' : ''}${spot.netPnl.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-800 pt-1 text-slate-300">
+                      <span className="font-bold">{isArabic ? 'إجمالي السبوت:' : 'Spot Equity:'}</span>
+                      <span className="text-white font-black">${spot.totalEquity.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Actions */}
-            <div className="pt-2 flex gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition border border-slate-700/80 active:scale-95 cursor-pointer"
-              >
-                {isArabic ? 'إلغاء' : isEn ? 'Cancel' : 'Annuler'}
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>{isArabic ? 'تطبيق الرصيد' : isEn ? 'Apply' : 'Appliquer'}</span>
-              </button>
+                {/* Futures Card */}
+                <div className="p-3.5 bg-slate-950 border border-cyan-500/30 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-cyan-400" />
+                      <span>{isArabic ? 'محفظة العقود (Futures)' : 'Futures Portfolio'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTab('FUTURES')}
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer"
+                    >
+                      {isArabic ? 'إدارة' : 'Manage'}
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-xs font-mono">
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'الهامش المتاح:' : 'Free Margin:'}</span>
+                      <span className="text-white font-bold">${futures.balance.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'الهامش المحجوز:' : 'In Margin:'}</span>
+                      <span className="text-amber-400 font-bold">${futures.inTradeMargin.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>{isArabic ? 'صافي الربح/الخسارة:' : 'Net P&L:'}</span>
+                      <span className={futures.netPnl >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                        {futures.netPnl >= 0 ? '+' : ''}${futures.netPnl.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-800 pt-1 text-slate-300">
+                      <span className="font-bold">{isArabic ? 'إجمالي العقود:' : 'Futures Equity:'}</span>
+                      <span className="text-white font-black">${futures.totalEquity.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Combined Global Reset Action (In Paper Mode) */}
+              {isPaperMode && (
+                <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <span className="font-bold text-white block">
+                      {isArabic ? 'إعادة ضبط شاملة لكلا المحفظتين' : 'Full Reset for Both Wallets'}
+                    </span>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">
+                      {isArabic ? 'تصفير كافة الصفقات وتعيين 1,000 USDT لكل محفظة' : 'Reset history and set $1,000 to Spot and Futures'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdateBalance(1000, true, 'ALL');
+                      setSuccessToast(isArabic ? 'تمت إعادة ضبط كافة المحافظ بنجاح!' : 'Both portfolios reset successfully!');
+                      setTimeout(() => {
+                        setSuccessToast(null);
+                        onClose();
+                      }, 800);
+                    }}
+                    className="py-2 px-3 rounded-xl font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 transition text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>{isArabic ? 'إعادة ضبط شاملة' : 'Full Reset'}</span>
+                  </button>
+                </div>
+              )}
             </div>
-          </form>
-        )}
+          )}
+        </div>
+
+        {/* Footer Navigation / Help */}
+        <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span className="text-[11px]">
+              {isArabic ? 'حسابات كمية دقيقة ومطابقة لمعايير بايننس' : 'Precise quantitative accounting matching Binance specs'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition cursor-pointer text-xs"
+          >
+            {isArabic ? 'إغلاق' : 'Close'}
+          </button>
+        </div>
       </div>
     </div>
   );

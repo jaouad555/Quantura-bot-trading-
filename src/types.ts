@@ -306,6 +306,8 @@ export interface TradeHistoryItem {
   profitUsdt?: number;
   pnlUsdt?: number;
   mode?: TradingExecutionMode;
+  marketType?: MarketType;
+  leverage?: number;
   strategyName?: string;
   confidence: number;
   riskRewardRatio?: number;
@@ -648,6 +650,45 @@ export interface SpotHolding {
   lastUpdated: number;
 }
 
+export interface DedicatedMarketWallet {
+  marketType: MarketType; // 'SPOT' | 'FUTURES'
+  initialDeposit: number; // Base capital deposited (e.g. 1000 USDT)
+  balance: number; // Available free cash / free margin (الرصيد المتاح / المتبقي)
+  inTradeMargin: number; // Cash locked in active trades / spot purchases (الرصيد المستثمر)
+  realizedPnl: number; // Realized PnL from closed trades (الأرباح المحققة)
+  floatingPnl: number; // Unrealized / Floating PnL from active positions (الأرباح غير المحققة)
+  totalEquity: number; // General balance = balance + inTradeMargin + floatingPnl (الرصيد العام)
+  netPnl: number; // realizedPnl + floatingPnl (صافي الأرباح الكلي)
+  tradeCount: number;
+  winCount: number;
+  lossCount: number;
+  winRate: number;
+  lastUpdated: number;
+  holdings?: Record<string, { qty: number; valueUsdt: number; avgCost: number; pnlUsdt: number }>;
+}
+
+export interface CombinedPortfolioSummary {
+  totalEquity: number; // Spot Equity + Futures Equity (الرصيد العام المشترك)
+  freeBalance: number; // Spot Free + Futures Free (الرصيد المتبقي الإجمالي)
+  investedMargin: number; // Spot Invested + Futures Margin (الرصيد المستثمر الإجمالي)
+  realizedPnl: number; // Spot Realized + Futures Realized (الأرباح المحققة الإجمالية)
+  floatingPnl: number; // Spot Floating + Futures Floating (الأرباح غير المحققة الإجمالية)
+  totalNetPnl: number; // صافي الأرباح العام
+  totalTrades: number;
+  winCount: number;
+  lossCount: number;
+  winRate: number;
+}
+
+export interface MultiMarketPortfolio {
+  spot: DedicatedMarketWallet;
+  futures: DedicatedMarketWallet;
+  combined: CombinedPortfolioSummary;
+  activeMarketType: MarketType;
+  executionMode: TradingExecutionMode;
+  lastUpdated: number;
+}
+
 export interface PaperSpotWallet {
   usdtBalance: number;
   holdings: Record<string, SpotHolding>;
@@ -667,13 +708,18 @@ export interface PaperFuturesWallet {
 }
 
 export interface PaperWallet {
-  balance: number;
+  balance: number; // Free / available cash in active market
   realizedPnl: number;
+  marketType?: MarketType;
+  initialDeposit?: number;
+  inTradeMargin?: number;
+  floatingPnl?: number;
+  totalEquity?: number;
   spotBalance?: number;
   futuresBalance?: number;
   spotHoldings?: Record<string, number>;
-  spotWallet?: PaperSpotWallet;
-  futuresWallet?: PaperFuturesWallet;
+  spotWallet?: DedicatedMarketWallet | PaperSpotWallet;
+  futuresWallet?: DedicatedMarketWallet | PaperFuturesWallet;
   openPosition: PaperTradePosition | null;
   history: PaperTradeClosedRecord[];
 }
