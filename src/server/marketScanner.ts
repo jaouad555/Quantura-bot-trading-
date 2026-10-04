@@ -479,8 +479,7 @@ async function processTradingSignal(
         // Max Trades limit
         const maxTrades = Math.max(1, config.maxOpenTrades || 3);
         if (currentModePositions.length >= maxTrades) {
-            console.log(`[RISK BLOCKED] ${symUpper} max trades reached (${currentModePositions.length}/${maxTrades})`);
-            sendServerTelegramNotification(`❌ <b>Trade Blocked</b>\nSymbol: <b>${symUpper}</b>\nReason: MAX_OPEN_TRADES_REACHED (${currentModePositions.length}/${maxTrades})\nMode: <b>${mode}</b> | Type: <b>${marketType}</b>`);
+            console.log(`[CAPACITY FULL] ${symUpper} skipped: Portfolio at max trades (${currentModePositions.length}/${maxTrades})`);
             return;
         }
         
@@ -788,8 +787,7 @@ async function processTradingSignal(
       return;
     }
     if (freshCurrentModePositions.length >= maxTrades) {
-      console.log(`[CAPACITY ABORT] Portfolio max trades reached (${freshCurrentModePositions.length}/${maxTrades}).`);
-      sendServerTelegramNotification(`❌ <b>Trade Blocked (Final Check)</b>\nSymbol: <b>${symUpper}</b>\nReason: MAX_OPEN_TRADES_REACHED (${freshCurrentModePositions.length}/${maxTrades})\nMode: <b>${mode}</b> | Type: <b>${marketType}</b>`);
+      console.log(`[CAPACITY FULL] Portfolio max trades reached (${freshCurrentModePositions.length}/${maxTrades}). Trade not opened.`);
       return;
     }
 

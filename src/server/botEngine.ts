@@ -321,12 +321,16 @@ export const sendServerTelegramNotification = async (text: string, targetChatId?
     const destinationChatId = targetChatId || chatId;
     if (!token || !destinationChatId || !text) return;
 
-    // Strict 8-second deduplication: normalized text prevents duplicate identical alerts
+    // Strict 12-second deduplication: normalized text prevents duplicate identical alerts
     const now = Date.now();
-    const normalizedText = text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const normalizedText = text
+      .replace(/<[^>]*>/g, '')
+      .replace(/التوقيت:[^\n]*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const dedupeKey = `${destinationChatId}_${normalizedText}`;
     const lastSentTime = sentTelegramMessageCache.get(dedupeKey);
-    if (lastSentTime && (now - lastSentTime < 8000)) {
+    if (lastSentTime && (now - lastSentTime < 12000)) {
       console.log(`[TELEGRAM DEDUPE] Dropped duplicate message to ${destinationChatId}`);
       return;
     }
