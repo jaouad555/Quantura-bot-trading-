@@ -1,3 +1,6 @@
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import { kv } from './db';
 import { RiskEngine } from './riskEngine/RiskEngine';
 import { RoeEngine, DEFAULT_ROE_CONFIG } from './roeEngine';
@@ -232,6 +235,13 @@ const sentTelegramMessageCache = new Map<string, number>();
 
 export const startTelegramSync = () => {
   if (telegramInterval) clearInterval(telegramInterval);
+
+  // Prevent development/preview containers (AI Studio) from polluting production Telegram chat
+  const isAiStudioPreview = !!(process.env.APPLET_ID || process.env.K_SERVICE || process.env.CONTROL_PLANE_PORT);
+  if (isAiStudioPreview && process.env.ENABLE_DEV_TELEGRAM_POLLING !== 'true') {
+    console.log('[TELEGRAM] 🚫 Periodic sync disabled in AI Studio dev preview container (VPS production mode active).');
+    return;
+  }
 
   telegramInterval = setInterval(async () => {
     try {
@@ -731,6 +741,7 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           `├ <b>الأرباح العائمة:</b> <code>${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT</code>\n` +
           `└ <b>الأرباح المحققة:</b> <code>${(wallet.realizedPnl || 0).toFixed(2)} USDT</code>\n\n` +
           `⚡ <b>النظام والتداول:</b>\n` +
+          `├ <b>السيرفر المضيف:</b> <code>${os.hostname()} (PID: ${process.pid})</code>\n` +
           `├ <b>الصفقات المفتوحة:</b> <code>${positions.length} / ${config.maxOpenTrades || 3}</code>\n` +
           `├ <b>الاستراتيجيات:</b> <code>${activeStrats.length} نشطة</code>\n` +
           `├ <b>صلاحية التداول:</b> ${canTradeStatus ? '🟢 مفعّلة' : '🔴 مقيدة'}\n` +
@@ -1006,6 +1017,39 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
 export const startTelegramCommandListener = async () => {
   if (telegramCommandPollingActive) return;
+
+  // 1. Prevent AI Studio development/preview containers from polling production Telegram commands
+  const isAiStudioPreview = !!(process.env.APPLET_ID || process.env.K_SERVICE || process.env.CONTROL_PLANE_PORT);
+  if (isAiStudioPreview && process.env.ENABLE_DEV_TELEGRAM_POLLING !== 'true') {
+    console.log('[TELEGRAM] 🚫 Telegram command polling disabled in AI Studio dev preview container (VPS production mode active).');
+    return;
+  }
+
+  // 2. OS-level PID Lockfile on the server: Prevents multiple node processes on the same VPS from polling simultaneously
+  const LOCK_FILE = path.join(os.tmpdir(), 'quantura_telegram_poller.lock');
+  const isPidAlive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const raw = fs.readFileSync(LOCK_FILE, 'utf8').trim();
+      const existingPid = parseInt(raw, 10);
+      if (!isNaN(existingPid) && existingPid !== process.pid && isPidAlive(existingPid)) {
+        console.warn(`[TELEGRAM] ⚠️ Another process (PID: ${existingPid}) is already polling Telegram on this server. Skipping duplicate poller.`);
+        return;
+      }
+    }
+    fs.writeFileSync(LOCK_FILE, String(process.pid), 'utf8');
+  } catch (lockErr) {
+    // Non-fatal if filesystem is restricted
+  }
+
   telegramCommandPollingActive = true;
 
   // Restore persistent lastTelegramUpdateOffset from KV
