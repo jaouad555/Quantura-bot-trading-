@@ -670,6 +670,7 @@ export async function reconcilePositionsWithBinance(options?: {
             liquidationPrice,
             marketType: 'FUTURES',
             mode: auth.executionMode,
+            isManaged: existingLocal.isManaged ?? true,
             lastSyncedAt: Date.now(),
           });
           updatedCount++;
@@ -698,6 +699,7 @@ export async function reconcilePositionsWithBinance(options?: {
             source: 'BINANCE_RECONCILED',
             openedAt: existingLocal?.openedAt || Date.now(),
             strategyName: 'Binance Exchange Position',
+            isManaged: false,
             lastSyncedAt: Date.now(),
           });
           importedCount++;
@@ -842,6 +844,7 @@ export async function reconcilePositionsWithBinance(options?: {
             unrealizedPnlUsdt: Math.round(unrealizedPnl * 100) / 100,
             marketType: 'SPOT',
             mode: auth.executionMode,
+            isManaged: existingLocal.isManaged ?? true,
             lastSyncedAt: Date.now(),
           });
           updatedCount++;
@@ -868,6 +871,7 @@ export async function reconcilePositionsWithBinance(options?: {
             source: 'BINANCE_RECONCILED',
             openedAt: existingLocal?.openedAt || Date.now(),
             strategyName: 'Spot Asset Holding',
+            isManaged: false,
             lastSyncedAt: Date.now(),
           });
           importedCount++;
