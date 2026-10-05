@@ -230,6 +230,33 @@ app.post('/api/config', async (req, res) => {
     } else {
       let finalValue = String(value);
 
+      // Protect binance_api_config from being overwritten with masked or empty secrets via generic /api/config
+      if (key === 'binance_api_config') {
+        try {
+          const parsed = JSON.parse(String(value));
+          const pKey = (parsed.apiKey || '').trim();
+          const pSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+          if (isValidBinanceKey(pKey) && isValidBinanceSecret(pSecret)) {
+            parsed.apiKey = pKey;
+            parsed.apiSecret = encryptSecret(pSecret);
+            finalValue = JSON.stringify(parsed);
+          } else {
+            // Do not overwrite existing valid binance_api_config with empty/masked secret; only update non-secret metadata
+            const existingStr = await kv.get('binance_api_config');
+            if (existingStr) {
+              const existingParsed = JSON.parse(existingStr);
+              if (parsed.useTestnet !== undefined) existingParsed.useTestnet = Boolean(parsed.useTestnet);
+              if (parsed.marketType) existingParsed.marketType = parsed.marketType;
+              finalValue = JSON.stringify(existingParsed);
+            } else {
+              return res.json({ success: true, ignored: true });
+            }
+          }
+        } catch (_) {
+          return res.json({ success: true, ignored: true });
+        }
+      }
+
       // Schema validation & sanitization for active bot positions to prevent NaN propagation
       if (key === 'btc_active_bot_positions') {
         try {
@@ -2290,10 +2317,31 @@ async function resolveBinanceAuth(req: express.Request): Promise<BinanceAuthData
   const reqMode = (req.query?.executionMode as string) || (req.headers['x-execution-mode'] as string) || (req.body?.executionMode as string) || '';
   const effectiveMode = reqMode || kvMode;
 
-  const isTestnetMode = effectiveMode === 'BINANCE_TESTNET' || bodyTestnet || headerTestnet;
+  const explicitTestnetParam =
+    req.body?.useTestnet !== undefined
+      ? Boolean(req.body.useTestnet)
+      : req.query?.useTestnet !== undefined
+      ? req.query.useTestnet === 'true'
+      : req.headers['x-binance-testnet'] !== undefined
+      ? req.headers['x-binance-testnet'] === 'true'
+      : undefined;
+
+  const isTestnetMode = effectiveMode === 'BINANCE_TESTNET';
   const isLiveMode = effectiveMode === 'BINANCE_LIVE';
 
-  const useTestnet = isTestnetMode ? true : (isLiveMode ? false : (kvTestnet !== null ? (kvTestnet === 'true') : (dbTestnet !== null ? dbTestnet : envCreds.useTestnet)));
+  const useTestnet =
+    explicitTestnetParam !== undefined
+      ? explicitTestnetParam
+      : isTestnetMode
+      ? true
+      : isLiveMode
+      ? false
+      : kvTestnet !== null
+      ? kvTestnet === 'true'
+      : dbTestnet !== null
+      ? Boolean(dbTestnet)
+      : envCreds.useTestnet;
+
   const botCfgStr = await kv.get('btc_bot_config');
   let botCfgMarketType: 'SPOT' | 'FUTURES' | null = null;
   if (botCfgStr) {
@@ -2326,9 +2374,13 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
   const startTime = Date.now();
   try {
     const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
-    const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const rawMode = (req.body?.executionMode as string) || (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
-      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+      rawMode === 'BINANCE_LIVE'
+        ? 'BINANCE_LIVE'
+        : rawMode === 'BINANCE_TESTNET' || useTestnet
+        ? 'BINANCE_TESTNET'
+        : 'PAPER';
 
     if (executionMode !== 'PAPER' && (!apiKey || !apiSecret)) {
       return res.status(400).json({
@@ -2337,21 +2389,75 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
       });
     }
 
-    const effectiveMarket: 'SPOT' | 'FUTURES' = (marketType === 'FUTURES' || marketType === 'SPOT') ? marketType : 'SPOT';
-    const accountData = await fetchAuthoritativeAccount(
+    let effectiveMarket: 'SPOT' | 'FUTURES' = (marketType === 'FUTURES' || marketType === 'SPOT') ? marketType : 'SPOT';
+    let accountData = await fetchAuthoritativeAccount(
       effectiveMarket,
       executionMode,
       { apiKey, apiSecret, useTestnet }
     );
 
+    // Smart Auto-Detection: If user entered valid Spot Testnet keys while FUTURES was selected (or vice-versa),
+    // automatically test the opposite marketType on the same network if the first failed with -2015 or auth error!
+    if (!accountData.success && apiKey && apiSecret && ((accountData as any).binanceCode === -2015 || (accountData as any).binanceCode === -2014 || String(accountData.error).includes('Invalid API-key'))) {
+      const alternateMarket: 'SPOT' | 'FUTURES' = effectiveMarket === 'FUTURES' ? 'SPOT' : 'FUTURES';
+      const altAccountData = await fetchAuthoritativeAccount(
+        alternateMarket,
+        executionMode,
+        { apiKey, apiSecret, useTestnet }
+      );
+      if (altAccountData.success) {
+        effectiveMarket = alternateMarket;
+        accountData = altAccountData;
+        await kv.set('app_binance_market_type', effectiveMarket);
+        binanceWs.setMarketType(effectiveMarket);
+      }
+    }
+
+    // Second Smart Fallback: If user entered Testnet keys while useTestnet was false, try useTestnet = true!
+    let finalUseTestnet = useTestnet;
+    if (!accountData.success && apiKey && apiSecret && !useTestnet && ((accountData as any).binanceCode === -2015 || String(accountData.error).includes('Invalid API-key'))) {
+      const testnetTry = await fetchAuthoritativeAccount(
+        effectiveMarket,
+        'BINANCE_TESTNET',
+        { apiKey, apiSecret, useTestnet: true }
+      );
+      if (testnetTry.success) {
+        finalUseTestnet = true;
+        accountData = testnetTry;
+        await kv.set('app_binance_use_testnet', 'true');
+      } else {
+        const altMarket: 'SPOT' | 'FUTURES' = effectiveMarket === 'FUTURES' ? 'SPOT' : 'FUTURES';
+        const testnetAltTry = await fetchAuthoritativeAccount(
+          altMarket,
+          'BINANCE_TESTNET',
+          { apiKey, apiSecret, useTestnet: true }
+        );
+        if (testnetAltTry.success) {
+          finalUseTestnet = true;
+          effectiveMarket = altMarket;
+          accountData = testnetAltTry;
+          await kv.set('app_binance_use_testnet', 'true');
+          await kv.set('app_binance_market_type', effectiveMarket);
+          binanceWs.setMarketType(effectiveMarket);
+        }
+      }
+    }
+
     const latencyMs = Date.now() - startTime;
 
     if (!accountData.success) {
+      let friendlyError = accountData.error || 'BINANCE CONNECTION ERROR: Failed to fetch account';
+      if ((accountData as any).binanceCode === -2015) {
+        friendlyError = finalUseTestnet
+          ? `Invalid Testnet API Key or Secret for ${effectiveMarket} (${finalUseTestnet ? (effectiveMarket === 'SPOT' ? 'testnet.binance.vision' : 'testnet.binancefuture.com') : 'binance.com'}). Note: Spot Testnet keys are generated at testnet.binance.vision, while Futures Testnet keys are generated at testnet.binancefuture.com.`
+          : `Invalid API Key, IP restriction, or permissions for ${effectiveMarket}.`;
+      }
       return res.status(400).json({
-        error: accountData.error || 'BINANCE CONNECTION ERROR: Failed to fetch account',
+        error: friendlyError,
         binanceCode: (accountData as any).binanceCode,
         latencyMs,
         marketType: effectiveMarket,
+        useTestnet: finalUseTestnet,
         executionMode,
       });
     }
@@ -2366,7 +2472,8 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     return res.json({
       ...accountData,
       tradePermissionWarning,
-      useTestnet,
+      useTestnet: finalUseTestnet,
+      marketType: effectiveMarket,
       latencyMs,
       accountType: effectiveMarket,
     });

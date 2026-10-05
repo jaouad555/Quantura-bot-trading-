@@ -425,8 +425,9 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
       if (onRefreshBinancePermissions) {
         await onRefreshBinancePermissions();
       }
+      const isTestnet = executionMode === 'BINANCE_TESTNET' || Boolean(binanceConfig?.useTestnet);
       const [accRes, ipRes] = await Promise.all([
-        fetch(`/api/binance/account?marketType=${binanceConfig?.marketType || 'FUTURES'}`),
+        fetch(`/api/binance/account?marketType=${binanceConfig?.marketType || 'FUTURES'}&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${isTestnet ? 'BINANCE_TESTNET' : (executionMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : 'BINANCE_TESTNET')}`),
         fetch('/api/server-ip').catch(() => null),
       ]);
       const t1 = performance.now();
@@ -438,7 +439,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
         serverIp = ipData.ip || '';
       }
 
-      if (accRes.ok && accData.success) {
+      if (accRes.ok && accData.success && !accData.isPaper) {
         if (accData.canTrade === true) {
           setTestResult({
             success: true,

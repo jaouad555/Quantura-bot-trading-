@@ -86,6 +86,32 @@ export function getReconciliationStatus(): ReconciliationStatus {
   return { ...latestReconciliationStatus };
 }
 
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'quantura_secure_default_key_32_bytes_long!';
+
+function decryptSecret(text: string): string {
+  if (!text) return text;
+  try {
+    const textParts = text.split(':');
+    if (textParts.length !== 2) return text;
+    const iv = Buffer.from(textParts[0], 'hex');
+    const encryptedText = Buffer.from(textParts[1], 'hex');
+    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substring(0, 32);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch (e) {
+    return text;
+  }
+}
+
+function isValidBinanceCredential(val: string): boolean {
+  if (!val) return false;
+  const trimmed = val.trim();
+  if (trimmed.includes('...') || trimmed.includes('*') || trimmed.includes('•') || trimmed.length < 15) return false;
+  return true;
+}
+
 /**
  * Authoritative Binance Credentials Resolver
  */
@@ -97,18 +123,67 @@ export async function getAuthoritativeBinanceConfig(): Promise<{
   executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE';
   isConnected: boolean;
 }> {
-  const apiKey = (await kv.get('app_binance_api_key')) || process.env.BINANCE_API_KEY || '';
-  const apiSecret = (await kv.get('app_binance_api_secret')) || process.env.BINANCE_API_SECRET || '';
+  let dbKey = '';
+  let dbSecret = '';
+  let dbTestnet: boolean | null = null;
+  let dbMarketType: 'SPOT' | 'FUTURES' | null = null;
+
+  const storedStr = await kv.get('binance_api_config');
+  if (storedStr) {
+    try {
+      const parsed = JSON.parse(storedStr);
+      const parsedKey = (parsed.apiKey || '').trim();
+      const parsedSecret = (decryptSecret(parsed.apiSecret) || '').trim();
+      if (isValidBinanceCredential(parsedKey)) dbKey = parsedKey;
+      if (isValidBinanceCredential(parsedSecret)) dbSecret = parsedSecret;
+      if (parsed.useTestnet !== undefined) dbTestnet = Boolean(parsed.useTestnet);
+      if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') dbMarketType = parsed.marketType;
+    } catch (_) {}
+  }
+
+  const legacyKey = ((await kv.get('app_binance_api_key')) || '').trim();
+  const legacySecret = ((await kv.get('app_binance_api_secret')) || '').trim();
+  if (isValidBinanceCredential(legacyKey) && !dbKey) dbKey = legacyKey;
+  if (isValidBinanceCredential(legacySecret) && !dbSecret) dbSecret = legacySecret;
+
+  const envKey = (
+    process.env.BINANCE_API_KEY ||
+    process.env.BINANCE_KEY ||
+    process.env.BINANCE_APIKEY ||
+    process.env.VITE_BINANCE_API_KEY ||
+    ''
+  ).trim();
+  const envSecret = (
+    process.env.BINANCE_SECRET_KEY ||
+    process.env.BINANCE_API_SECRET ||
+    process.env.BINANCE_SECRET ||
+    process.env.VITE_BINANCE_SECRET_KEY ||
+    ''
+  ).trim();
+
+  const apiKey = dbKey || (isValidBinanceCredential(envKey) ? envKey : '');
+  const apiSecret = dbSecret || (isValidBinanceCredential(envSecret) ? envSecret : '');
+
   const rawTestnet = await kv.get('app_binance_use_testnet');
   const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
-  const rawMt = (await kv.get('app_binance_market_type')) || 'SPOT';
+  const rawMt = (await kv.get('app_binance_market_type')) || dbMarketType || 'SPOT';
 
   const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
     rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
 
-  const useTestnet = executionMode === 'BINANCE_TESTNET' ? true : (rawTestnet === 'true' || process.env.BINANCE_USE_TESTNET === 'true');
+  const useTestnet =
+    executionMode === 'BINANCE_TESTNET'
+      ? true
+      : executionMode === 'BINANCE_LIVE'
+      ? false
+      : rawTestnet !== null
+      ? rawTestnet === 'true'
+      : dbTestnet !== null
+      ? dbTestnet
+      : process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
+
   const marketType: 'SPOT' | 'FUTURES' = rawMt === 'FUTURES' ? 'FUTURES' : 'SPOT';
-  const isConnected = Boolean(apiKey && apiSecret && apiKey.length > 5 && apiSecret.length > 5);
+  const isConnected = Boolean(isValidBinanceCredential(apiKey) && isValidBinanceCredential(apiSecret));
 
   return { apiKey, apiSecret, useTestnet, marketType, executionMode, isConnected };
 }
@@ -120,9 +195,17 @@ export async function getAuthoritativeBinanceConfig(): Promise<{
 export async function fetchAuthoritativeAccount(
   marketType: 'SPOT' | 'FUTURES',
   executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE',
-  credentials?: { apiKey?: string; apiSecret?: string; useTestnet?: boolean }
+  credentials?: { apiKey?: string; apiSecret?: string; useTestnet?: boolean; forceLiveFetch?: boolean }
 ) {
-  if (executionMode === 'PAPER') {
+  const hasRealCredentials = Boolean(
+    credentials?.apiKey &&
+    credentials?.apiSecret &&
+    isValidBinanceCredential(credentials.apiKey) &&
+    isValidBinanceCredential(credentials.apiSecret)
+  );
+
+  // Return local paper wallet calculation ONLY if in PAPER mode AND we are not testing/fetching real API credentials
+  if (executionMode === 'PAPER' && !hasRealCredentials && !credentials?.forceLiveFetch) {
     // Return clean paper wallet calculation strictly isolated by marketType
     const walletKey = marketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
     const raw = await kv.get(walletKey);

@@ -140,7 +140,7 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
       fetch(`/api/binance/account?marketType=${activeBinanceConfig.marketType || 'SPOT'}&useTestnet=${activeBinanceConfig.useTestnet ? 'true' : 'false'}`)
         .then(res => res.json())
         .then(data => {
-          if (data && data.success) {
+          if (data && data.success && !data.isPaper) {
             const accountInfo: BinanceAccountInfo = {
               canTrade: data.canTrade ?? true,
               canWithdraw: data.canWithdraw ?? false,
@@ -165,6 +165,9 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
             });
             if (data.useTestnet !== undefined) {
               setUseTestnet(data.useTestnet);
+            }
+            if (data.marketType) {
+              setMarketType(data.marketType);
             }
             onSaveConfig({
               ...activeBinanceConfig,
@@ -327,12 +330,22 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
 
       const data = await response.json();
 
-      if (response.ok && data.success) {
+      if (response.ok && data.success && !data.isPaper) {
+        const resolvedMarketType: MarketType = data.marketType || marketType;
+        const resolvedUseTestnet: boolean = data.useTestnet !== undefined ? Boolean(data.useTestnet) : useTestnet;
+
+        if (resolvedMarketType !== marketType) {
+          setMarketType(resolvedMarketType);
+        }
+        if (resolvedUseTestnet !== useTestnet) {
+          setUseTestnet(resolvedUseTestnet);
+        }
+
         const accountInfo: BinanceAccountInfo = {
           canTrade: data.canTrade ?? true,
           canWithdraw: data.canWithdraw ?? false,
           canDeposit: data.canDeposit ?? true,
-          accountType: data.accountType || marketType,
+          accountType: data.accountType || resolvedMarketType,
           makerCommission: data.makerCommission ?? 10,
           takerCommission: data.takerCommission ?? 10,
           updateTime: data.updateTime || Date.now(),
@@ -341,26 +354,31 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
           freeUsdt: data.freeUsdt ?? 0,
         };
 
+        const targetMode: TradingExecutionMode = resolvedUseTestnet
+          ? 'BINANCE_TESTNET'
+          : executionMode;
+
         const updatedConfig: BinanceApiConfig = {
           ...activeBinanceConfig,
           apiKey: hasInputKeys ? apiKey.trim() : activeBinanceConfig.apiKey,
           apiSecret: '',
-          useTestnet,
-          marketType,
+          useTestnet: resolvedUseTestnet,
+          marketType: resolvedMarketType,
           isConnected: true,
           lastConnectedAt: Date.now(),
           latencyMs: data.latencyMs,
           accountInfo,
-          isLiveModeEnabled: executionMode === 'BINANCE_LIVE',
+          executionMode: targetMode,
+          isLiveModeEnabled: targetMode === 'BINANCE_LIVE',
         };
 
         setTestResult({
           success: true,
           message: isArabic
-            ? `✅ تم الاتصال بنجاح مع بايننس (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'})! الاستجابة: ${data.latencyMs ?? 24}ms | الرصيد المتاح: $${(data.freeUsdt || 0).toFixed(2)} USDT`
+            ? `✅ تم الاتصال بنجاح مع بايننس (${resolvedMarketType} - ${resolvedUseTestnet ? 'Testnet' : 'Mainnet'})! الاستجابة: ${data.latencyMs ?? 24}ms | الرصيد المتاح: $${(data.freeUsdt || 0).toFixed(2)} USDT`
             : isEn
-            ? `✅ Successfully connected to Binance (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'})! Latency: ${data.latencyMs ?? 24}ms | Free: $${(data.freeUsdt || 0).toFixed(2)} USDT`
-            : `✅ Connexion réussie à Binance (${marketType === 'SPOT' ? 'SPOT' : 'FUTURES'}) ! Latence : ${data.latencyMs ?? 24}ms | Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT`,
+            ? `✅ Successfully connected to Binance (${resolvedMarketType} - ${resolvedUseTestnet ? 'Testnet' : 'Mainnet'})! Latency: ${data.latencyMs ?? 24}ms | Free: $${(data.freeUsdt || 0).toFixed(2)} USDT`
+            : `✅ Connexion réussie à Binance (${resolvedMarketType} - ${resolvedUseTestnet ? 'Testnet' : 'Mainnet'}) ! Latence : ${data.latencyMs ?? 24}ms | Libre : $${(data.freeUsdt || 0).toFixed(2)} USDT`,
           accountInfo,
           latencyMs: data.latencyMs,
         });
@@ -373,11 +391,15 @@ export const BinanceConnectionModal: React.FC<BinanceConnectionModalProps> = ({
             body: JSON.stringify({
               apiKey: hasInputKeys ? apiKey.trim() : undefined,
               apiSecret: hasInputKeys ? apiSecret.trim() : undefined,
-              useTestnet,
-              marketType,
+              useTestnet: resolvedUseTestnet,
+              marketType: resolvedMarketType,
             })
           }).catch(console.error);
           setIsSaving(false);
+        }
+
+        if (resolvedUseTestnet && executionMode !== 'BINANCE_TESTNET') {
+          handleToggleModeFn('BINANCE_TESTNET');
         }
 
         onSaveConfig(updatedConfig);

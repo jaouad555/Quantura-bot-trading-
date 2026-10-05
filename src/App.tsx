@@ -419,7 +419,7 @@ export const App: React.FC = () => {
       const isTestnet = executionModeRef.current === 'BINANCE_TESTNET' || binanceConfigRef.current?.useTestnet;
       const res = await fetch(`/api/binance/account?marketType=${currentMt}&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${executionModeRef.current}`);
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
+      if (res.ok && data.success && !data.isPaper) {
         const canTradeStatus = data.canTrade === true;
         setBinanceConfig(prev => ({
           ...prev,
@@ -893,13 +893,18 @@ export const App: React.FC = () => {
   // Save bot state, history and wallet changes to localStorage
   useEffect(() => {
     // SECURITY: We never save the API Secret to localStorage for client-side persistence
-    // However, we MUST sync the full config to the server so the botEngine can use it
+    // Sync to the dedicated encrypted endpoint /api/config/binance
     const syncBinanceConfig = async () => {
       try {
-        await fetch('/api/config', {
+        await fetch('/api/config/binance', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: 'binance_api_config', value: JSON.stringify(binanceConfig) }),
+          body: JSON.stringify({
+            apiKey: binanceConfig.apiKey,
+            apiSecret: binanceConfig.apiSecret,
+            useTestnet: binanceConfig.useTestnet,
+            marketType: binanceConfig.marketType,
+          }),
         });
       } catch (e) {
         console.warn('Failed to sync Binance API config to server:', e);

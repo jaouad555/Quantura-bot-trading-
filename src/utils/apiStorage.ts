@@ -74,7 +74,7 @@ class ApiStorage {
 
   // High-performance batched backend synchronization
   private scheduleBackendSync(key: string, value: string | null) {
-    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token'];
+    const AUTH_SESSION_KEYS = ['app_is_authenticated', 'app_email', 'app_username', 'app_2fa_verified', 'session_token', 'binance_api_config', 'app_binance_api_key', 'app_binance_api_secret'];
     if (AUTH_SESSION_KEYS.includes(key)) return;
 
     this.pendingSync[key] = value;
