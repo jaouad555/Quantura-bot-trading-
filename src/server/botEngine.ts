@@ -9,6 +9,13 @@ import { strategyManager } from './strategyManager.js';
 import { binanceWs } from './binanceWebSocket.js';
 import { binanceRestCache } from './binanceRestCache.js';
 import { formatBinancePrecisionQty, formatBinancePrecisionPrice, getSymbolFilterRules } from './binancePrecision.js';
+import { canSubmitOrder } from './botControl.js';
+import { 
+  getAuthoritativeBinanceApiBase, 
+  getAuthoritativeBinanceFuturesApiBase, 
+  logBinanceApiCall, 
+  fetchAuthoritativeAccount 
+} from './positionReconciliation.js';
 
 let engineInterval: NodeJS.Timeout | null = null;
 let telegramInterval: NodeJS.Timeout | null = null;
@@ -1366,9 +1373,9 @@ const getBinanceConfig = async () => {
 
 import crypto from 'crypto';
 
-// Binance Utilities
-const getBinanceApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
-const getBinanceFuturesApiBase = (useTestnet: boolean) => useTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
+// Binance Utilities - Authoritative endpoint selectors
+const getBinanceApiBase = (useTestnet: boolean) => getAuthoritativeBinanceApiBase(useTestnet);
+const getBinanceFuturesApiBase = (useTestnet: boolean) => getAuthoritativeBinanceFuturesApiBase(useTestnet);
 
 const createBinanceSignature = (queryString: string, apiSecret: string) => {
   return crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
@@ -1389,10 +1396,15 @@ export interface RealBinanceAccountInfo {
 
 /**
  * Direct real Binance account state query for backend risk validation and execution sizing.
+ * Strictly separates Spot and Futures, and never mixes Testnet with Live.
  */
 export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccountInfo> => {
   const config = await getBinanceConfig();
+  const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+  const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+    rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
   const effectiveMarketType: 'SPOT' | 'FUTURES' = config.marketType === 'SPOT' ? 'SPOT' : 'FUTURES';
+
   if (!config.isConnected || !config.apiKey || !config.apiSecret) {
     return {
       success: false,
@@ -1404,129 +1416,30 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
     };
   }
 
-  const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-  const signature = createBinanceSignature(queryString, config.apiSecret);
-  const isFutures = effectiveMarketType === 'FUTURES';
+  const result = await fetchAuthoritativeAccount(effectiveMarketType, executionMode, {
+    apiKey: config.apiKey,
+    apiSecret: config.apiSecret,
+    useTestnet: config.useTestnet,
+  });
 
-  const baseUrlsToTry = isFutures
-    ? (config.useTestnet ? ['https://testnet.binancefuture.com', 'https://demo-fapi.binance.com', 'https://fapi.binance.com'] : ['https://fapi.binance.com'])
-    : (config.useTestnet ? ['https://demo-api.binance.com', 'https://testnet.binance.vision', 'https://api.binance.com'] : ['https://api.binance.com']);
-
-  let lastData: any = null;
-  let lastError = 'Failed to fetch account info';
-  let lastCode: number | undefined;
-
-  for (const baseUrl of baseUrlsToTry) {
-    const url = isFutures
-      ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
-      : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
-
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-MBX-APIKEY': config.apiKey,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      const data = await res.json().catch(() => null);
-      if (res.ok && data) {
-        lastData = data;
-        break;
-      } else {
-        lastError = data?.msg || `HTTP ${res.status}`;
-        lastCode = data?.code;
-      }
-    } catch (err: any) {
-      lastError = err.message;
-    }
-  }
-
-  if (!lastData) {
-    return {
-      success: false,
-      canTrade: false,
-      freeUsdt: 0,
-      totalUsdtEquity: 0,
-      marketType: effectiveMarketType,
-      error: lastError,
-      binanceCode: lastCode,
-    };
-  }
-
-  const data = lastData;
-  let canTrade = data.canTrade ?? true;
-  let freeUsdt = 0;
-  let totalUsdtEquity = 0;
-
-    if (isFutures) {
-      const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
-      const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
-      const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
-      const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
-      const availMargin = parseFloat(data.availableBalance || '0') || 0;
-      const totalUnrealized = parseFloat(data.totalUnrealizedProfit || '0') || 0;
-      const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
-      const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
-      
-      freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      // In Binance Futures, totalMarginBalance is the true total account equity (Wallet Balance + Floating PnL)
-      totalUsdtEquity = totalMargin > 0 ? totalMargin : (totalWallet + totalUnrealized);
-      if (totalUsdtEquity <= 0) totalUsdtEquity = freeUsdt;
-    } else {
-      const balances = data.balances || [];
-      const usdt = balances.find((b: any) => b.asset === 'USDT');
-      const usdc = balances.find((b: any) => b.asset === 'USDC');
-      const fdusd = balances.find((b: any) => b.asset === 'FDUSD');
-      freeUsdt = (parseFloat(usdt?.free || '0') || 0) + (parseFloat(usdc?.free || '0') || 0) + (parseFloat(fdusd?.free || '0') || 0);
-
-      // Include all non-stablecoin crypto assets valued at live prices
-      let cryptoHoldingsUsdt = 0;
-      for (const b of balances) {
-        const free = parseFloat(b.free || '0');
-        const locked = parseFloat(b.locked || '0');
-        const total = free + locked;
-        const asset = b.asset?.toUpperCase();
-        if (total > 0 && asset && !['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(asset)) {
-          const ticker = binanceWs.getTicker(`${asset}USDT`);
-          let p = ticker?.price || 0;
-          if (!p || p <= 0) {
-            p = FALLBACK_PRICES[`${asset}USDT`] || 0;
-          }
-          if (p > 0) {
-            cryptoHoldingsUsdt += total * p;
-          }
-        }
-      }
-
-      const stableLocked = (parseFloat(usdt?.locked || '0') || 0) + (parseFloat(usdc?.locked || '0') || 0) + (parseFloat(fdusd?.locked || '0') || 0);
-      totalUsdtEquity = freeUsdt + stableLocked + cryptoHoldingsUsdt;
-    }
-
-    const inTradeMargin = Math.max(0, totalUsdtEquity - freeUsdt);
-
-    return {
-      success: true,
-      canTrade,
-      freeUsdt: Math.round(freeUsdt * 100) / 100,
-      totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
-      inTradeMargin: Math.round(inTradeMargin * 100) / 100,
-      marketType: effectiveMarketType,
-      useTestnet: config.useTestnet,
-      latencyMs: 25,
-    };
+  return {
+    success: result.success,
+    canTrade: result.canTrade ?? false,
+    freeUsdt: result.freeUsdt || 0,
+    totalUsdtEquity: result.totalEquity || result.freeUsdt || 0,
+    marketType: effectiveMarketType,
+    inTradeMargin: result.inTradeMargin || 0,
+    useTestnet: config.useTestnet,
+    error: result.error,
+    binanceCode: (result as any).binanceCode,
+  };
 };
 
 export const formatBinanceQuantity = (symbol: string, quantity: number, price?: number, marketType: 'SPOT' | 'FUTURES' = 'SPOT'): string => {
   return formatBinancePrecisionQty(symbol, quantity, marketType);
 };
 
-// Simulate or real execute order
+// Authoritative Order Execution
 export const serverExecuteOrder = async (
   symbol: string, 
   side: string, 
@@ -1547,7 +1460,28 @@ export const serverExecuteOrder = async (
     try {
         const normSymbol = symbol.toUpperCase().replace('/', '').trim();
         const effectiveMt = (marketTypeParam || config.marketType || 'SPOT') as 'SPOT' | 'FUTURES';
-        
+        const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+        const effectiveMode = rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+
+        // =================================================================
+        // FINAL AUTHORITATIVE EXECUTION GUARD
+        // Applied immediately before every real/testnet order submission.
+        // If bot is disabled/stopped and order is not a genuine reduceOnly close, REJECT.
+        // =================================================================
+        const guardResult = await canSubmitOrder({
+          isManual: false,
+          isReduceOnly: reduceOnly,
+          symbol: normSymbol,
+          side,
+          marketType: effectiveMt,
+          executionMode: effectiveMode,
+        });
+
+        if (!guardResult.allowed) {
+          console.warn(`[EXECUTION GUARD REJECT] ${normSymbol} ${side} ${effectiveMt} (${effectiveMode}): ${guardResult.reason}`);
+          return { success: false, error: guardResult.reason || 'Bot is disabled or not allowed to trade', code: guardResult.code };
+        }
+
         let effQty = quantity;
         if ((!effQty || effQty <= 0 || isNaN(effQty)) && currentPrice > 0 && quoteOrderQty > 0) {
           effQty = quoteOrderQty / currentPrice;
@@ -1562,7 +1496,7 @@ export const serverExecuteOrder = async (
         console.log(`[SERVER-SIDE EXECUTE] ${side} ${symbol} Qty: ${formattedQty} Price: ${currentPrice} Lev: ${leverage}x ReduceOnly: ${reduceOnly} Mode: ${effectiveMt}`);
 
         if (effectiveMt === 'FUTURES') {
-          const baseUrl = getBinanceFuturesApiBase(config.useTestnet);
+          const baseUrl = getAuthoritativeBinanceFuturesApiBase(config.useTestnet);
           
           if (!reduceOnly) {
             // 1. Ensure symbol leverage and margin type are configured
@@ -1621,7 +1555,21 @@ export const serverExecuteOrder = async (
             signal: controller.signal,
           });
           clearTimeout(timeout);
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
+
+          logBinanceApiCall({
+            timestamp: Date.now(),
+            marketType: 'FUTURES',
+            executionMode: effectiveMode,
+            symbol: normSymbol,
+            endpoint: '/fapi/v1/order',
+            orderId: data?.orderId,
+            clientOrderId: data?.clientOrderId,
+            httpStatus: response.status,
+            binanceCode: data?.code,
+            binanceMessage: data?.msg,
+            error: !response.ok ? (data?.msg || `HTTP ${response.status}`) : undefined,
+          });
 
           if (!response.ok) {
             console.error("[SERVER ENGINE] Binance Futures Order Error:", data);
@@ -1666,7 +1614,7 @@ export const serverExecuteOrder = async (
                 method: 'POST',
                 headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
               });
-              console.log(`[SERVER ENGINE] Stop Loss conditional order placed on Binance Testnet Open Orders for ${normSymbol} at $${formattedSlPrice}`);
+              console.log(`[SERVER ENGINE] Stop Loss conditional order placed on Binance Open Orders for ${normSymbol} at $${formattedSlPrice}`);
             } catch (slErr) {
               console.warn('[SERVER ENGINE] Non-fatal SL conditional order placement notice:', slErr);
             }
@@ -1674,9 +1622,8 @@ export const serverExecuteOrder = async (
 
           return { success: true, orderId: primaryOrderId, executedQty: data.executedQty || formattedQty };
         } else {
-          // SPOT Order (Testnet & Live)
-          const primaryBaseUrl = config.useTestnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
-          const fallbackBaseUrl = config.useTestnet ? 'https://demo-api.binance.com' : 'https://api.binance.com';
+          // SPOT Order (Testnet & Live strictly separated)
+          const primaryBaseUrl = getAuthoritativeBinanceApiBase(config.useTestnet);
 
           const params: Record<string, string> = {
             symbol: normSymbol,
@@ -1686,9 +1633,6 @@ export const serverExecuteOrder = async (
             recvWindow: '10000',
           };
 
-          // On Binance Spot:
-          // MARKET BUY orders can use quoteOrderQty (USDT amount to spend), which prevents LOT_SIZE and precision errors!
-          // MARKET SELL orders MUST use quantity (base asset amount) formatted to exact stepSize.
           if (side.toUpperCase() === 'BUY' && quoteOrderQty && quoteOrderQty > 0) {
             params.quoteOrderQty = Number(Math.max(10, quoteOrderQty)).toFixed(2);
           } else {
@@ -1697,54 +1641,48 @@ export const serverExecuteOrder = async (
 
           const queryString = new URLSearchParams(params).toString();
           const signature = createBinanceSignature(queryString, config.apiSecret!);
+          const orderUrl = `${primaryBaseUrl}/api/v3/order?${queryString}&signature=${signature}`;
 
-          const candidateUrls = [
-            `${primaryBaseUrl}/api/v3/order?${queryString}&signature=${signature}`,
-            ...(config.useTestnet ? [`${fallbackBaseUrl}/api/v3/order?${queryString}&signature=${signature}`] : []),
-          ];
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const response = await fetch(orderUrl, {
+            method: 'POST',
+            headers: {
+              'X-MBX-APIKEY': config.apiKey!,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          const data = await response.json().catch(() => ({}));
 
-          let lastSpotError: any = null;
-          let lastSpotCode: any = null;
+          logBinanceApiCall({
+            timestamp: Date.now(),
+            marketType: 'SPOT',
+            executionMode: effectiveMode,
+            symbol: normSymbol,
+            endpoint: '/api/v3/order',
+            orderId: data?.orderId,
+            clientOrderId: data?.clientOrderId,
+            httpStatus: response.status,
+            binanceCode: data?.code,
+            binanceMessage: data?.msg,
+            error: !response.ok ? (data?.msg || `HTTP ${response.status}`) : undefined,
+          });
 
-          for (const orderUrl of candidateUrls) {
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 8000);
-              const response = await fetch(orderUrl, {
-                method: 'POST',
-                headers: {
-                  'X-MBX-APIKEY': config.apiKey!,
-                  'Content-Type': 'application/json',
-                },
-                signal: controller.signal,
-              });
-              clearTimeout(timeout);
-              const data = await response.json();
-
-              if (response.ok) {
-                console.log(`[SERVER ENGINE] Binance Spot Order SUCCESS:`, data);
-                return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
-              } else {
-                lastSpotError = data.msg || 'Binance Spot order rejected';
-                lastSpotCode = data.code;
-                console.warn(`[SERVER ENGINE] Spot order attempt failed on ${orderUrl}:`, data);
-                if (data.code === -2015 && candidateUrls.length > 1) {
-                  continue; // Try fallback testnet host if API key mismatch
-                }
-                break;
-              }
-            } catch (netErr: any) {
-              lastSpotError = netErr.message;
-            }
+          if (response.ok) {
+            console.log(`[SERVER ENGINE] Binance Spot Order SUCCESS:`, data);
+            return { success: true, orderId: data.orderId || Date.now().toString(), executedQty: data.executedQty || formattedQty };
+          } else {
+            return { success: false, error: data.msg || 'Binance Spot order rejected', binanceCode: data.code };
           }
-
-          return { success: false, error: lastSpotError || 'Spot order execution failed', binanceCode: lastSpotCode };
         }
     } catch (err: any) {
-        console.error("[SERVER ENGINE] Fetch Error:", err);
-        return { success: false, error: err.message || 'Network error executing order' };
+      console.error("[SERVER ENGINE] Execution Error:", err);
+      return { success: false, error: err.message };
     }
 };
+
 
 
 export const recentlyClosedPositionMap = new Map<string, number>();
@@ -1927,6 +1865,14 @@ export const reconcilePaperWalletDirect = async () => {
   } catch (err) {
     console.error('[ACCOUNTING RECONCILE] Error reconciling paper wallet:', err);
     return null;
+  }
+};
+
+export const stopBotEngine = () => {
+  console.log("🛑 [BOT ENGINE] Stopping Server-Side Bot Execution Engine...");
+  if (engineInterval) {
+    clearInterval(engineInterval);
+    engineInterval = null;
   }
 };
 
@@ -2236,7 +2182,11 @@ export const startBotEngine = () => {
           if (isPosLive) {
             if (binanceConfig.isConnected) {
               const execQty = (pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (marginClosed * lev) / currentP);
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              const execRes = await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              if (!execRes?.success) {
+                console.warn(`[SERVER ENGINE] Binance TP1 order failed for ${pos.symbol}:`, execRes?.error);
+                continue;
+              }
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2304,7 +2254,11 @@ export const startBotEngine = () => {
           if (isPosLive) {
             if (binanceConfig.isConnected) {
               const execQty = (pos.remainingAmountBtc ? pos.remainingAmountBtc * 0.5 : (marginClosed * lev) / currentP);
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              const execRes = await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              if (!execRes?.success) {
+                console.warn(`[SERVER ENGINE] Binance TP2 order failed for ${pos.symbol}:`, execRes?.error);
+                continue;
+              }
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2383,7 +2337,11 @@ export const startBotEngine = () => {
           if (isPosLive) {
             if (binanceConfig.isConnected) {
               const execQty = pos.remainingAmountBtc || ((marginClosed * lev) / currentP);
-              await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              const execRes = await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
+              if (!execRes?.success) {
+                console.warn(`[SERVER ENGINE] Binance close order failed for ${pos.symbol}:`, execRes?.error);
+                continue;
+              }
             }
           } else {
             walletBalanceDelta += cashReturned;
@@ -2603,7 +2561,8 @@ export const closePositionDirect = async (
         const execQty = pos.remainingAmountBtc || ((marginClosed * lev) / currentP);
         const orderRes = await serverExecuteOrder(pos.symbol, isLong ? 'SELL' : 'BUY', marginClosed * lev, execQty, currentP, lev, true, undefined, undefined, pos.marketType || 'FUTURES');
         if (!orderRes.success) {
-          console.warn(`[SERVER ENGINE] Warning closing Binance order for ${pos.symbol}:`, orderRes.error);
+          console.warn(`[SERVER ENGINE] Failed closing Binance order for ${pos.symbol}:`, orderRes.error);
+          return { success: false, error: `Failed to close position on Binance: ${orderRes.error || 'Order rejected'}` };
         }
       }
     }

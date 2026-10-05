@@ -9,6 +9,7 @@ import { calculateQuantitativeScore, detectMarketRegime } from '../utils/quantEn
 import { isSignalThrottled, recordSignalRejection, resetSignalRejection } from './rejectionThrottler.js';
 import { binanceWs } from './binanceWebSocket.js';
 import { binanceRestCache } from './binanceRestCache.js';
+import { canSubmitOrder } from './botControl.js';
 
 // In-Flight execution locks & per-symbol cooldowns to prevent parallel duplicate orders and cascade entries
 export const inFlightExecutionLocks = new Set<string>();
@@ -67,7 +68,25 @@ let wsClient: WebSocket | null = null;
 let scanningInterval: NodeJS.Timeout | null = null;
 
 export async function startMarketScanner() {
-  if (scannerState.status === 'RUNNING') return;
+  const configStr = await kv.get('btc_bot_config');
+  let isEnabled = false;
+  if (configStr) {
+    try {
+      const cfg = JSON.parse(configStr);
+      isEnabled = Boolean(cfg.enabled && !cfg.circuitBreakerTripped);
+    } catch (_) {}
+  }
+  if (!isEnabled) {
+    console.log('[SCANNER] Bot is DISABLED/STOPPED. Not starting market scanner loop.');
+    scannerState.status = 'STOPPED';
+    if (scanningInterval) {
+      clearInterval(scanningInterval);
+      scanningInterval = null;
+    }
+    return;
+  }
+
+  if (scannerState.status === 'RUNNING' && scanningInterval) return;
   console.log('[SCANNER] Starting Multi-Pair Market Scanner with Strategy Activation Gate...');
   scannerState.status = 'RUNNING';
   
@@ -82,14 +101,27 @@ export async function startMarketScanner() {
 export function stopMarketScanner() {
   console.log('[SCANNER] Stopping Multi-Pair Market Scanner...');
   scannerState.status = 'STOPPED';
-  if (scanningInterval) clearInterval(scanningInterval);
-  if (wsClient) wsClient.close();
+  if (scanningInterval) {
+    clearInterval(scanningInterval);
+    scanningInterval = null;
+  }
+  if (wsClient) {
+    try { wsClient.close(); } catch (_) {}
+    wsClient = null;
+  }
 }
 
 export async function scanAllPairs() {
   try {
     const configStr = await kv.get('btc_bot_config');
     const config = configStr ? JSON.parse(configStr) : {};
+
+    // Authoritative Bot State Check:
+    // When the bot is OFF / STOPPED / DISABLED, the market scanner must NOT run trade generation!
+    if (!config || !config.enabled) {
+      scannerState.status = 'STOPPED';
+      return;
+    }
     
     // Auto-sync strategyManager if activePresets are specified in bot config
     if (Array.isArray(config.activePresets)) {
@@ -435,6 +467,26 @@ async function processTradingSignal(
       return;
     }
 
+    // CRITICAL GATE 1.5: Final Authoritative Execution Guard
+    const kvMt = await kv.get('app_binance_market_type');
+    const effectiveMarketType: 'SPOT' | 'FUTURES' = (kvMt === 'SPOT' || kvMt === 'FUTURES') 
+      ? (kvMt as 'SPOT' | 'FUTURES') 
+      : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
+
+    const guard = await canSubmitOrder({
+      isManual: false,
+      isReduceOnly: false,
+      symbol: symUpper,
+      side: signal.decision === 'LONG' ? 'BUY' : 'SELL',
+      marketType: effectiveMarketType,
+      executionMode: mode,
+      strategyId: signal.strategyId,
+    });
+    if (!guard.allowed) {
+      console.log(`[TRADE BLOCKED BY GUARD] ${symUpper} ${signal.decision} - ${guard.reason}`);
+      return;
+    }
+
     // spin-lock to ensure atomicity of the trade-opening process
     let locked = false;
     for (let i = 0; i < 20; i++) {
@@ -457,10 +509,6 @@ async function processTradingSignal(
     const positions = posStr ? JSON.parse(posStr) : [];
         
         // Risk Management Checks
-        const kvMt = await kv.get('app_binance_market_type');
-        const effectiveMarketType: 'SPOT' | 'FUTURES' = (kvMt === 'SPOT' || kvMt === 'FUTURES') 
-          ? (kvMt as 'SPOT' | 'FUTURES') 
-          : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
         const marketType = effectiveMarketType;
 
         // Spot Market Protection: In Spot trading, only LONG orders are allowed. SHORT is rejected.

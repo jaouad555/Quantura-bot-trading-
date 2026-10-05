@@ -41,8 +41,19 @@ import OpenAI from 'openai';
 import { calculateTechnicalIndicators } from './src/utils/indicators';
 import { generateQuantitativePlan, detectMarketRegime } from './src/utils/quantEngine';
 import { initDb, kv } from './src/server/db';
-import { startBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect, resetBotEngineState, reconcilePaperWalletDirect } from './src/server/botEngine';
-import { startMarketScanner, scannerState, scanAllPairs, setMarketDataProvider, inFlightExecutionLocks, symbolCooldownMap } from './src/server/marketScanner';
+import { startBotEngine, stopBotEngine, startTelegramSync, fetchSymbolPrice, closePositionDirect, panicCloseAllDirect, resetBotEngineState, reconcilePaperWalletDirect } from './src/server/botEngine';
+import { startMarketScanner, stopMarketScanner, scannerState, scanAllPairs, setMarketDataProvider, inFlightExecutionLocks, symbolCooldownMap } from './src/server/marketScanner';
+import { canSubmitOrder, startBotAuthoritative, stopBotAuthoritative, getAuthoritativeBotState } from './src/server/botControl';
+import {
+  reconcilePositionsWithBinance,
+  runStartupReconciliation,
+  fetchAuthoritativeAccount,
+  getAuthoritativeBinanceApiBase,
+  getAuthoritativeBinanceFuturesApiBase,
+  logBinanceApiCall,
+  getBinanceApiLogs,
+  getReconciliationStatus,
+} from './src/server/positionReconciliation';
 import { binanceWs } from './src/server/binanceWebSocket';
 import { binanceRestCache } from './src/server/binanceRestCache';
 import { strategyManager } from './src/server/strategyManager';
@@ -133,15 +144,57 @@ function getOpenAI(): OpenAI | null {
 }
 
 // -----------------------------------------------------
-// Local Database Configuration Endpoints
+// Local Database Configuration Endpoints (With Sensitive Secret Redaction)
 // -----------------------------------------------------
+const SENSITIVE_CONFIG_KEYS = new Set([
+  'app_binance_api_secret',
+  'app_binance_api_key',
+  'binance_api_config',
+  'app_telegram_bot_token',
+  'gemini_api_key',
+  'openai_api_key',
+  'deepseek_api_key',
+  'qwen_api_key',
+  'encryption_key',
+  'database_secret',
+  'user_passcode',
+  'admin_password',
+]);
+
+function maskSensitiveValue(key: string, val: string | null): string {
+  if (!val) return '';
+  if (key === 'binance_api_config') {
+    try {
+      const parsed = JSON.parse(val);
+      return JSON.stringify({
+        configured: true,
+        apiKeyPrefix: parsed.apiKey ? parsed.apiKey.substring(0, 4) + '...' : '',
+        useTestnet: parsed.useTestnet,
+        marketType: parsed.marketType,
+      });
+    } catch (_) {
+      return '[REDACTED]';
+    }
+  }
+  return val.length > 8 ? val.substring(0, 4) + '••••••••' + val.slice(-2) : '••••••••';
+}
+
 app.get('/api/config', async (req, res) => {
   const { key } = req.query;
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ error: 'Key is required' });
   }
   try {
+    const rawKey = key.trim().toLowerCase();
     const value = await kv.get(key);
+    if (SENSITIVE_CONFIG_KEYS.has(rawKey) || rawKey.includes('secret') || rawKey.includes('password') || (rawKey.includes('token') && !rawKey.includes('symbol'))) {
+      return res.json({
+        key,
+        value: maskSensitiveValue(key, value),
+        configured: Boolean(value),
+        isSensitive: true,
+      });
+    }
     res.json({ key, value });
   } catch (error) {
     res.status(500).json({ error: 'Failed to read config' });
@@ -151,7 +204,16 @@ app.get('/api/config', async (req, res) => {
 app.get('/api/config/all', async (req, res) => {
   try {
     const data = await kv.getAll();
-    res.json(data);
+    const sanitizedData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(data)) {
+      const lowerKey = k.toLowerCase();
+      if (SENSITIVE_CONFIG_KEYS.has(lowerKey) || lowerKey.includes('secret') || lowerKey.includes('password') || (lowerKey.includes('token') && !lowerKey.includes('symbol'))) {
+        sanitizedData[k] = maskSensitiveValue(k, v);
+      } else {
+        sanitizedData[k] = v;
+      }
+    }
+    res.json(sanitizedData);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read all configs' });
   }
@@ -221,6 +283,15 @@ app.post('/api/config', async (req, res) => {
             await kv.set('app_binance_market_type', parsed.marketType);
             binanceWs.setMarketType(parsed.marketType);
           }
+          if (parsed.enabled === true) {
+            console.log('[CONFIG API] Bot enabled requested. Starting bot engine and scanner...');
+            startBotEngine();
+            startBotAuthoritative();
+          } else if (parsed.enabled === false) {
+            console.log('[CONFIG API] Bot disabled requested. Stopping bot engine and scanner...');
+            stopBotEngine();
+            stopBotAuthoritative('Disabled via Config API');
+          }
           if (Array.isArray(parsed.activePresets)) {
             const activeSet = new Set(parsed.activePresets);
             for (const strat of strategyManager.getAllStrategies()) {
@@ -236,6 +307,10 @@ app.post('/api/config', async (req, res) => {
         if (finalValue === 'SPOT' || finalValue === 'FUTURES') {
           binanceWs.setMarketType(finalValue as 'SPOT' | 'FUTURES');
         }
+      } else if (key === 'trading_execution_mode') {
+        await kv.set('app_execution_mode', finalValue);
+      } else if (key === 'app_execution_mode') {
+        await kv.set('trading_execution_mode', finalValue);
       } else if (key === 'quantura_active_strategies') {
         try {
           const parsed = JSON.parse(String(value));
@@ -616,6 +691,9 @@ app.post('/api/telegram/send', async (req, res) => {
   const { token, chatId, message } = req.body;
   if (!token || !chatId || !message) {
     return res.status(400).json({ error: 'token, chatId and message are required' });
+  }
+  if (typeof token !== 'string' || !/^[0-9]+:[a-zA-Z0-9_-]+$/.test(token.trim())) {
+    return res.status(400).json({ error: 'Invalid Telegram bot token format' });
   }
   try {
     const controller = new AbortController();
@@ -2248,176 +2326,54 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
   const startTime = Date.now();
   try {
     const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
+    const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
 
-    if (!apiKey || !apiSecret) {
+    if (executionMode !== 'PAPER' && (!apiKey || !apiSecret)) {
       return res.status(400).json({
-        error: 'Missing Binance API Key or Secret Key. Please provide valid credentials.',
+        error: 'BINANCE CONNECTION ERROR: Missing Binance API Key or Secret Key.',
         code: 'MISSING_CREDENTIALS',
       });
     }
 
-    const timestamp = Date.now();
-    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-    const signature = createBinanceSignature(queryString, apiSecret);
-
-    // Strictly test the requested marketType. Do NOT silently fallback to another market.
-    const isFutures = marketType === 'FUTURES';
-    const actualMarketType: 'FUTURES' | 'SPOT' = isFutures ? 'FUTURES' : 'SPOT';
-    
-    let lastError: any = null;
-    let successfulData: any = null;
-
-    // List candidate base URLs for the requested market type (e.g. Binance Demo Trading vs Testnet Sandbox)
-    const baseUrlsToTry: string[] = isFutures
-      ? (useTestnet ? ['https://testnet.binancefuture.com', 'https://demo-fapi.binance.com', 'https://fapi.binance.com'] : ['https://fapi.binance.com'])
-      : (useTestnet ? ['https://testnet.binance.vision', 'https://demo-api.binance.com', 'https://api.binance.com'] : ['https://api.binance.com']);
-
-    const uniqueBaseUrls = Array.from(new Set(baseUrlsToTry.filter(Boolean)));
-
-    for (const baseUrl of uniqueBaseUrls) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-      const fullUrl = isFutures
-        ? `${baseUrl}/fapi/v2/account?${queryString}&signature=${signature}`
-        : `${baseUrl}/api/v3/account?${queryString}&signature=${signature}`;
-
-      try {
-        const response = await fetch(fullUrl, {
-          method: 'GET',
-          headers: {
-            'X-MBX-APIKEY': apiKey,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-
-        const data = await response.json().catch(() => null);
-        if (response.ok && data) {
-          console.log(`[DEBUG] Binance Account API Response (${actualMarketType}):`, JSON.stringify(data).substring(0, 300));
-          successfulData = data;
-          break;
-        } else {
-          lastError = data || { msg: `HTTP ${response.status} ${response.statusText}` };
-        }
-      } catch (err: any) {
-        clearTimeout(timeout);
-        lastError = { msg: err.message };
-      }
-    }
+    const effectiveMarket: 'SPOT' | 'FUTURES' = (marketType === 'FUTURES' || marketType === 'SPOT') ? marketType : 'SPOT';
+    const accountData = await fetchAuthoritativeAccount(
+      effectiveMarket,
+      executionMode,
+      { apiKey, apiSecret, useTestnet }
+    );
 
     const latencyMs = Date.now() - startTime;
 
-    if (!successfulData) {
+    if (!accountData.success) {
       return res.status(400).json({
-        error: lastError?.msg || 'Binance API connection failed. Please verify API Key, Secret, and IP restrictions.',
-        binanceCode: lastError?.code,
+        error: accountData.error || 'BINANCE CONNECTION ERROR: Failed to fetch account',
+        binanceCode: (accountData as any).binanceCode,
         latencyMs,
+        marketType: effectiveMarket,
+        executionMode,
       });
     }
 
-    const data = successfulData;
-    let nonZeroBalances = [];
-    let canTrade = true;
-    let canWithdraw = false;
-    let canDeposit = true;
-    let accountType = actualMarketType;
-    let freeUsdt = 0;
-    let totalUsdtEquity = 0;
-
-    if (actualMarketType === 'FUTURES') {
-      nonZeroBalances = (data.assets || [])
-        .map((b: any) => ({
-          asset: b.asset,
-          free: parseFloat(b.availableBalance) || 0,
-          locked: Math.max(0, (parseFloat(b.walletBalance) || 0) - (parseFloat(b.availableBalance) || 0)),
-          total: parseFloat(b.walletBalance) || 0,
-        }))
-        .filter((b: any) => b.total > 0 || b.free > 0);
-      canTrade = data.canTrade ?? true;
-      canWithdraw = data.canWithdraw ?? false;
-      canDeposit = data.canDeposit ?? true;
-
-      const usdtAsset = (data.assets || []).find((a: any) => a.asset === 'USDT');
-      const usdcAsset = (data.assets || []).find((a: any) => a.asset === 'USDC');
-      const totalMargin = parseFloat(data.totalMarginBalance || '0') || 0;
-      const totalWallet = parseFloat(data.totalWalletBalance || '0') || 0;
-      const availMargin = parseFloat(data.availableBalance || '0') || 0;
-      const totalUnrealized = parseFloat(data.totalUnrealizedProfit || '0') || 0;
-      const totalInitialMargin = parseFloat(data.totalInitialMargin || '0') || 0;
-      const usdtFree = parseFloat(usdtAsset?.availableBalance || '0') || 0;
-      const usdcFree = parseFloat(usdcAsset?.availableBalance || '0') || 0;
-
-      freeUsdt = availMargin > 0 ? availMargin : (usdtFree + usdcFree);
-      // In Binance Futures, totalMarginBalance represents the total live equity including unrealized profit/loss
-      totalUsdtEquity = totalMargin > 0 ? totalMargin : (totalWallet + totalUnrealized);
-      if (totalUsdtEquity <= 0) totalUsdtEquity = freeUsdt;
-    } else {
-      // SPOT Account
-      nonZeroBalances = (data.balances || [])
-        .map((b: any) => ({
-          asset: b.asset,
-          free: parseFloat(b.free) || 0,
-          locked: parseFloat(b.locked) || 0,
-          total: (parseFloat(b.free) || 0) + (parseFloat(b.locked) || 0),
-        }))
-        .filter((b: any) => b.total > 0);
-      canTrade = data.canTrade ?? true;
-      canWithdraw = data.canWithdraw ?? false;
-      canDeposit = data.canDeposit ?? true;
-      accountType = data.accountType || 'SPOT';
-
-      const usdtEntry = nonZeroBalances.find((b: any) => b.asset === 'USDT');
-      const usdcEntry = nonZeroBalances.find((b: any) => b.asset === 'USDC');
-      const fdusdEntry = nonZeroBalances.find((b: any) => b.asset === 'FDUSD');
-      
-      const stableFree = (usdtEntry?.free || 0) + (usdcEntry?.free || 0) + (fdusdEntry?.free || 0);
-      const stableTotal = (usdtEntry?.total || 0) + (usdcEntry?.total || 0) + (fdusdEntry?.total || 0);
-
-      freeUsdt = stableFree;
-      totalUsdtEquity = stableTotal;
-
-      // Also sum up major crypto assets if stablecoins are zero or to give accurate total portfolio equity
-      for (const item of nonZeroBalances) {
-        if (!['USDT', 'USDC', 'FDUSD', 'BUSD'].includes(item.asset)) {
-          const approxPrice = getBasePriceForSymbol(`${item.asset}USDT`);
-          if (approxPrice > 0) {
-            totalUsdtEquity += (item.total * approxPrice);
-          }
-        }
-      }
-    }
-
     let tradePermissionWarning = null;
-    if (!canTrade) {
-      tradePermissionWarning = actualMarketType === 'FUTURES'
-        ? 'Futures trading permission is disabled on this API Key. Please edit your API Key on Binance and check "Enable Futures" (تفعيل العقود الآجلة).'
+    if (!accountData.canTrade) {
+      tradePermissionWarning = effectiveMarket === 'FUTURES'
+        ? 'Futures trading permission is disabled on this API Key. Please edit your API Key on Binance and check "Enable Futures".'
         : 'Spot trading permission is disabled on this API Key. Please edit your API Key on Binance and check "Enable Spot & Margin Trading".';
     }
 
     return res.json({
-      success: true,
-      canTrade,
+      ...accountData,
       tradePermissionWarning,
-      canWithdraw,
-      canDeposit,
-      accountType,
-      makerCommission: data.makerCommission || 0,
-      takerCommission: data.takerCommission || 0,
-      updateTime: data.updateTime || Date.now(),
-      balances: nonZeroBalances,
-      freeUsdt: Math.round(freeUsdt * 100) / 100,
-      totalUsdtEquity: Math.round(totalUsdtEquity * 100) / 100,
-      inTradeMargin: Math.round((parseFloat(data.totalInitialMargin || '0') || 0) * 100) / 100,
-      unrealizedProfit: Math.round((parseFloat(data.totalUnrealizedProfit || '0') || 0) * 100) / 100,
       useTestnet,
       latencyMs,
-      marketType: actualMarketType,
+      accountType: effectiveMarket,
     });
   } catch (error: any) {
     console.error('Binance Account Error:', error);
     return res.status(500).json({
-      error: error.message || 'Failed to connect to Binance API',
+      error: `BINANCE CONNECTION ERROR: ${error.message || 'Internal connection failure'}`,
       latencyMs: Date.now() - startTime,
     });
   }
@@ -2732,6 +2688,33 @@ app.post('/api/binance/order', async (req, res) => {
     const normSide = side.toUpperCase();
     const normType = type.toUpperCase();
 
+    const rawMode = (req.body.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+
+    const isManual = req.body.isManual ?? true;
+    const isReduceOnly = Boolean(req.body.reduceOnly);
+
+    // =============================================================
+    // AUTHORITATIVE ORDER SUBMISSION GUARD
+    // =============================================================
+    const guardResult = await canSubmitOrder({
+      isManual,
+      isReduceOnly,
+      symbol: normSymbol,
+      side: normSide,
+      marketType: (marketType || 'SPOT') as 'SPOT' | 'FUTURES',
+      executionMode,
+      clientOrderId: req.body.clientOrderId,
+    });
+
+    if (!guardResult.allowed) {
+      return res.status(403).json({
+        error: `Order rejected by execution guard: ${guardResult.reason}`,
+        code: guardResult.code || 'ORDER_GUARD_REJECT',
+      });
+    }
+
     // -------------------------------------------------------------
     // QUANTURA RISK MANAGEMENT ENGINE EVALUATION (MANDATORY GATEWAY)
     // -------------------------------------------------------------
@@ -2741,10 +2724,18 @@ app.post('/api/binance/order', async (req, res) => {
     const existingPositions = positionsStr ? JSON.parse(positionsStr) : [];
     
     let accountEquity = 10000;
-    const walletStr = await kv.get('btc_paper_wallet');
-    if (walletStr) {
-      const parsedWallet = JSON.parse(walletStr);
-      if (parsedWallet.balance) accountEquity = parsedWallet.balance;
+    if (executionMode === 'PAPER') {
+      const walletKey = marketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+      const walletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
+      if (walletStr) {
+        const parsedWallet = JSON.parse(walletStr);
+        if (parsedWallet.balance) accountEquity = parsedWallet.balance;
+      }
+    } else {
+      const realAcc = await fetchAuthoritativeAccount((marketType || 'SPOT') as 'SPOT' | 'FUTURES', executionMode, { apiKey, apiSecret, useTestnet });
+      if (realAcc.success) {
+        accountEquity = realAcc.totalEquity || realAcc.freeUsdt || 10000;
+      }
     }
 
     const currentTicker = await fetchBinanceTicker(normSymbol, marketType);
@@ -2834,10 +2825,10 @@ app.post('/api/binance/order', async (req, res) => {
     
     let orderUrl = '';
     if (marketType === 'FUTURES') {
-      const baseUrl = getBinanceFuturesApiBase(useTestnet);
+      const baseUrl = getAuthoritativeBinanceFuturesApiBase(useTestnet);
       orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
     } else {
-      const baseUrl = getBinanceApiBase(useTestnet);
+      const baseUrl = getAuthoritativeBinanceApiBase(useTestnet);
       orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
     }
 
@@ -2856,8 +2847,21 @@ app.post('/api/binance/order', async (req, res) => {
 
     const data = await response.json();
 
+    logBinanceApiCall({
+      timestamp: Date.now(),
+      marketType: (marketType || 'SPOT') as 'SPOT' | 'FUTURES',
+      executionMode,
+      symbol: normSymbol,
+      endpoint: marketType === 'FUTURES' ? '/fapi/v1/order' : '/api/v3/order',
+      orderId: data?.orderId,
+      clientOrderId: data?.clientOrderId || req.body.clientOrderId,
+      httpStatus: response.status,
+      binanceCode: data?.code,
+      binanceMessage: data?.msg,
+      error: !response.ok ? (data?.msg || `HTTP ${response.status}`) : undefined,
+    });
+
     if (!response.ok) {
-      // Map Binance error codes into actionable explanations
       let userFriendlyHint = '';
       if (data.code === -2010) {
         userFriendlyHint = 'Insufficient balance in Binance account for this trade.';
@@ -2875,6 +2879,9 @@ app.post('/api/binance/order', async (req, res) => {
         hint: userFriendlyHint,
       });
     }
+
+    // Schedule background reconciliation to immediately sync with live position
+    reconcilePositionsWithBinance().catch(() => {});
 
     return res.json({
       success: true,
@@ -2958,52 +2965,31 @@ app.post('/api/binance/cancel-order', async (req, res) => {
 });
 
 /**
- * 5. Futures Position Risk & Live Positions on Binance
+ * 5. Futures Position Risk & Live Positions on Binance (Authoritative Reconciled Source)
  */
 app.get('/api/binance/futures/positions', async (req, res) => {
   try {
-    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
-    if (!apiKey || !apiSecret) {
-      return res.json({ success: true, activePositionsCount: 0, positions: [], allPositions: [], message: 'No credentials configured' });
+    const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+
+    if (executionMode !== 'PAPER') {
+      await reconcilePositionsWithBinance();
     }
 
-    const symbol = (req.query.symbol as string)?.toUpperCase();
-    const timestamp = Date.now();
-    let query = `timestamp=${timestamp}&recvWindow=10000`;
-    if (symbol) query = `symbol=${symbol}&${query}`;
-
-    const signature = createBinanceSignature(query, apiSecret);
-    const baseUrl = getBinanceFuturesApiBase(useTestnet);
-
-    const response = await fetch(`${baseUrl}/fapi/v2/positionRisk?${query}&signature=${signature}`, {
-      headers: { 
-        'X-MBX-APIKEY': apiKey,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const data = await response.json().catch(() => ([]));
-    if (!response.ok) {
-      console.warn('[BINANCE FUTURES POSITIONS WARN]', data);
-      return res.json({ 
-        success: true, 
-        activePositionsCount: 0, 
-        positions: [], 
-        allPositions: [], 
-        error: (data as any)?.msg || 'Failed to fetch futures positions',
-        binanceCode: (data as any)?.code,
-      });
-    }
-
-    const activePositions = Array.isArray(data) 
-      ? data.filter((p: any) => parseFloat(p.positionAmt || '0') !== 0)
-      : [];
+    const posStr = await kv.get('btc_active_bot_positions');
+    const allPositions: any[] = posStr ? JSON.parse(posStr) : [];
+    const futuresPositions = allPositions.filter(p => (p.marketType || 'SPOT') === 'FUTURES' && (p.mode || 'PAPER') === executionMode);
+    const status = getReconciliationStatus();
 
     return res.json({
       success: true,
-      activePositionsCount: activePositions.length,
-      positions: activePositions,
-      allPositions: data,
+      activePositionsCount: futuresPositions.length,
+      positions: futuresPositions,
+      allPositions: futuresPositions,
+      syncing: status.isSyncing,
+      lastSyncTime: status.lastSyncTime,
+      executionMode,
     });
   } catch (error: any) {
     console.error('[BINANCE FUTURES POSITIONS ERROR]', error);
@@ -3013,113 +2999,132 @@ app.get('/api/binance/futures/positions', async (req, res) => {
 
 app.get('/api/binance/spot/positions', async (req, res) => {
   try {
-    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
-    if (!apiKey || !apiSecret) {
-      return res.json({ success: true, positions: [], message: 'No credentials configured' });
+    const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+
+    if (executionMode !== 'PAPER') {
+      await reconcilePositionsWithBinance();
     }
-    const timestamp = Date.now();
-    // Do NOT include symbol in /api/v3/account query string (Binance will reject with 400)
-    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-    
-    const signature = createBinanceSignature(queryString, apiSecret);
-    const baseUrl = getBinanceApiBase(useTestnet);
-    const response = await fetch(`${baseUrl}/api/v3/account?${queryString}&signature=${signature}`, {
-      headers: { 
-        'X-MBX-APIKEY': apiKey,
-        'Content-Type': 'application/json',
-      },
+
+    const posStr = await kv.get('btc_active_bot_positions');
+    const allPositions: any[] = posStr ? JSON.parse(posStr) : [];
+    const spotPositions = allPositions.filter(p => (p.marketType || 'SPOT') === 'SPOT' && (p.mode || 'PAPER') === executionMode);
+    const status = getReconciliationStatus();
+
+    return res.json({
+      success: true,
+      positions: spotPositions,
+      syncing: status.isSyncing,
+      lastSyncTime: status.lastSyncTime,
+      executionMode,
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.warn('[BINANCE SPOT POSITIONS WARN]', data);
-      return res.json({ 
-        success: true, 
-        positions: [], 
-        error: data.msg || 'Failed to fetch spot positions',
-        binanceCode: data.code,
-      });
-    }
-
-    const rawBalances = Array.isArray(data.balances) ? data.balances : [];
-    const balanceMap = new Map<string, { free: number; locked: number; total: number }>();
-    for (const b of rawBalances) {
-      const free = parseFloat(b.free || '0');
-      const locked = parseFloat(b.locked || '0');
-      const total = free + locked;
-      if (total > 0) {
-        balanceMap.set(b.asset.toUpperCase(), { free, locked, total });
-      }
-    }
-
-    // Get active bot positions tracked in database/system for SPOT
-    const storedPositionsStr = await kv.get('btc_active_bot_positions');
-    const storedPositions: any[] = storedPositionsStr ? JSON.parse(storedPositionsStr) : [];
-    const spotTracked = storedPositions.filter((p: any) => p && (p.marketType === 'SPOT' || p.leverage === 1));
-
-    const symbolFilter = (req.query.symbol as string)?.toUpperCase();
-
-    // Reconcile: Only return positions for assets that either:
-    // 1) Have an active tracked bot/manual trade in spotTracked AND exist in wallet
-    // 2) OR if explicitly queried via symbolFilter and the asset has non-zero balance
-    const reconciledPositions = spotTracked
-      .filter((pos: any) => {
-        const baseAsset = pos.symbol.toUpperCase().replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
-        const bal = balanceMap.get(baseAsset);
-        return bal && bal.total > 0;
-      })
-      .map((pos: any) => {
-        const baseAsset = pos.symbol.toUpperCase().replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
-        const bal = balanceMap.get(baseAsset)!;
-        return {
-          id: pos.id,
-          symbol: pos.symbol.toUpperCase(),
-          asset: baseAsset,
-          positionAmt: bal.total.toString(),
-          free: bal.free.toString(),
-          locked: bal.locked.toString(),
-          entryPrice: pos.entryPrice || 0,
-          leverage: 1,
-          marketType: 'SPOT' as const,
-          decision: pos.decision || 'LONG',
-          tp1: pos.tp1,
-          tp2: pos.tp2,
-          tp3: pos.tp3,
-          stopLoss: pos.stopLoss,
-          openedAt: pos.openedAt,
-          strategyName: pos.strategyName,
-        };
-      });
-
-    // If symbolFilter was requested specifically, and it wasn't already in reconciledPositions but has balance
-    if (symbolFilter && !reconciledPositions.some(p => p.symbol === symbolFilter)) {
-      const baseAsset = symbolFilter.replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
-      const bal = balanceMap.get(baseAsset);
-      if (bal && bal.total > 0 && !['USDT', 'USDC', 'FDUSD', 'BUSD', 'DAI', 'TUSD', 'EUR', 'USD'].includes(baseAsset)) {
-        reconciledPositions.push({
-          id: `spot-pos-${symbolFilter}`,
-          symbol: symbolFilter,
-          asset: baseAsset,
-          positionAmt: bal.total.toString(),
-          free: bal.free.toString(),
-          locked: bal.locked.toString(),
-          entryPrice: 0,
-          leverage: 1,
-          marketType: 'SPOT' as const,
-          decision: 'LONG',
-          tp1: undefined,
-          tp2: undefined,
-          tp3: undefined,
-          stopLoss: undefined,
-          openedAt: Date.now(),
-          strategyName: 'Spot Asset Holding',
-        });
-      }
-    }
-
-    return res.json({ success: true, positions: reconciledPositions });
   } catch (error: any) {
     console.error('[BINANCE SPOT POSITIONS ERROR]', error);
     return res.json({ success: true, positions: [], error: error.message });
+  }
+});
+
+/**
+ * Authoritative Unified Positions Endpoint
+ */
+app.get('/api/binance/positions', async (req, res) => {
+  try {
+    const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
+      rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
+    const marketType = ((req.query.marketType as string) || (await kv.get('app_binance_market_type')) || 'SPOT').toUpperCase() as 'SPOT' | 'FUTURES';
+
+    if (executionMode !== 'PAPER') {
+      await reconcilePositionsWithBinance();
+    }
+
+    const posStr = await kv.get('btc_active_bot_positions');
+    const allPositions: any[] = posStr ? JSON.parse(posStr) : [];
+    const filtered = allPositions.filter(p => (p.marketType || 'SPOT') === marketType && (p.mode || 'PAPER') === executionMode);
+    const status = getReconciliationStatus();
+
+    return res.json({
+      success: true,
+      marketType,
+      executionMode,
+      activePositionsCount: filtered.length,
+      positions: filtered,
+      openOrdersCount: status.openOrdersCount,
+      isSyncing: status.isSyncing,
+      lastSyncTime: status.lastSyncTime,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Trigger Authoritative Position & Account Reconciliation
+ */
+app.post('/api/binance/reconcile', async (req, res) => {
+  try {
+    const result = await reconcilePositionsWithBinance();
+    return res.json({ success: true, ...result });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/binance/reconcile/status', async (_req, res) => {
+  return res.json(getReconciliationStatus());
+});
+
+app.get('/api/binance/logs', async (_req, res) => {
+  return res.json({ logs: getBinanceApiLogs() });
+});
+
+/**
+ * Authoritative Bot State & Control Endpoints
+ */
+app.get('/api/bot/status', async (_req, res) => {
+  try {
+    const state = await getAuthoritativeBotState();
+    const reconStatus = getReconciliationStatus();
+    return res.json({
+      success: true,
+      ...state,
+      syncing: reconStatus.isSyncing,
+      lastSyncTime: reconStatus.lastSyncTime,
+      openOrdersCount: reconStatus.openOrdersCount,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/bot/state', async (_req, res) => {
+  try {
+    const state = await getAuthoritativeBotState();
+    return res.json(state);
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/bot/start', async (_req, res) => {
+  try {
+    const state = await startBotAuthoritative();
+    startBotEngine();
+    return res.json({ success: true, state });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/bot/stop', async (req, res) => {
+  try {
+    const reason = req.body?.reason || 'User clicked stop';
+    const state = await stopBotAuthoritative(reason);
+    stopBotEngine();
+    return res.json({ success: true, state });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -3321,9 +3326,25 @@ async function initFrontendAndServices() {
     binanceWs.start(initialMt);
     await strategyManager.init();
     setMarketDataProvider(getMarketDataDirect);
-    startBotEngine();
+
+    // 10. STARTUP RECONCILIATION
+    // START -> CONNECT BINANCE -> FETCH ACCOUNT -> FETCH OPEN ORDERS -> FETCH OPEN POSITIONS -> RECONCILE LOCAL STATE -> UPDATE DATABASE/KV
+    await runStartupReconciliation();
+
+    // START BOT ENGINE ONLY IF BOT IS ENABLED
+    // If the bot was OFF before restart, it must remain OFF.
+    const authoritativeState = await getAuthoritativeBotState();
+    if (authoritativeState.enabled && authoritativeState.status === 'RUNNING') {
+      console.log('🤖 [STARTUP] Bot was previously ENABLED. Resuming Bot Engine & Market Scanner.');
+      startBotEngine();
+      startMarketScanner();
+    } else {
+      console.log('🛑 [STARTUP] Bot is currently DISABLED/STOPPED. Order generation loops remain OFF.');
+      // Position monitoring loop ensures SL/TP safety for existing positions without generating new orders
+      startBotEngine();
+      stopMarketScanner();
+    }
     startTelegramSync();
-    startMarketScanner();
   } catch (err) {
     console.error('Warning: Background engine initialization error:', err);
   }

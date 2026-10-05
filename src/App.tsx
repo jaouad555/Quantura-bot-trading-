@@ -3573,32 +3573,47 @@ export const App: React.FC = () => {
             return [newPos, ...filtered];
           });
         } else if (side === 'SELL') {
+          // If closing an existing open position, record the genuine closed trade in history
+          const closingPos = (activeBotPositionsRef.current || []).find(
+            p => p.symbol.toUpperCase() === selectedSymbol.toUpperCase() && (p.mode || 'PAPER') === execMode
+          );
+
+          if (closingPos) {
+            const entryP = closingPos.entryPrice || executedPrice;
+            const lev = closingPos.leverage || 1;
+            const initialMargin = closingPos.initialAmountUsdt || (closingPos.remainingAmountBtc * entryP) / lev || 10;
+            const pnlUsdt = closingPos.decision === 'LONG'
+              ? (executedPrice - entryP) * (closingPos.remainingAmountBtc || 1)
+              : (entryP - executedPrice) * (closingPos.remainingAmountBtc || 1);
+            const pnlPercent = initialMargin > 0 ? (pnlUsdt / initialMargin) * 100 : 0;
+
+            const completedTrade: TradeHistoryItem = {
+              id: `trade-manual-${orderId}-${Date.now()}`,
+              timestamp: closingPos.openedAt || Date.now(),
+              symbol: selectedSymbol,
+              decision: closingPos.decision || 'LONG',
+              timeframe: timeframe || '15m',
+              entryPrice: entryP,
+              exitPrice: executedPrice,
+              tp1: closingPos.tp1,
+              tp2: closingPos.tp2,
+              tp3: closingPos.tp3,
+              stopLoss: closingPos.stopLoss,
+              status: pnlUsdt >= 0 ? 'PROFIT_TP1' : 'STOPPED_OUT',
+              profitPercent: Math.round(pnlPercent * 100) / 100,
+              profitUsdt: Math.round(pnlUsdt * 100) / 100,
+              confidence: 90,
+              reason: isArabicLang ? `إغلاق يدوي لصفقة ${selectedSymbol}` : `Manual close of ${selectedSymbol} position`,
+              strategyName: closingPos.strategyName || `Manual ${isSpot ? 'Spot' : 'Futures'} Order`,
+              mode: execMode,
+            };
+            setTradeHistory(prev => [completedTrade, ...(prev || [])]);
+          }
+
           updateBotPositionsSync((prev) => {
             return (prev || []).filter(p => !(p.symbol.toUpperCase() === selectedSymbol.toUpperCase() && (p.mode || 'PAPER') === execMode));
           });
         }
-
-        // Add to trade history
-        const completedTrade: TradeHistoryItem = {
-          id: `trade-manual-${orderId}-${Date.now()}`,
-          timestamp: Date.now(),
-          symbol: selectedSymbol,
-          decision: side === 'BUY' ? 'LONG' : 'SHORT',
-          timeframe: timeframe || '15m',
-          entryPrice: executedPrice,
-          exitPrice: executedPrice,
-          tp1: defaultTp1,
-          tp2: defaultTp2,
-          tp3: defaultTp3,
-          stopLoss: defaultSl,
-          status: 'CLOSED',
-          profitPercent: 0,
-          profitUsdt: 0,
-          confidence: 90,
-          reason: isArabicLang ? `أمر يدوي فوري ${side} على بايننس` : `Ordre manuel direct ${side}`,
-          strategyName: `Manual ${isSpot ? 'Spot' : 'Futures'} Order`,
-        };
-        setTradeHistory(prev => [completedTrade, ...(prev || [])]);
 
         playAudioChime();
 
