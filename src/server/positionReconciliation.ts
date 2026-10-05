@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { kv } from './db.js';
 import { fetchSymbolPrice } from './botEngine.js';
 import { binanceWs } from './binanceWebSocket.js';
+import { clearOrderGuardState } from './botControl.js';
 
 export interface BinanceApiLogEntry {
   timestamp: number;
@@ -52,8 +53,34 @@ export function getAuthoritativeBinanceFuturesApiBase(useTestnet: boolean): stri
   return useTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
 }
 
-function createSignature(query: string, secret: string): string {
-  return crypto.createHmac('sha256', secret).update(query).digest('hex');
+/**
+ * Robust HMAC-SHA256 Signed Query Generator:
+ * 1. Collects and normalizes query parameters.
+ * 2. Injects recvWindow (default 10000).
+ * 3. Injects timestamp immediately prior to signing.
+ * 4. Serializes query string via URLSearchParams.
+ * 5. Computes HMAC-SHA256 hex digest using the resolved secret.
+ * 6. Appends &signature=<hex> without re-encoding or altering parameters.
+ */
+export function createBinanceSignedQuery(
+  params: Record<string, string | number | boolean | undefined> = {},
+  secret: string
+): { queryString: string; signature: string; fullQuery: string } {
+  const cleanParams: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') {
+      cleanParams[k] = String(v);
+    }
+  }
+  if (!cleanParams.recvWindow) {
+    cleanParams.recvWindow = '10000';
+  }
+  cleanParams.timestamp = Date.now().toString();
+
+  const queryString = new URLSearchParams(cleanParams).toString();
+  const signature = crypto.createHmac('sha256', secret.trim()).update(queryString).digest('hex');
+  const fullQuery = `${queryString}&signature=${signature}`;
+  return { queryString, signature, fullQuery };
 }
 
 export interface ReconciliationStatus {
@@ -86,23 +113,28 @@ export function getReconciliationStatus(): ReconciliationStatus {
   return { ...latestReconciliationStatus };
 }
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'quantura_secure_default_key_32_bytes_long!';
-
 function decryptSecret(text: string): string {
   if (!text) return text;
-  try {
-    const textParts = text.split(':');
-    if (textParts.length !== 2) return text;
-    const iv = Buffer.from(textParts[0], 'hex');
-    const encryptedText = Buffer.from(textParts[1], 'hex');
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substring(0, 32);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (e) {
-    return text;
+  const keysToTry = [
+    process.env.ENCRYPTION_KEY || 'default_secret_key_quantura_2026',
+    'default_secret_key_quantura_2026',
+    'quantura_secure_default_key_32_bytes_long!',
+  ];
+  for (const encKey of keysToTry) {
+    try {
+      const textParts = text.split(':');
+      if (textParts.length !== 2) return text;
+      const iv = Buffer.from(textParts[0], 'hex');
+      const encryptedText = Buffer.from(textParts[1], 'hex');
+      const key = crypto.createHash('sha256').update(String(encKey)).digest('base64').substring(0, 32);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+      let decrypted = decipher.update(encryptedText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      const res = decrypted.toString();
+      if (res && isValidBinanceCredential(res)) return res;
+    } catch (_) {}
   }
+  return text;
 }
 
 function isValidBinanceCredential(val: string): boolean {
@@ -114,6 +146,7 @@ function isValidBinanceCredential(val: string): boolean {
 
 /**
  * Authoritative Binance Credentials Resolver
+ * Uniformly resolves credentials from secure KV and environment variables.
  */
 export async function getAuthoritativeBinanceConfig(): Promise<{
   apiKey?: string;
@@ -150,14 +183,25 @@ export async function getAuthoritativeBinanceConfig(): Promise<{
     process.env.BINANCE_API_KEY ||
     process.env.BINANCE_KEY ||
     process.env.BINANCE_APIKEY ||
+    process.env.BINANCE_PUBLIC_KEY ||
+    process.env.BINANCE_API ||
+    process.env.API_KEY ||
     process.env.VITE_BINANCE_API_KEY ||
+    process.env.VITE_BINANCE_KEY ||
     ''
   ).trim();
+
   const envSecret = (
     process.env.BINANCE_SECRET_KEY ||
     process.env.BINANCE_API_SECRET ||
     process.env.BINANCE_SECRET ||
+    process.env.BINANCE_APISECRET ||
+    process.env.BINANCE_PRIVATE_KEY ||
+    process.env.API_SECRET ||
+    process.env.SECRET_KEY ||
     process.env.VITE_BINANCE_SECRET_KEY ||
+    process.env.VITE_BINANCE_API_SECRET ||
+    process.env.VITE_BINANCE_SECRET ||
     ''
   ).trim();
 
@@ -166,7 +210,19 @@ export async function getAuthoritativeBinanceConfig(): Promise<{
 
   const rawTestnet = await kv.get('app_binance_use_testnet');
   const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
-  const rawMt = (await kv.get('app_binance_market_type')) || dbMarketType || 'SPOT';
+
+  const botCfgStr = await kv.get('btc_bot_config');
+  let botCfgMarketType: 'SPOT' | 'FUTURES' | null = null;
+  if (botCfgStr) {
+    try {
+      const parsed = JSON.parse(botCfgStr);
+      if (parsed.marketType === 'SPOT' || parsed.marketType === 'FUTURES') {
+        botCfgMarketType = parsed.marketType;
+      }
+    } catch (_) {}
+  }
+
+  const rawMt = (await kv.get('app_binance_market_type')) || botCfgMarketType || dbMarketType || (process.env.BINANCE_MARKET_TYPE || process.env.MARKET_TYPE || 'SPOT');
 
   const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
     rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
@@ -180,9 +236,9 @@ export async function getAuthoritativeBinanceConfig(): Promise<{
       ? rawTestnet === 'true'
       : dbTestnet !== null
       ? dbTestnet
-      : process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true';
+      : process.env.BINANCE_USE_TESTNET === 'true' || process.env.BINANCE_TESTNET === 'true' || process.env.USE_TESTNET === 'true';
 
-  const marketType: 'SPOT' | 'FUTURES' = rawMt === 'FUTURES' ? 'FUTURES' : 'SPOT';
+  const marketType: 'SPOT' | 'FUTURES' = String(rawMt).toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT';
   const isConnected = Boolean(isValidBinanceCredential(apiKey) && isValidBinanceCredential(apiSecret));
 
   return { apiKey, apiSecret, useTestnet, marketType, executionMode, isConnected };
@@ -264,28 +320,25 @@ export async function fetchAuthoritativeAccount(
     };
   }
 
-  const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-  const signature = createSignature(queryString, auth.apiSecret);
-
   if (marketType === 'FUTURES') {
     const baseUrl = getAuthoritativeBinanceFuturesApiBase(auth.useTestnet ?? false);
     const endpoint = '/fapi/v2/account';
-    const url = `${baseUrl}${endpoint}?${queryString}&signature=${signature}`;
+    const { fullQuery } = createBinanceSignedQuery({}, auth.apiSecret);
+    const url = `${baseUrl}${endpoint}?${fullQuery}`;
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(url, {
         method: 'GET',
-        headers: { 'X-MBX-APIKEY': auth.apiKey, 'Content-Type': 'application/json' },
+        headers: { 'X-MBX-APIKEY': auth.apiKey, 'Accept': 'application/json' },
         signal: controller.signal,
       });
       clearTimeout(timeout);
       const data = await res.json().catch(() => null);
 
       logBinanceApiCall({
-        timestamp,
+        timestamp: Date.now(),
         marketType: 'FUTURES',
         executionMode,
         endpoint,
@@ -354,7 +407,7 @@ export async function fetchAuthoritativeAccount(
       };
     } catch (err: any) {
       logBinanceApiCall({
-        timestamp,
+        timestamp: Date.now(),
         marketType: 'FUTURES',
         executionMode,
         endpoint,
@@ -372,21 +425,22 @@ export async function fetchAuthoritativeAccount(
     // SPOT Account
     const baseUrl = getAuthoritativeBinanceApiBase(auth.useTestnet ?? false);
     const endpoint = '/api/v3/account';
-    const url = `${baseUrl}${endpoint}?${queryString}&signature=${signature}`;
+    const { fullQuery } = createBinanceSignedQuery({}, auth.apiSecret);
+    const url = `${baseUrl}${endpoint}?${fullQuery}`;
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(url, {
         method: 'GET',
-        headers: { 'X-MBX-APIKEY': auth.apiKey, 'Content-Type': 'application/json' },
+        headers: { 'X-MBX-APIKEY': auth.apiKey, 'Accept': 'application/json' },
         signal: controller.signal,
       });
       clearTimeout(timeout);
       const data = await res.json().catch(() => null);
 
       logBinanceApiCall({
-        timestamp,
+        timestamp: Date.now(),
         marketType: 'SPOT',
         executionMode,
         endpoint,
@@ -487,7 +541,7 @@ export async function fetchAuthoritativeAccount(
       };
     } catch (err: any) {
       logBinanceApiCall({
-        timestamp,
+        timestamp: Date.now(),
         marketType: 'SPOT',
         executionMode,
         endpoint,
@@ -511,7 +565,7 @@ export async function fetchAuthoritativeAccount(
  * - Detects local positions no longer existing on Binance -> Moves to history and cleans up.
  * - Updates quantity, entry price, current price, unrealized PnL, leverage.
  * - Strictly separates SPOT and FUTURES positions.
- * - Completely prevents duplicates.
+ * - Completely prevents duplicates and stale in-flight state locks.
  */
 export async function reconcilePositionsWithBinance(options?: {
   customBinancePositions?: any[];
@@ -587,10 +641,6 @@ export async function reconcilePositionsWithBinance(options?: {
       };
     }
 
-    const timestamp = Date.now();
-    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-    const signature = createSignature(queryString, auth.apiSecret!);
-
     if (auth.marketType === 'FUTURES') {
       let rawBinancePositions: any[] = [];
       let rawOpenOrders: any[] = [];
@@ -600,8 +650,9 @@ export async function reconcilePositionsWithBinance(options?: {
       } else {
         const baseUrl = getAuthoritativeBinanceFuturesApiBase(auth.useTestnet);
         // 1. Fetch active Futures positions
-        const posRes = await fetch(`${baseUrl}/fapi/v2/positionRisk?${queryString}&signature=${signature}`, {
-          headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Content-Type': 'application/json' },
+        const posSigned = createBinanceSignedQuery({}, auth.apiSecret!);
+        const posRes = await fetch(`${baseUrl}/fapi/v2/positionRisk?${posSigned.fullQuery}`, {
+          headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Accept': 'application/json' },
         });
         const posData = await posRes.json().catch(() => []);
         if (posRes.ok && Array.isArray(posData)) {
@@ -612,8 +663,9 @@ export async function reconcilePositionsWithBinance(options?: {
 
         // 2. Fetch open conditional/limit orders
         try {
-          const ordersRes = await fetch(`${baseUrl}/fapi/v1/openOrders?${queryString}&signature=${signature}`, {
-            headers: { 'X-MBX-APIKEY': auth.apiKey! },
+          const ordersSigned = createBinanceSignedQuery({}, auth.apiSecret!);
+          const ordersRes = await fetch(`${baseUrl}/fapi/v1/openOrders?${ordersSigned.fullQuery}`, {
+            headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Accept': 'application/json' },
           });
           const ordersData = await ordersRes.json().catch(() => []);
           if (ordersRes.ok && Array.isArray(ordersData)) {
@@ -713,6 +765,9 @@ export async function reconcilePositionsWithBinance(options?: {
           console.log(`[RECONCILIATION] Local Futures position ${sym} no longer exists on Binance. Moving to trade history.`);
           closedCount++;
 
+          // Clear any in-flight execution lock for this symbol
+          clearOrderGuardState(sym);
+
           // Move to History as closed trade
           const histStr = await kv.get('btc_trade_history');
           const history = histStr ? JSON.parse(histStr) : [];
@@ -777,8 +832,10 @@ export async function reconcilePositionsWithBinance(options?: {
         rawBalances = options.customBinanceSpotBalances;
       } else {
         const baseUrl = getAuthoritativeBinanceApiBase(auth.useTestnet);
-        const accRes = await fetch(`${baseUrl}/api/v3/account?${queryString}&signature=${signature}`, {
-          headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Content-Type': 'application/json' },
+        // 1. Fetch Spot Account Balances with freshly signed query
+        const accSigned = createBinanceSignedQuery({}, auth.apiSecret!);
+        const accRes = await fetch(`${baseUrl}/api/v3/account?${accSigned.fullQuery}`, {
+          headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Accept': 'application/json' },
         });
         const accData = await accRes.json().catch(() => ({}));
         if (accRes.ok && Array.isArray(accData.balances)) {
@@ -787,9 +844,11 @@ export async function reconcilePositionsWithBinance(options?: {
           throw new Error(accData?.msg || `Failed to fetch Spot balances (HTTP ${accRes.status})`);
         }
 
+        // 2. Fetch Spot Open Orders with freshly signed query
         try {
-          const ordersRes = await fetch(`${baseUrl}/api/v3/openOrders?${queryString}&signature=${signature}`, {
-            headers: { 'X-MBX-APIKEY': auth.apiKey! },
+          const ordersSigned = createBinanceSignedQuery({}, auth.apiSecret!);
+          const ordersRes = await fetch(`${baseUrl}/api/v3/openOrders?${ordersSigned.fullQuery}`, {
+            headers: { 'X-MBX-APIKEY': auth.apiKey!, 'Accept': 'application/json' },
           });
           const ordersData = await ordersRes.json().catch(() => []);
           if (ordersRes.ok && Array.isArray(ordersData)) {
@@ -815,11 +874,18 @@ export async function reconcilePositionsWithBinance(options?: {
 
       const reconciledCurrent: any[] = [];
       const binanceSeenAssets = new Set<string>();
+      for (const b of activeSpotAssets) {
+        binanceSeenAssets.add(b.asset.toUpperCase());
+      }
+
+      const binanceOpenOrderSymbols = new Set<string>();
+      for (const o of rawOpenOrders) {
+        if (o.symbol) binanceOpenOrderSymbols.add(o.symbol.toUpperCase());
+      }
 
       for (const b of activeSpotAssets) {
         const asset = b.asset.toUpperCase();
         const sym = `${asset}USDT`;
-        binanceSeenAssets.add(asset);
         const free = parseFloat(b.free || '0');
         const locked = parseFloat(b.locked || '0');
         const totalQty = free + locked;
@@ -849,27 +915,32 @@ export async function reconcilePositionsWithBinance(options?: {
           });
           updatedCount++;
         }
-        // Do NOT auto-import random Spot wallet balances as active bot trades!
-        // Spot wallet assets (like Testnet faucet balances or long-term holdings) are not bot positions unless opened by the bot.
       }
 
-      // Check local Spot positions whose balance is now zero on Binance
+      // Check local Spot positions whose balance is now zero on Binance AND has no open orders
       for (const lp of currentSpotPositions) {
-        const baseAsset = lp.symbol.toUpperCase().replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
-        if (!binanceSeenAssets.has(baseAsset)) {
-          console.log(`[RECONCILIATION] Spot asset ${lp.symbol} balance is 0 on Binance. Moving to trade history.`);
+        const sym = lp.symbol.toUpperCase();
+        const baseAsset = sym.replace('USDT', '').replace('USDC', '').replace('FDUSD', '');
+        const hasBalance = binanceSeenAssets.has(baseAsset);
+        const hasOpenOrder = binanceOpenOrderSymbols.has(sym);
+
+        if (!hasBalance && !hasOpenOrder) {
+          console.log(`[RECONCILIATION] Spot symbol ${sym} balance is 0 and no open orders on Binance. Removing stale internal position and clearing in-flight lock.`);
           closedCount++;
+
+          // Clear any in-flight execution lock or guard idempotency for this symbol
+          clearOrderGuardState(sym);
 
           const histStr = await kv.get('btc_trade_history');
           const history = histStr ? JSON.parse(histStr) : [];
           const exitPrice = lp.currentPrice || lp.entryPrice;
           const pnl = lp.unrealizedPnlUsdt || 0;
-          const histId = `hist-reconciled-spot-${lp.symbol}-${lp.openedAt || Date.now()}`;
+          const histId = `hist-reconciled-spot-${sym}-${lp.openedAt || Date.now()}`;
           if (!history.some((h: any) => h.id === histId || (h.posId === lp.id && Math.abs((h.closedAt || 0) - Date.now()) < 60000))) {
             const historyItem = {
               id: histId,
               posId: lp.id,
-              symbol: lp.symbol,
+              symbol: sym,
               decision: 'LONG',
               entryPrice: lp.entryPrice,
               exitPrice,
@@ -887,6 +958,11 @@ export async function reconcilePositionsWithBinance(options?: {
             await kv.set('btc_trade_history', JSON.stringify(history.slice(0, 500)));
           }
         }
+      }
+
+      // If no open orders and no positions exist in this mode, ensure all in-flight locks are cleanly cleared
+      if (reconciledCurrent.length === 0 && openOrdersCount === 0) {
+        clearOrderGuardState();
       }
 
       const finalPositions = [...otherMarketPositions, ...reconciledCurrent];
@@ -954,3 +1030,4 @@ export async function runStartupReconciliation(): Promise<void> {
     console.error('⚠️ [STARTUP RECONCILIATION ERROR]:', err);
   }
 }
+

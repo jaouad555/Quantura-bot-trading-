@@ -13,6 +13,7 @@ import { canSubmitOrder } from './botControl.js';
 import { 
   getAuthoritativeBinanceApiBase, 
   getAuthoritativeBinanceFuturesApiBase, 
+  createBinanceSignedQuery,
   logBinanceApiCall, 
   fetchAuthoritativeAccount 
 } from './positionReconciliation.js';
@@ -1225,19 +1226,26 @@ const IV_LENGTH = 16;
 
 function decryptSecret(text: string): string {
   if (!text) return text;
-  try {
-    const textParts = text.split(':');
-    if (textParts.length !== 2) return text;
-    const iv = Buffer.from(textParts[0], 'hex');
-    const encryptedText = Buffer.from(textParts[1], 'hex');
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substring(0, 32);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (e) {
-    return text;
+  const keysToTry = [
+    process.env.ENCRYPTION_KEY || 'default_secret_key_quantura_2026',
+    'default_secret_key_quantura_2026',
+    'quantura_secure_default_key_32_bytes_long!',
+  ];
+  for (const encKey of keysToTry) {
+    try {
+      const textParts = text.split(':');
+      if (textParts.length !== 2) return text;
+      const iv = Buffer.from(textParts[0], 'hex');
+      const encryptedText = Buffer.from(textParts[1], 'hex');
+      const key = crypto.createHash('sha256').update(String(encKey)).digest('base64').substring(0, 32);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+      let decrypted = decipher.update(encryptedText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      const res = decrypted.toString();
+      if (res && isValidBinanceSecret(res)) return res;
+    } catch (_) {}
   }
+  return text;
 }
 
 function isValidBinanceKey(key: string): boolean {
@@ -1501,24 +1509,21 @@ export const serverExecuteOrder = async (
           if (!reduceOnly) {
             // 1. Ensure symbol leverage and margin type are configured
             try {
-              const now = Date.now();
               try {
-                const marginQuery = `symbol=${normSymbol}&marginType=ISOLATED&timestamp=${now}&recvWindow=10000`;
-                const marginSig = createBinanceSignature(marginQuery, config.apiSecret!);
-                await fetch(`${baseUrl}/fapi/v1/marginType?${marginQuery}&signature=${marginSig}`, {
+                const { fullQuery: marginQuery } = createBinanceSignedQuery({ symbol: normSymbol, marginType: 'ISOLATED' }, config.apiSecret!);
+                await fetch(`${baseUrl}/fapi/v1/marginType?${marginQuery}`, {
                   method: 'POST',
-                  headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
+                  headers: { 'X-MBX-APIKEY': config.apiKey!, 'Accept': 'application/json' },
                 });
               } catch (mErr) { /* Ignore "No need to change margin type" */ }
 
               const targetLev = Math.max(1, Math.min(50, leverage || 3));
-              const levQuery = `symbol=${normSymbol}&leverage=${targetLev}&timestamp=${now}&recvWindow=10000`;
-              const levSig = createBinanceSignature(levQuery, config.apiSecret!);
-              await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}&signature=${levSig}`, {
+              const { fullQuery: levQuery } = createBinanceSignedQuery({ symbol: normSymbol, leverage: targetLev }, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/leverage?${levQuery}`, {
                 method: 'POST',
                 headers: {
                   'X-MBX-APIKEY': config.apiKey!,
-                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
                 },
               });
             } catch (levErr) {
@@ -1532,17 +1537,14 @@ export const serverExecuteOrder = async (
             side: side.toUpperCase(),
             type: 'MARKET',
             quantity: formattedQty,
-            timestamp: Date.now().toString(),
-            recvWindow: '10000',
           };
 
           if (reduceOnly) {
             params.reduceOnly = 'true';
           }
 
-          const queryString = new URLSearchParams(params).toString();
-          const signature = createBinanceSignature(queryString, config.apiSecret!);
-          const orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+          const { fullQuery } = createBinanceSignedQuery(params, config.apiSecret!);
+          const orderUrl = `${baseUrl}/fapi/v1/order?${fullQuery}`;
 
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1550,7 +1552,7 @@ export const serverExecuteOrder = async (
             method: 'POST',
             headers: {
               'X-MBX-APIKEY': config.apiKey!,
-              'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
             signal: controller.signal,
           });
@@ -1582,11 +1584,10 @@ export const serverExecuteOrder = async (
           // If closing or reduceOnly, clean up any open conditional orders (SL / TP) on Binance
           if (reduceOnly) {
             try {
-              const cancelQuery = `symbol=${normSymbol}&timestamp=${Date.now()}&recvWindow=10000`;
-              const cancelSig = createBinanceSignature(cancelQuery, config.apiSecret!);
-              await fetch(`${baseUrl}/fapi/v1/allOpenOrders?${cancelQuery}&signature=${cancelSig}`, {
+              const { fullQuery: cancelQuery } = createBinanceSignedQuery({ symbol: normSymbol }, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/allOpenOrders?${cancelQuery}`, {
                 method: 'DELETE',
-                headers: { 'X-MBX-APIKEY': config.apiKey! },
+                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Accept': 'application/json' },
               });
               console.log(`[SERVER ENGINE] Cleaned up open conditional orders on Binance for ${normSymbol}`);
             } catch (cErr) {
@@ -1605,14 +1606,11 @@ export const serverExecuteOrder = async (
                 type: 'STOP_MARKET',
                 stopPrice: formattedSlPrice,
                 closePosition: 'true',
-                timestamp: Date.now().toString(),
-                recvWindow: '10000',
               };
-              const slQuery = new URLSearchParams(slParams).toString();
-              const slSig = createBinanceSignature(slQuery, config.apiSecret!);
-              await fetch(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, {
+              const { fullQuery: slQuery } = createBinanceSignedQuery(slParams, config.apiSecret!);
+              await fetch(`${baseUrl}/fapi/v1/order?${slQuery}`, {
                 method: 'POST',
-                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Content-Type': 'application/json' },
+                headers: { 'X-MBX-APIKEY': config.apiKey!, 'Accept': 'application/json' },
               });
               console.log(`[SERVER ENGINE] Stop Loss conditional order placed on Binance Open Orders for ${normSymbol} at $${formattedSlPrice}`);
             } catch (slErr) {
@@ -1629,8 +1627,6 @@ export const serverExecuteOrder = async (
             symbol: normSymbol,
             side: side.toUpperCase(),
             type: 'MARKET',
-            timestamp: Date.now().toString(),
-            recvWindow: '10000',
           };
 
           if (side.toUpperCase() === 'BUY' && quoteOrderQty && quoteOrderQty > 0) {
@@ -1639,9 +1635,8 @@ export const serverExecuteOrder = async (
             params.quantity = formattedQty;
           }
 
-          const queryString = new URLSearchParams(params).toString();
-          const signature = createBinanceSignature(queryString, config.apiSecret!);
-          const orderUrl = `${primaryBaseUrl}/api/v3/order?${queryString}&signature=${signature}`;
+          const { fullQuery } = createBinanceSignedQuery(params, config.apiSecret!);
+          const orderUrl = `${primaryBaseUrl}/api/v3/order?${fullQuery}`;
 
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1649,7 +1644,7 @@ export const serverExecuteOrder = async (
             method: 'POST',
             headers: {
               'X-MBX-APIKEY': config.apiKey!,
-              'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
             signal: controller.signal,
           });

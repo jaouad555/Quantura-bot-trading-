@@ -19,6 +19,21 @@ export function clearIdempotencyCache() {
   orderIdempotencyCache.clear();
 }
 
+export function clearOrderGuardState(symbol?: string) {
+  if (symbol) {
+    const sym = symbol.toUpperCase().trim();
+    inFlightExecutionLocks.delete(sym);
+    for (const key of Array.from(orderIdempotencyCache.keys())) {
+      if (key.toUpperCase().includes(sym)) {
+        orderIdempotencyCache.delete(key);
+      }
+    }
+  } else {
+    inFlightExecutionLocks.clear();
+    orderIdempotencyCache.clear();
+  }
+}
+
 // Clean idempotency cache older than 60 seconds
 setInterval(() => {
   const now = Date.now();

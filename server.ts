@@ -50,6 +50,7 @@ import {
   fetchAuthoritativeAccount,
   getAuthoritativeBinanceApiBase,
   getAuthoritativeBinanceFuturesApiBase,
+  createBinanceSignedQuery,
   logBinanceApiCall,
   getBinanceApiLogs,
   getReconciliationStatus,
@@ -2044,19 +2045,26 @@ function encryptSecret(text) {
 
 function decryptSecret(text) {
   if (!text) return text;
-  try {
-    const textParts = text.split(':');
-    if (textParts.length !== 2) return text;
-    const iv = Buffer.from(textParts[0], 'hex');
-    const encryptedText = Buffer.from(textParts[1], 'hex');
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substring(0, 32);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (e) {
-    return text;
+  const keysToTry = [
+    process.env.ENCRYPTION_KEY || 'default_secret_key_quantura_2026',
+    'default_secret_key_quantura_2026',
+    'quantura_secure_default_key_32_bytes_long!',
+  ];
+  for (const encKey of keysToTry) {
+    try {
+      const textParts = text.split(':');
+      if (textParts.length !== 2) return text;
+      const iv = Buffer.from(textParts[0], 'hex');
+      const encryptedText = Buffer.from(textParts[1], 'hex');
+      const key = crypto.createHash('sha256').update(String(encKey)).digest('base64').substring(0, 32);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+      let decrypted = decipher.update(encryptedText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      const res = decrypted.toString();
+      if (res && isValidBinanceSecret(res)) return res;
+    } catch (_) {}
   }
+  return text;
 }
 
 function isValidBinanceKey(key: string): boolean {
@@ -2518,7 +2526,7 @@ app.get('/api/wallet/summary', async (_req, res) => {
     const positionsStr = await kv.get('btc_active_bot_positions');
     const positions = positionsStr ? JSON.parse(positionsStr) : [];
     const executionMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
-    const activeMarketType = (await kv.get('app_binance_market_type')) || 'FUTURES';
+    const activeMarketType = (await kv.get('app_binance_market_type')) || 'SPOT';
 
     let multiPortfolio = multiPortfolioStr ? JSON.parse(multiPortfolioStr) : null;
     let spotWallet = spotWalletStr ? JSON.parse(spotWalletStr) : null;
@@ -2927,16 +2935,15 @@ app.post('/api/binance/order', async (req, res) => {
       params.timeInForce = timeInForce || 'GTC';
     }
 
-    const queryString = new URLSearchParams(params).toString();
-    const signature = createBinanceSignature(queryString, apiSecret);
+    const { fullQuery } = createBinanceSignedQuery(params, apiSecret);
     
     let orderUrl = '';
     if (marketType === 'FUTURES') {
       const baseUrl = getAuthoritativeBinanceFuturesApiBase(useTestnet);
-      orderUrl = `${baseUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+      orderUrl = `${baseUrl}/fapi/v1/order?${fullQuery}`;
     } else {
       const baseUrl = getAuthoritativeBinanceApiBase(useTestnet);
-      orderUrl = `${baseUrl}/api/v3/order?${queryString}&signature=${signature}`;
+      orderUrl = `${baseUrl}/api/v3/order?${fullQuery}`;
     }
 
     const controller = new AbortController();
@@ -2946,7 +2953,7 @@ app.post('/api/binance/order', async (req, res) => {
       method: 'POST',
       headers: {
         'X-MBX-APIKEY': apiKey,
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       signal: controller.signal,
     });
@@ -3013,17 +3020,16 @@ app.get('/api/binance/open-orders', async (req, res) => {
     }
 
     const symbol = (req.query.symbol as string)?.toUpperCase();
-    const timestamp = Date.now();
-    let query = `timestamp=${timestamp}&recvWindow=10000`;
-    if (symbol) query = `symbol=${symbol}&${query}`;
+    const params: Record<string, string> = {};
+    if (symbol) params.symbol = symbol;
 
-    const signature = createBinanceSignature(query, apiSecret);
+    const { fullQuery } = createBinanceSignedQuery(params, apiSecret);
     const isFutures = marketType === 'FUTURES';
     const baseUrl = isFutures ? getBinanceFuturesApiBase(useTestnet) : getBinanceApiBase(useTestnet);
     const endpoint = isFutures ? '/fapi/v1/openOrders' : '/api/v3/openOrders';
     
-    const response = await fetch(`${baseUrl}${endpoint}?${query}&signature=${signature}`, {
-      headers: { 'X-MBX-APIKEY': apiKey },
+    const response = await fetch(`${baseUrl}${endpoint}?${fullQuery}`, {
+      headers: { 'X-MBX-APIKEY': apiKey, 'Accept': 'application/json' },
     });
 
     const data = await response.json();
@@ -3049,15 +3055,14 @@ app.post('/api/binance/cancel-order', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
-    const query = `symbol=${symbol.toUpperCase()}&orderId=${orderId}&timestamp=${Date.now()}&recvWindow=10000`;
-    const signature = createBinanceSignature(query, apiSecret);
+    const { fullQuery } = createBinanceSignedQuery({ symbol: symbol.toUpperCase(), orderId }, apiSecret);
     const isFutures = marketType === 'FUTURES';
     const baseUrl = isFutures ? getBinanceFuturesApiBase(useTestnet) : getBinanceApiBase(useTestnet);
     const endpoint = isFutures ? '/fapi/v1/order' : '/api/v3/order';
 
-    const response = await fetch(`${baseUrl}${endpoint}?${query}&signature=${signature}`, {
+    const response = await fetch(`${baseUrl}${endpoint}?${fullQuery}`, {
       method: 'DELETE',
-      headers: { 'X-MBX-APIKEY': apiKey },
+      headers: { 'X-MBX-APIKEY': apiKey, 'Accept': 'application/json' },
     });
 
     const data = await response.json();
@@ -3076,7 +3081,7 @@ app.post('/api/binance/cancel-order', async (req, res) => {
  */
 app.get('/api/binance/futures/positions', async (req, res) => {
   try {
-    const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
+    const { apiKey, apiSecret, useTestnet } = await resolveBinanceAuth(req);
     const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
       rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
@@ -3091,13 +3096,11 @@ app.get('/api/binance/futures/positions', async (req, res) => {
       });
     }
 
-    const timestamp = Date.now();
-    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
-    const signature = createBinanceSignature(queryString, apiSecret);
+    const { fullQuery } = createBinanceSignedQuery({}, apiSecret);
     const baseUrl = getBinanceFuturesApiBase(useTestnet);
 
-    const posRes = await fetch(`${baseUrl}/fapi/v2/positionRisk?${queryString}&signature=${signature}`, {
-      headers: { 'X-MBX-APIKEY': apiKey, 'Content-Type': 'application/json' },
+    const posRes = await fetch(`${baseUrl}/fapi/v2/positionRisk?${fullQuery}`, {
+      headers: { 'X-MBX-APIKEY': apiKey, 'Accept': 'application/json' },
     });
     const posData = await posRes.json().catch(() => []);
     if (!posRes.ok || !Array.isArray(posData)) {
@@ -3267,26 +3270,22 @@ app.post('/api/binance/futures/test-order', async (req, res) => {
     }
 
     const { symbol = 'BTCUSDT', side = 'BUY', quantity = '0.002', type = 'MARKET' } = req.body;
-    const timestamp = Date.now();
     const params: Record<string, string> = {
       symbol: symbol.toUpperCase(),
       side: side.toUpperCase(),
       type: type.toUpperCase(),
       quantity: String(quantity),
-      timestamp: timestamp.toString(),
-      recvWindow: '10000',
     };
 
-    const queryString = new URLSearchParams(params).toString();
-    const signature = createBinanceSignature(queryString, apiSecret);
+    const { fullQuery } = createBinanceSignedQuery(params, apiSecret);
     const baseUrl = getBinanceFuturesApiBase(useTestnet);
 
     // Binance Futures order test endpoint validates syntax and permissions without creating order
-    const response = await fetch(`${baseUrl}/fapi/v1/order/test?${queryString}&signature=${signature}`, {
+    const response = await fetch(`${baseUrl}/fapi/v1/order/test?${fullQuery}`, {
       method: 'POST',
       headers: {
         'X-MBX-APIKEY': apiKey,
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 

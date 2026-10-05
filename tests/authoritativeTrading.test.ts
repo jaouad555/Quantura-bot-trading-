@@ -128,9 +128,34 @@ async function runAllTests() {
       'Imported position has correct symbol, side, quantity, and entry price');
 
     // -------------------------------------------------------------
+    // TEST 3B: Spot Testnet Reconciliation & Zero Balance Cleaning
+    // -------------------------------------------------------------
+    await kv.set('app_binance_market_type', 'SPOT');
+    await kv.set('btc_active_bot_positions', JSON.stringify([
+      { id: 'spot-stale-eth', symbol: 'ETHUSDT', marketType: 'SPOT', mode: 'BINANCE_TESTNET', quantity: 1, entryPrice: 3000, leverage: 1 },
+    ]));
+
+    // Binance Spot balances without ETH (ETH balance is 0 on Binance)
+    const mockBinanceSpotBalances = [
+      { asset: 'USDT', free: '10000.00', locked: '0.00' },
+    ];
+
+    const spotRecon = await reconcilePositionsWithBinance({
+      customBinanceSpotBalances: mockBinanceSpotBalances,
+    });
+    assert(spotRecon.success === true, 'Spot Testnet reconciliation completes successfully');
+    assert(spotRecon.closedCount >= 1, 'Spot internal position with 0 balance on Binance is removed and moved to history');
+    const remainingSpotPos = spotRecon.activePositions.filter((p: any) => p.symbol === 'ETHUSDT' && p.mode === 'BINANCE_TESTNET');
+    assert(remainingSpotPos.length === 0, 'ETHUSDT stale position is completely removed from active positions');
+
+    // -------------------------------------------------------------
     // TEST 4: Local position exists but Binance doesn't -> Stale position removed
     // -------------------------------------------------------------
-    // Local state has BTCUSDT and ETHUSDT, but Binance now only reports empty positions
+    // Local state has BTCUSDT, but Binance now only reports empty positions
+    await kv.set('app_binance_market_type', 'FUTURES');
+    await kv.set('btc_active_bot_positions', JSON.stringify([
+      { id: 'binance-futures-BTCUSDT-BINANCE_TESTNET', symbol: 'BTCUSDT', marketType: 'FUTURES', mode: 'BINANCE_TESTNET', quantity: 0.05, entryPrice: 62500, leverage: 10, isManaged: false },
+    ]));
     const emptyBinancePositions: any[] = [];
     const reconClose = await reconcilePositionsWithBinance({
       customBinancePositions: emptyBinancePositions,
@@ -222,6 +247,8 @@ async function runAllTests() {
     // -------------------------------------------------------------
     console.log('\n--- SUITE 6: RESTART CONSISTENCY & IDEMPOTENCY ---');
     await stopBotAuthoritative('Testing restart with bot OFF');
+    await kv.set('trading_execution_mode', 'PAPER');
+    await kv.set('app_execution_mode', 'PAPER');
     const ordersBeforeRestart = (await kv.get('btc_trade_history')) || '[]';
     
     // Simulate startup sequence

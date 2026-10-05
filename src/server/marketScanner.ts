@@ -577,7 +577,7 @@ async function processTradingSignal(
           wallet.realizedPnl = typeof wallet.realizedPnl === 'number' && !isNaN(wallet.realizedPnl) ? wallet.realizedPnl : 0;
 
           // In-Trade margin for this specific market type
-          const marketPositions = currentModePositions.filter((p: any) => (p.marketType || 'FUTURES') === effectiveMarketType);
+          const marketPositions = currentModePositions.filter((p: any) => (p.marketType || 'SPOT') === effectiveMarketType);
           let marketInTradeMargin = 0;
           marketPositions.forEach((p: any) => {
             marketInTradeMargin += (typeof p.remainingAmountUsdt === 'number' ? p.remainingAmountUsdt : (p.marginUsdt || p.initialAmountUsdt || 0));
