@@ -1976,7 +1976,7 @@ export const startBotEngine = () => {
         if (posMode !== mode) continue; 
 
         // Skip unmanaged positions (e.g. newly imported spot assets)
-        if (pos.isManaged === false) continue;
+        if (pos.isManaged !== true) continue;
 
         // --- STRICT MARKET TYPE SEPARATION ---
         // If the active bot is in SPOT mode, completely disable and ignore FUTURES positions.
