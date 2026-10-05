@@ -501,9 +501,13 @@ export const App: React.FC = () => {
     const currentMt = isSpot ? 'SPOT' : 'FUTURES';
 
     try {
-      const endpoint = isSpot 
-        ? `/api/binance/spot/positions?marketType=SPOT&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`
-        : `/api/binance/futures/positions?marketType=FUTURES&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`;
+      if (isSpot) {
+        // In Spot mode, active bot positions are already synchronized via /api/config/all from the server engine.
+        // Never import random Spot wallet holdings as active bot trades.
+        return;
+      }
+
+      const endpoint = `/api/binance/futures/positions?marketType=FUTURES&useTestnet=${isTestnet ? 'true' : 'false'}&executionMode=${execMode}`;
       const res = await fetch(endpoint);
       if (!res.ok) return;
       
@@ -513,20 +517,16 @@ export const App: React.FC = () => {
       const rawPositions: any[] = data.positions;
 
       const realPositions: ActiveBotPosition[] = rawPositions.map((p: any) => {
-        const amt = parseFloat(p.positionAmt || '0');
-        const isLong = isSpot ? true : amt > 0;
+        const amt = parseFloat(p.positionAmt ?? p.quantity ?? p.remainingAmountBtc ?? '0');
+        const isLong = p.decision ? p.decision === 'LONG' : amt > 0;
         const entryPrice = parseFloat(p.entryPrice || '0') || (tickerRef.current?.price || 1);
-        const markPrice = parseFloat(p.markPrice || '0') || (tickerRef.current?.price || entryPrice);
+        const markPrice = parseFloat(p.markPrice || p.currentPrice || '0') || (tickerRef.current?.price || entryPrice);
         const qty = Math.abs(amt);
-        const lev = isSpot ? 1 : (parseInt(p.leverage || '10') || 10);
-        const margin = isSpot 
-          ? (qty * markPrice)
-          : (parseFloat(p.isolatedMargin || p.positionInitialMargin || '0') || ((qty * entryPrice) / lev));
+        const lev = parseInt(p.leverage || '10') || 10;
+        const margin = parseFloat(p.isolatedMargin || p.positionInitialMargin || p.marginUsdt || '0') || ((qty * entryPrice) / lev);
         const notional = Math.round(qty * markPrice * 100) / 100;
-        const unRealizedPnl = isSpot 
-          ? Math.round((markPrice - entryPrice) * qty * 100) / 100 
-          : Math.round((parseFloat(p.unRealizedProfit || '0')) * 100) / 100;
-        const liqPrice = isSpot ? 0 : parseFloat(p.liquidationPrice || '0');
+        const unRealizedPnl = Math.round((parseFloat(p.unRealizedProfit ?? p.unrealizedPnlUsdt ?? '0')) * 100) / 100;
+        const liqPrice = parseFloat(p.liquidationPrice || '0');
 
         const defaultSl = isLong ? entryPrice * 0.95 : entryPrice * 1.05;
         const defaultTp1 = isLong ? entryPrice * 1.05 : entryPrice * 0.95;

@@ -33,6 +33,23 @@ function assert(condition: boolean, testName: string, extra?: string) {
 }
 
 async function runAllTests() {
+  const backupKeys = [
+    'btc_bot_config',
+    'quantura_active_strategies',
+    'btc_active_bot_positions',
+    'btc_trade_history',
+    'trading_execution_mode',
+    'app_execution_mode',
+    'app_binance_market_type',
+    'app_binance_use_testnet',
+    'app_binance_api_key',
+    'app_binance_api_secret',
+  ];
+  const initialKvBackup: Record<string, string | null> = {};
+  for (const k of backupKeys) {
+    initialKvBackup[k] = await kv.get(k);
+  }
+
   try {
     // -------------------------------------------------------------
     // TEST 1: Bot OFF -> No order possible
@@ -324,6 +341,17 @@ async function runAllTests() {
     console.log('\n================================================================');
     console.log(`📊 FINAL RESULTS: ${passedTests}/${totalTests} TESTS PASSED (${Math.round((passedTests / totalTests) * 100)}%)`);
     console.log('================================================================\n');
+
+    // Restore original KV state before exiting
+    await stopBotAuthoritative('Test cleanup');
+    for (const k of backupKeys) {
+      const val = initialKvBackup[k];
+      if (val !== null && val !== undefined) {
+        await kv.set(k, val);
+      } else {
+        await kv.delete(k);
+      }
+    }
 
     if (passedTests === totalTests) {
       process.exit(0);

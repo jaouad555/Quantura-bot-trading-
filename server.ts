@@ -3076,26 +3076,47 @@ app.post('/api/binance/cancel-order', async (req, res) => {
  */
 app.get('/api/binance/futures/positions', async (req, res) => {
   try {
+    const { apiKey, apiSecret, useTestnet, marketType } = await resolveBinanceAuth(req);
     const rawMode = (req.query.executionMode as string) || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
       rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
 
-    if (executionMode !== 'PAPER') {
-      await reconcilePositionsWithBinance();
+    if (executionMode === 'PAPER' || !apiKey || !apiSecret) {
+      return res.json({
+        success: true,
+        activePositionsCount: 0,
+        positions: [],
+        allPositions: [],
+        executionMode,
+      });
     }
 
-    const posStr = await kv.get('btc_active_bot_positions');
-    const allPositions: any[] = posStr ? JSON.parse(posStr) : [];
-    const futuresPositions = allPositions.filter(p => (p.marketType || 'SPOT') === 'FUTURES' && (p.mode || 'PAPER') === executionMode);
-    const status = getReconciliationStatus();
+    const timestamp = Date.now();
+    const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+    const signature = createBinanceSignature(queryString, apiSecret);
+    const baseUrl = getBinanceFuturesApiBase(useTestnet);
+
+    const posRes = await fetch(`${baseUrl}/fapi/v2/positionRisk?${queryString}&signature=${signature}`, {
+      headers: { 'X-MBX-APIKEY': apiKey, 'Content-Type': 'application/json' },
+    });
+    const posData = await posRes.json().catch(() => []);
+    if (!posRes.ok || !Array.isArray(posData)) {
+      return res.json({
+        success: false,
+        activePositionsCount: 0,
+        positions: [],
+        allPositions: [],
+        error: posData?.msg || 'Failed to fetch Futures positions',
+      });
+    }
+
+    const activePositions = posData.filter((p: any) => p && parseFloat(p.positionAmt || '0') !== 0);
 
     return res.json({
       success: true,
-      activePositionsCount: futuresPositions.length,
-      positions: futuresPositions,
-      allPositions: futuresPositions,
-      syncing: status.isSyncing,
-      lastSyncTime: status.lastSyncTime,
+      activePositionsCount: activePositions.length,
+      positions: activePositions,
+      allPositions: posData,
       executionMode,
     });
   } catch (error: any) {

@@ -848,34 +848,9 @@ export async function reconcilePositionsWithBinance(options?: {
             lastSyncedAt: Date.now(),
           });
           updatedCount++;
-        } else {
-          const stableId = `binance-spot-${sym}-${auth.executionMode}`;
-          console.log(`[RECONCILIATION] IMPORTING Spot asset holding ${sym} (${totalQty}) from Binance.`);
-          reconciledCurrent.push({
-            id: stableId,
-            symbol: sym,
-            side: 'LONG',
-            decision: 'LONG',
-            entryPrice,
-            currentPrice: currentP,
-            quantity: totalQty,
-            remainingAmountBtc: totalQty,
-            initialAmountUsdt: Math.round(totalQty * entryPrice * 100) / 100,
-            remainingAmountUsdt: Math.round(totalQty * entryPrice * 100) / 100,
-            marginUsdt: Math.round(totalQty * entryPrice * 100) / 100,
-            positionSizeUsdt: Math.round(totalQty * entryPrice * 100) / 100,
-            leverage: 1,
-            unrealizedPnlUsdt: Math.round(unrealizedPnl * 100) / 100,
-            marketType: 'SPOT',
-            mode: auth.executionMode,
-            source: 'BINANCE_RECONCILED',
-            openedAt: existingLocal?.openedAt || Date.now(),
-            strategyName: 'Spot Asset Holding',
-            isManaged: false,
-            lastSyncedAt: Date.now(),
-          });
-          importedCount++;
         }
+        // Do NOT auto-import random Spot wallet balances as active bot trades!
+        // Spot wallet assets (like Testnet faucet balances or long-term holdings) are not bot positions unless opened by the bot.
       }
 
       // Check local Spot positions whose balance is now zero on Binance
