@@ -675,9 +675,10 @@ export async function reconcilePositionsWithBinance(options?: {
           updatedCount++;
         } else {
           // CRITICAL: POSITION EXISTS ON BINANCE BUT NOT IN QUANTURA -> IMPORT IT!
+          const stableId = `binance-futures-${sym}-${auth.executionMode}`;
           console.log(`[RECONCILIATION] IMPORTING position for ${sym} (${side} ${qty}) from Binance Futures.`);
           reconciledCurrent.push({
-            id: `binance-futures-${sym}-${Date.now()}`,
+            id: stableId,
             symbol: sym,
             side,
             decision: side,
@@ -695,7 +696,7 @@ export async function reconcilePositionsWithBinance(options?: {
             marketType: 'FUTURES',
             mode: auth.executionMode,
             source: 'BINANCE_RECONCILED',
-            openedAt: Date.now(),
+            openedAt: existingLocal?.openedAt || Date.now(),
             strategyName: 'Binance Exchange Position',
             lastSyncedAt: Date.now(),
           });
@@ -715,25 +716,28 @@ export async function reconcilePositionsWithBinance(options?: {
           const history = histStr ? JSON.parse(histStr) : [];
           const exitPrice = lp.currentPrice || lp.entryPrice;
           const pnl = lp.unrealizedPnlUsdt || 0;
-          const historyItem = {
-            id: `hist-reconciled-${Date.now()}-${sym}`,
-            posId: lp.id,
-            symbol: sym,
-            decision: lp.decision || lp.side || 'LONG',
-            entryPrice: lp.entryPrice,
-            exitPrice,
-            quantity: lp.quantity,
-            profitUsdt: pnl,
-            profitPercent: lp.initialAmountUsdt > 0 ? (pnl / lp.initialAmountUsdt) * 100 : 0,
-            status: pnl >= 0 ? 'CLOSED_ON_EXCHANGE_WIN' : 'CLOSED_ON_EXCHANGE_LOSS',
-            timestamp: lp.openedAt || Date.now() - 3600000,
-            closedAt: Date.now(),
-            marketType: 'FUTURES',
-            mode: auth.executionMode,
-            strategyName: lp.strategyName || 'Binance Trade',
-          };
-          history.unshift(historyItem);
-          await kv.set('btc_trade_history', JSON.stringify(history.slice(0, 500)));
+          const histId = `hist-reconciled-${sym}-${lp.openedAt || Date.now()}`;
+          if (!history.some((h: any) => h.id === histId || (h.posId === lp.id && Math.abs((h.closedAt || 0) - Date.now()) < 60000))) {
+            const historyItem = {
+              id: histId,
+              posId: lp.id,
+              symbol: sym,
+              decision: lp.decision || lp.side || 'LONG',
+              entryPrice: lp.entryPrice,
+              exitPrice,
+              quantity: lp.quantity,
+              profitUsdt: pnl,
+              profitPercent: lp.initialAmountUsdt > 0 ? (pnl / lp.initialAmountUsdt) * 100 : 0,
+              status: pnl >= 0 ? 'CLOSED_ON_EXCHANGE_WIN' : 'CLOSED_ON_EXCHANGE_LOSS',
+              timestamp: lp.openedAt || Date.now() - 3600000,
+              closedAt: Date.now(),
+              marketType: 'FUTURES',
+              mode: auth.executionMode,
+              strategyName: lp.strategyName || 'Binance Trade',
+            };
+            history.unshift(historyItem);
+            await kv.set('btc_trade_history', JSON.stringify(history.slice(0, 500)));
+          }
         }
       }
 
@@ -842,9 +846,10 @@ export async function reconcilePositionsWithBinance(options?: {
           });
           updatedCount++;
         } else {
+          const stableId = `binance-spot-${sym}-${auth.executionMode}`;
           console.log(`[RECONCILIATION] IMPORTING Spot asset holding ${sym} (${totalQty}) from Binance.`);
           reconciledCurrent.push({
-            id: `binance-spot-${sym}-${Date.now()}`,
+            id: stableId,
             symbol: sym,
             side: 'LONG',
             decision: 'LONG',
@@ -861,7 +866,7 @@ export async function reconcilePositionsWithBinance(options?: {
             marketType: 'SPOT',
             mode: auth.executionMode,
             source: 'BINANCE_RECONCILED',
-            openedAt: Date.now(),
+            openedAt: existingLocal?.openedAt || Date.now(),
             strategyName: 'Spot Asset Holding',
             lastSyncedAt: Date.now(),
           });
@@ -880,25 +885,28 @@ export async function reconcilePositionsWithBinance(options?: {
           const history = histStr ? JSON.parse(histStr) : [];
           const exitPrice = lp.currentPrice || lp.entryPrice;
           const pnl = lp.unrealizedPnlUsdt || 0;
-          const historyItem = {
-            id: `hist-reconciled-spot-${Date.now()}-${lp.symbol}`,
-            posId: lp.id,
-            symbol: lp.symbol,
-            decision: 'LONG',
-            entryPrice: lp.entryPrice,
-            exitPrice,
-            quantity: lp.quantity,
-            profitUsdt: pnl,
-            profitPercent: lp.initialAmountUsdt > 0 ? (pnl / lp.initialAmountUsdt) * 100 : 0,
-            status: pnl >= 0 ? 'CLOSED_ON_EXCHANGE_WIN' : 'CLOSED_ON_EXCHANGE_LOSS',
-            timestamp: lp.openedAt || Date.now() - 3600000,
-            closedAt: Date.now(),
-            marketType: 'SPOT',
-            mode: auth.executionMode,
-            strategyName: lp.strategyName || 'Binance Spot Trade',
-          };
-          history.unshift(historyItem);
-          await kv.set('btc_trade_history', JSON.stringify(history.slice(0, 500)));
+          const histId = `hist-reconciled-spot-${lp.symbol}-${lp.openedAt || Date.now()}`;
+          if (!history.some((h: any) => h.id === histId || (h.posId === lp.id && Math.abs((h.closedAt || 0) - Date.now()) < 60000))) {
+            const historyItem = {
+              id: histId,
+              posId: lp.id,
+              symbol: lp.symbol,
+              decision: 'LONG',
+              entryPrice: lp.entryPrice,
+              exitPrice,
+              quantity: lp.quantity,
+              profitUsdt: pnl,
+              profitPercent: lp.initialAmountUsdt > 0 ? (pnl / lp.initialAmountUsdt) * 100 : 0,
+              status: pnl >= 0 ? 'CLOSED_ON_EXCHANGE_WIN' : 'CLOSED_ON_EXCHANGE_LOSS',
+              timestamp: lp.openedAt || Date.now() - 3600000,
+              closedAt: Date.now(),
+              marketType: 'SPOT',
+              mode: auth.executionMode,
+              strategyName: lp.strategyName || 'Binance Spot Trade',
+            };
+            history.unshift(historyItem);
+            await kv.set('btc_trade_history', JSON.stringify(history.slice(0, 500)));
+          }
         }
       }
 

@@ -533,9 +533,9 @@ export const App: React.FC = () => {
         const defaultTp2 = isLong ? entryPrice * 1.10 : entryPrice * 0.90;
         const defaultTp3 = isLong ? entryPrice * 1.15 : entryPrice * 0.85;
 
-        const posUniqueKey = p.openedAt || p.updateTime || (p.entryPrice ? Math.round(Number(p.entryPrice) * 100) : '') || Date.now();
+        const posStableKey = `${p.symbol.toUpperCase()}-${currentMt}-${execMode}`;
         return {
-          id: p.id || `binance-pos-${p.symbol.toUpperCase()}-${execMode}-${posUniqueKey}`,
+          id: p.id || `binance-pos-${posStableKey}`,
           symbol: p.symbol.toUpperCase(),
           decision: isLong ? 'LONG' : 'SHORT',
           entryPrice,
@@ -577,7 +577,7 @@ export const App: React.FC = () => {
 
         // Update live price / PnL for existing positions from real exchange data
         const updatedExisting = currentModeExisting.map(existing => {
-          const fresh = realPositions.find(rp => rp.symbol.toUpperCase() === existing.symbol.toUpperCase());
+          const fresh = realPositions.find(rp => rp.symbol.toUpperCase() === existing.symbol.toUpperCase() && (rp.marketType || 'SPOT') === (existing.marketType || 'SPOT'));
           if (fresh) {
             return {
               ...existing,
@@ -590,16 +590,26 @@ export const App: React.FC = () => {
               pnlHistory: [...(existing.pnlHistory || []), fresh.unrealizedPnlUsdt].slice(-20),
             };
           }
-          // If not in fresh, but opened recently (< 45s) or in Spot, keep it to avoid flicker
           return existing;
         });
 
         // Add any external Binance positions that weren't in currentModeExisting
         const newExternalPositions = realPositions.filter(rp =>
-          !currentModeExisting.some(ex => ex.symbol.toUpperCase() === rp.symbol.toUpperCase())
+          !currentModeExisting.some(ex => ex.symbol.toUpperCase() === rp.symbol.toUpperCase() && (ex.marketType || 'SPOT') === (rp.marketType || 'SPOT'))
         );
 
-        return [...updatedExisting, ...newExternalPositions, ...otherModes];
+        // Deduplicate final result strictly by symbol + marketType + mode
+        const combined = [...updatedExisting, ...newExternalPositions, ...otherModes];
+        const seenKeys = new Set<string>();
+        const deduped: ActiveBotPosition[] = [];
+        for (const pos of combined) {
+          const key = `${pos.symbol.toUpperCase()}_${pos.marketType || 'SPOT'}_${pos.mode || 'PAPER'}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            deduped.push(pos);
+          }
+        }
+        return deduped;
       });
     } catch (e) {
       // Ignore background fetch aborts / network blips
@@ -2272,9 +2282,7 @@ export const App: React.FC = () => {
   const handleToggleBot = useCallback(() => {
     setBotConfig((prev) => {
       const nextEnabled = !prev.enabled;
-      const effectivePresets: StrategyId[] = prev.activePresets && prev.activePresets.length > 0
-        ? prev.activePresets
-        : ['MOMENTUM'];
+      const effectivePresets: StrategyId[] = Array.isArray(prev.activePresets) ? prev.activePresets : [];
 
       const currentExecMode = executionModeRef.current;
       // When manually turning ON the bot
@@ -2289,8 +2297,12 @@ export const App: React.FC = () => {
           price: tickerRef.current?.price || 0,
           amountUsdt: 0,
           reason: isAr
-            ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${effectivePresets.length} استراتيجية نشطة).`
-            : `Bot manually activated successfully (${effectivePresets.length} active strategies).`,
+            ? (effectivePresets.length > 0
+                ? `تم تفعيل وتشغيل البوت يدوياً بنجاح (${effectivePresets.length} استراتيجية نشطة).`
+                : `تم تشغيل البوت بنجاح. تنبيه: لا توجد استراتيجيات مفعلة حالياً (يرجى تفعيل استراتيجية واحدة على الأقل لفتح الصفقات تلقائياً).`)
+            : (effectivePresets.length > 0
+                ? `Bot manually activated successfully (${effectivePresets.length} active strategies).`
+                : `Bot activated. Notice: No strategies currently selected. Select at least 1 strategy to open auto trades.`),
           mode: currentExecMode,
         };
         addBotLog(startLog);

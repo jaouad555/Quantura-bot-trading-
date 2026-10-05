@@ -378,19 +378,13 @@ class StrategyManager {
     const strat = this.getStrategy(strategyId);
 
     // Rule 1: Unknown or missing strategy
-    if (!strat) {
+    if (!strat || !strat.enabled) {
       const reason = 'STRATEGY_INACTIVE';
       await this.logAudit(
-        `[TRADE BLOCKED] ${symbol} ${side} Strategy: Unknown (${strategyId}) Reason: ${reason}`,
+        `[TRADE BLOCKED] ${symbol} ${side} Strategy: ${strat?.name || strategyId} Reason: ${reason}`,
         true
       );
       return { authorized: false, reason };
-    }
-
-    // Auto-enable strategy if in user active presets
-    if (!strat.enabled) {
-      strat.enabled = true;
-      strat.activatedAt = Date.now();
     }
 
     // Rule 3: Zero active strategies rule
