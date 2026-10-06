@@ -473,6 +473,7 @@ async function processTradingSignal(
       ? (kvMt as 'SPOT' | 'FUTURES') 
       : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
 
+    const executionClientId = `quantura_${symUpper}_${Date.now()}`;
     const guard = await canSubmitOrder({
       isManual: false,
       isReduceOnly: false,
@@ -481,6 +482,7 @@ async function processTradingSignal(
       marketType: effectiveMarketType,
       executionMode: mode,
       strategyId: signal.strategyId,
+      clientOrderId: executionClientId,
     });
     if (!guard.allowed) {
       console.log(`[TRADE BLOCKED BY GUARD] ${symUpper} ${signal.decision} - ${guard.reason}`);
@@ -671,7 +673,7 @@ async function processTradingSignal(
     // CRITICAL GATE 3: QUANTURA RISK MANAGEMENT ENGINE EVALUATION (Zero-Bypass Gateway)
     const riskEngine = RiskEngine.getInstance();
     const riskProposal = {
-      clientOrderId: `scan-pos-${Date.now()}-${symbol}`,
+      clientOrderId: executionClientId,
       symbol: symbol.toUpperCase(),
       side: (signal.decision === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT',
       entryPrice: currentPrice,
@@ -727,7 +729,7 @@ async function processTradingSignal(
     let binanceOrderId = null;
     if (isExchangeMode) {
       const orderSide = isLong ? 'BUY' : 'SELL';
-      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false, safeSl, safeTp1, isFutures ? 'FUTURES' : 'SPOT');
+      const orderRes = await serverExecuteOrder(symbol, orderSide, margin, quantity, currentPrice, lev, false, safeSl, safeTp1, isFutures ? 'FUTURES' : 'SPOT', executionClientId);
       if (!orderRes.success || !orderRes.orderId) {
         console.error(`[EXECUTION] ${symbol} ${mode} ORDER FAILED:`, orderRes.error);
         const errorMsg = orderRes.error || 'Unknown Binance Error';

@@ -156,12 +156,30 @@ export class PositionSizer {
       );
     }
 
-    // Check available balance
+    // Check available balance and clamp safely to available balance if needed
     if (marginRequiredUsdt > availableBalance) {
-      return this.createInvalidResult(
-        `Insufficient available balance. Required margin: $${marginRequiredUsdt.toFixed(2)}, Available: $${availableBalance.toFixed(2)}.`
-      );
+      const maxPossibleMargin = Math.max(0, availableBalance * 0.99);
+      const maxPossibleNotional = isFutures ? maxPossibleMargin * effectiveLeverage : maxPossibleMargin;
+      if (maxPossibleNotional >= rules.minNotional) {
+        const clampedQty = this.roundDownToStep(maxPossibleNotional / entryPrice, rules.stepSize);
+        if (clampedQty >= rules.minQty) {
+          recommendedQuantity = clampedQty;
+        } else {
+          return this.createInvalidResult(
+            `Insufficient available balance. Required margin: $${marginRequiredUsdt.toFixed(2)}, Available: $${availableBalance.toFixed(2)}.`
+          );
+        }
+      } else {
+        return this.createInvalidResult(
+          `Insufficient available balance. Required margin: $${marginRequiredUsdt.toFixed(2)}, Available: $${availableBalance.toFixed(2)}.`
+        );
+      }
     }
+
+    // Recompute actual notional and margin after any clamping
+    const finalNotionalUsdt = recommendedQuantity * entryPrice;
+    const finalMarginRequiredUsdt = isFutures ? finalNotionalUsdt / effectiveLeverage : finalNotionalUsdt;
+    const finalRiskAmountUsdt = recommendedQuantity * riskPerUnit;
 
     // 7. Liquidation Price Calculation (Isolated Margin Futures)
     let liquidationPrice: number | undefined;
@@ -191,15 +209,15 @@ export class PositionSizer {
 
     // 8. Cost and Fee Estimation
     const takerFeeRate = rules.takerFeeRate;
-    const estimatedEntryFeeUsdt = notionalValueUsdt * takerFeeRate;
-    const estimatedExitFeeUsdt = notionalValueUsdt * takerFeeRate;
+    const estimatedEntryFeeUsdt = finalNotionalUsdt * takerFeeRate;
+    const estimatedExitFeeUsdt = finalNotionalUsdt * takerFeeRate;
     const totalEstimatedFeesUsdt = estimatedEntryFeeUsdt + estimatedExitFeeUsdt;
 
     // Estimated Slippage (0.05% baseline to 0.2%)
-    const estimatedSlippagePercent = Math.min(0.3, Math.max(0.02, (notionalValueUsdt / 100000) * 0.1));
-    const estimatedSlippageCostUsdt = notionalValueUsdt * (estimatedSlippagePercent / 100);
+    const estimatedSlippagePercent = Math.min(0.3, Math.max(0.02, (finalNotionalUsdt / 100000) * 0.1));
+    const estimatedSlippageCostUsdt = finalNotionalUsdt * (estimatedSlippagePercent / 100);
 
-    const estimatedLossAtStopLossUsdt = actualRiskAmountUsdt + totalEstimatedFeesUsdt + estimatedSlippageCostUsdt;
+    const estimatedLossAtStopLossUsdt = finalRiskAmountUsdt + totalEstimatedFeesUsdt + estimatedSlippageCostUsdt;
 
     // 9. Risk / Reward Calculation
     const targetPrice = proposal.takeProfit?.tp1 || (isLong ? entryPrice + (riskPerUnit * 2) : entryPrice - (riskPerUnit * 2));
@@ -214,10 +232,10 @@ export class PositionSizer {
     return {
       recommendedQuantity,
       maxSafeQuantity: recommendedQuantity,
-      riskAmountUsdt: Number(actualRiskAmountUsdt.toFixed(2)),
-      actualRiskPercent: Number(((actualRiskAmountUsdt / accountEquity) * 100).toFixed(3)),
-      notionalValueUsdt: Number(notionalValueUsdt.toFixed(2)),
-      marginRequiredUsdt: Number(marginRequiredUsdt.toFixed(2)),
+      riskAmountUsdt: Number(finalRiskAmountUsdt.toFixed(2)),
+      actualRiskPercent: Number(((finalRiskAmountUsdt / accountEquity) * 100).toFixed(3)),
+      notionalValueUsdt: Number(finalNotionalUsdt.toFixed(2)),
+      marginRequiredUsdt: Number(finalMarginRequiredUsdt.toFixed(2)),
       effectiveLeverage,
       liquidationPrice: liquidationPrice ? Number(liquidationPrice.toFixed(2)) : undefined,
       distanceToLiquidationPercent: distanceToLiquidationPercent ? Number(distanceToLiquidationPercent.toFixed(2)) : undefined,

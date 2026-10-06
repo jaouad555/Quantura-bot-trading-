@@ -1458,7 +1458,8 @@ export const serverExecuteOrder = async (
   reduceOnly: boolean = false,
   stopLossPrice?: number,
   takeProfitPrice?: number,
-  marketTypeParam?: 'SPOT' | 'FUTURES'
+  marketTypeParam?: 'SPOT' | 'FUTURES',
+  clientOrderId?: string
 ) => {
     const config = await getBinanceConfig();
     if (!config.isConnected) {
@@ -1483,6 +1484,7 @@ export const serverExecuteOrder = async (
           side,
           marketType: effectiveMt,
           executionMode: effectiveMode,
+          clientOrderId,
         });
 
         if (!guardResult.allowed) {

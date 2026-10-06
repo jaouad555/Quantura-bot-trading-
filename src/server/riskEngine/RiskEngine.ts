@@ -399,7 +399,12 @@ export class RiskEngine {
       currentPrice: entryPrice,
       timestamp: proposal.timestamp || Date.now(),
     };
-    const estimatedNotional = (accountEquity * (this.config.riskPerTradePercent / 100) / slDistance) * entryPrice;
+    const rawEstimatedNotional = proposal.quantity && proposal.quantity > 0
+      ? proposal.quantity * entryPrice
+      : (marketType === 'SPOT' 
+          ? Math.min(accountEquity * 0.25, availableBalance) 
+          : Math.min(accountEquity * 0.25 * (proposal.leverage || 1), availableBalance * (proposal.leverage || 1)));
+    const estimatedNotional = Math.max(10, rawEstimatedNotional);
     const marketEval = MarketProtection.evaluateMarket(marketInput, estimatedNotional, this.config);
     if (!marketEval.isValid) {
       return reject(marketEval.reasonCode!, marketEval.message!, 80, 'HIGH', {

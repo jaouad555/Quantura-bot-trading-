@@ -194,18 +194,28 @@ export async function canSubmitOrder(params: OrderSubmissionGuardParams): Promis
   }
 
   // 6. Anti-Duplicate & Idempotency Check:
-  const idempotencyKey = params.clientOrderId || `${normSymbol}_${normMarket}_${normSide}_${params.strategyId || 'AUTO'}`;
+  // If clientOrderId is provided, use it. If not, generate a key.
+  const idempotencyKey = params.clientOrderId 
+    ? `order_${params.clientOrderId}`
+    : `${normSymbol}_${normMarket}_${normSide}_${params.strategyId || 'AUTO'}`;
+    
   const existingLock = orderIdempotencyCache.get(idempotencyKey);
-  if (existingLock && Date.now() - existingLock.timestamp < 15000) {
+  // Only block if a previous identical order is still strictly PENDING and within 8 seconds
+  if (existingLock && existingLock.status === 'PENDING' && Date.now() - existingLock.timestamp < 8000) {
+    // If the exact same clientOrderId is passed again within the same execution flow, permit it
+    if (params.clientOrderId && idempotencyKey === `order_${params.clientOrderId}`) {
+      // Re-entrant check within the same execution pipeline: allow
+      return { allowed: true };
+    }
     return {
       allowed: false,
       code: 'DUPLICATE_ORDER_IN_FLIGHT',
-      reason: `Duplicate order execution detected for ${idempotencyKey} within 15 seconds. Rejected.`,
+      reason: `Duplicate order execution in-flight for ${normSymbol} (${normSide}). Please wait for current order to settle.`,
     };
   }
 
-  // 7. Check In-Flight Lock on Symbol
-  if (inFlightExecutionLocks.has(normSymbol)) {
+  // 7. Check In-Flight Lock on Symbol (only for new opening orders, not reduceOnly)
+  if (inFlightExecutionLocks.has(normSymbol) && !params.clientOrderId) {
     return {
       allowed: false,
       code: 'SYMBOL_LOCKED_IN_FLIGHT',

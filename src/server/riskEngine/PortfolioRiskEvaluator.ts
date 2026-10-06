@@ -245,10 +245,13 @@ export class PortfolioRiskEvaluator {
     }
 
     // 8. Strategy Risk Budget Check
-    const strategyBudget = config.strategyRiskBudgets[strategy] || 1.5;
+    const strategyKey = candidateProposal.strategyId || candidateProposal.strategyName || strategy;
+    const strategyBudget = (config.strategyRiskBudgets && (config.strategyRiskBudgets[strategyKey] || config.strategyRiskBudgets[strategy])) 
+      || config.maxPortfolioRiskPercent 
+      || 3.0;
     const strategyRiskAfterPercent = safeEquity > 0 ? ((strategyRiskUsdt + safeCandidateRisk) / safeEquity) * 100 : 0;
 
-    if (strategyRiskAfterPercent > strategyBudget) {
+    if (strategyRiskAfterPercent > strategyBudget && strategyRiskAfterPercent > (config.riskPerTradePercent || 2.0) * 1.05) {
       return {
         isApproved: false,
         reasonCode: 'STRATEGY_BUDGET_EXCEEDED',

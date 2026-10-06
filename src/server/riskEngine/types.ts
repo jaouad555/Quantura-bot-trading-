@@ -124,10 +124,12 @@ export interface TradeProposal {
   leverage?: number;
   marginMode?: 'ISOLATED' | 'CROSS';
   timeframe?: string;
+  strategyId?: string;
   strategyName?: string;
   signalConfidence?: number;
   requestedMarginUsdt?: number;
   requestedQuantity?: number;
+  quantity?: number;
   timestamp?: number;
   
   // Real-time market context provided for validation

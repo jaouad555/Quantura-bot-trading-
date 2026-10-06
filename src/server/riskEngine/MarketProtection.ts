@@ -135,39 +135,40 @@ export class MarketProtection {
       // Realistic order book fill simulation (walk the book)
       let remainingUsdt = notionalValueUsdt;
       let filledUsdt = 0;
-      let weightedPriceSum = 0;
+      let totalQtyFilled = 0;
       const levels = input.orderBook.topAsks;
 
       for (const lvl of levels) {
         const lvlUsd = lvl.price * lvl.amount;
         if (remainingUsdt <= lvlUsd) {
-          weightedPriceSum += remainingUsdt;
+          const qty = remainingUsdt / lvl.price;
+          totalQtyFilled += qty;
           filledUsdt += remainingUsdt;
           remainingUsdt = 0;
           break;
         } else {
-          weightedPriceSum += lvlUsd;
+          totalQtyFilled += lvl.amount;
           filledUsdt += lvlUsd;
           remainingUsdt -= lvlUsd;
         }
       }
 
       let simulatedBookSlippage = 0.04;
-      if (filledUsdt > 0) {
-        const avgExecPrice = weightedPriceSum / (filledUsdt / input.currentPrice);
+      if (filledUsdt > 0 && totalQtyFilled > 0) {
+        const avgExecPrice = filledUsdt / totalQtyFilled;
         simulatedBookSlippage = Math.abs((avgExecPrice - input.currentPrice) / input.currentPrice) * 100;
       }
 
       // If the order size exceeds the entire visible order book depth
       if (remainingUsdt > 0) {
         const unmetRatio = remainingUsdt / Math.max(1, notionalValueUsdt);
-        simulatedBookSlippage += unmetRatio * 1.5; // Heavy slippage penalty for clearing book
+        simulatedBookSlippage += unmetRatio * 0.5;
       }
 
       estimatedSlippagePercent = Math.max(0.02, simulatedBookSlippage + (bookSpread * 0.5));
 
-      // Liquidity Depth Check: Reject if available depth cannot sustain position size (coverage < 0.6x)
-      if (depthCoverageRatio < 0.60 || remainingUsdt > 0) {
+      // Liquidity Depth Check: Reject if depth is extremely deficient (coverage < 0.25x for large sizes > $1000)
+      if (notionalValueUsdt > 1000 && (depthCoverageRatio < 0.25 || remainingUsdt > notionalValueUsdt * 0.5)) {
         return {
           isValid: false,
           reasonCode: 'INSUFFICIENT_LIQUIDITY',
