@@ -134,12 +134,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const isEn = language === 'en';
   const isFrench = language === 'fr';
 
-  // Find active position for this specific symbol
+  // Find active position for this specific symbol and marketType
   const activePosition = useMemo(() => {
     return activeBotPositions.find(
-      (p) => p.symbol.toLowerCase() === symbol.toLowerCase()
+      (p) => p.symbol.toLowerCase() === symbol.toLowerCase() && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (marketType || 'SPOT')
     );
-  }, [activeBotPositions, symbol]);
+  }, [activeBotPositions, symbol, marketType]);
 
   // Derived indicator calculations
   const rsiValue = useMemo(() => calculateRSI(klines, 14), [klines]);

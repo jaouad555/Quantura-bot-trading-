@@ -58,7 +58,9 @@ class BinanceWebSocketManager {
     this.connectTimeoutTimer = setTimeout(() => {
       if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
         try {
-          this.ws.close();
+          const s = this.ws;
+          s.onerror = () => {};
+          s.close();
         } catch (_) {}
       }
     }, 4000);
@@ -347,16 +349,24 @@ class BinanceWebSocketManager {
     }
     this.stopHeartbeat();
     if (this.ws) {
+      const oldWs = this.ws;
+      this.ws = null;
       try {
-        this.ws.onopen = null;
-        this.ws.onmessage = null;
-        this.ws.onerror = null;
-        this.ws.onclose = null;
-        this.ws.close();
+        oldWs.onopen = null;
+        oldWs.onmessage = null;
+        oldWs.onerror = () => {};
+        oldWs.onclose = null;
+        if (oldWs.readyState === WebSocket.OPEN) {
+          oldWs.close();
+        } else {
+          // If still connecting, keep error handler attached and close safely
+          try {
+            oldWs.close();
+          } catch (_) {}
+        }
       } catch (e) {
         // ignore
       }
-      this.ws = null;
     }
   }
 }

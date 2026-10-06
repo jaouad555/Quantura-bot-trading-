@@ -732,17 +732,20 @@ export const App: React.FC = () => {
           if (parsed) positions = [parsed];
         }
       }
-      // Anti-hedging deduplication: Ensure no single symbol has multiple conflicting positions (e.g., simultaneous LONG & SHORT)
+      // Deduplicate strictly by symbol + marketType + execution mode
       const sanitizedMap = new Map<string, ActiveBotPosition>();
       for (const pos of positions) {
-        const symKey = (pos.symbol || 'BTCUSDT').toLowerCase();
-        if (!sanitizedMap.has(symKey)) {
-          sanitizedMap.set(symKey, pos);
+        if (!pos || !pos.symbol) continue;
+        const pMarket = pos.marketType || (pos.leverage && pos.leverage > 1 ? 'FUTURES' : 'SPOT');
+        const pMode = pos.mode || 'PAPER';
+        const posKey = `${pos.symbol.toUpperCase()}_${pMarket}_${pMode}`;
+        if (!sanitizedMap.has(posKey)) {
+          sanitizedMap.set(posKey, { ...pos, marketType: pMarket, mode: pMode as any });
         } else {
-          // Keep the newest opened position only
-          const existing = sanitizedMap.get(symKey)!;
+          // Keep the newest opened position for this specific market & mode
+          const existing = sanitizedMap.get(posKey)!;
           if ((pos.openedAt || 0) > (existing.openedAt || 0)) {
-            sanitizedMap.set(symKey, pos);
+            sanitizedMap.set(posKey, { ...pos, marketType: pMarket, mode: pMode as any });
           }
         }
       }
@@ -3723,8 +3726,8 @@ export const App: React.FC = () => {
               binanceConfig={binanceConfig}
               executionMode={executionMode}
               paperWallet={paperWallet}
-              activeBotPositions={activeBotPositions}
-              marketType={botConfig.marketType || 'FUTURES'}
+              activeBotPositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
+              marketType={botConfig.marketType || 'SPOT'}
               onToggleMarketType={handleToggleMarketType}
               onOpenBinanceModal={() => setIsBinanceModalOpen(true)}
               onOpenCustomBalanceModal={() => setIsCustomBalanceModalOpen(true)}
@@ -3738,14 +3741,14 @@ export const App: React.FC = () => {
               onOpenHelp={() => setIsHelpModalOpen(true)}
               onPanicCloseAll={handlePanicCloseAll}
               onToggleSound={() => setSoundEnabled(!soundEnabled)}
-              onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'FUTURES')}
+              onRefreshData={() => fetchMarketData(timeframe, selectedSymbol, botConfig.marketType || 'SPOT')}
               onLogout={handleLogout}
               username={username || 'JAOUAD'}
               botEnabled={botConfig.enabled}
               onToggleBot={handleToggleBot}
               activeTab={activeTab}
               onNavigateTab={setActiveTab}
-              openPositionsCount={activeBotPositions.length}
+              openPositionsCount={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT')).length}
             />
 
             {/* Scrollable workspace content container */}
@@ -3924,7 +3927,7 @@ export const App: React.FC = () => {
                   activeSignal={activeSignal}
                   language={language}
                   ticker={ticker}
-                  activeBotPositions={activeBotPositions}
+                  activeBotPositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
                   marketType={botConfig.marketType}
                 />
               </div>
@@ -3937,10 +3940,10 @@ export const App: React.FC = () => {
               <AutoTradingBot
                 language={language}
                 botConfig={botConfig}
-                activePositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode)}
+                activePositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
                 selectedSymbol={selectedSymbol}
-                logs={(botLogs || []).filter(l => (l.mode || 'PAPER') === executionMode)}
-                tradeHistory={tradeHistory}
+                logs={(botLogs || []).filter(l => (l.mode || 'PAPER') === executionMode && (l.marketType || 'SPOT') === (botConfig.marketType || 'SPOT'))}
+                tradeHistory={(tradeHistory || []).filter(t => (t.mode || 'PAPER') === executionMode && (t.marketType || (t.leverage && t.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
                 walletBalance={paperWallet.balance}
                 paperWallet={paperWallet}
                 currentPrice={ticker?.price || 0}
@@ -3971,12 +3974,13 @@ export const App: React.FC = () => {
                   if (ticker?.price) {
                     const currentPositions = activeBotPositionsRef.current;
                     const currentExecMode = executionModeRef.current;
-                    const modePositions = currentPositions.filter(p => (p.mode || 'PAPER') === currentExecMode);
+                    const currentMarket = botConfigRef.current.marketType || 'SPOT';
+                    const modePositions = currentPositions.filter(p => (p.mode || 'PAPER') === currentExecMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === currentMarket);
                     const maxTrades = botConfigRef.current.maxOpenTrades || 3;
                     if (modePositions.length >= maxTrades) {
                       const msg = language === 'ar'
-                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة في (${currentMarket}) من أصل ${maxTrades} صفقات كحد أقصى!`
+                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades in (${currentMarket})!`;
                       const rejectAlert: PushAlert = {
                         id: `alert-manual-max-${Date.now()}`,
                         title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
@@ -4015,12 +4019,13 @@ export const App: React.FC = () => {
 
                     const currentPositions = activeBotPositionsRef.current;
                     const currentExecMode = executionModeRef.current;
-                    const modePositions = currentPositions.filter(p => (p.mode || 'PAPER') === currentExecMode);
+                    const currentMarket = botConfigRef.current.marketType || 'SPOT';
+                    const modePositions = currentPositions.filter(p => (p.mode || 'PAPER') === currentExecMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === currentMarket);
                     const maxTrades = botConfigRef.current.maxOpenTrades || 3;
                     if (modePositions.length >= maxTrades) {
                       const msg = language === 'ar'
-                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة من أصل ${maxTrades} صفقات كحد أقصى!`
-                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades!`;
+                        ? `تم رفض العملية: لديك حالياً ${modePositions.length} صفقات مفتوحة في (${currentMarket}) من أصل ${maxTrades} صفقات كحد أقصى!`
+                        : `Action Rejected: You already have ${modePositions.length}/${maxTrades} maximum open trades in (${currentMarket})!`;
                       const rejectAlert: PushAlert = {
                         id: `alert-manual-max-${Date.now()}`,
                         title: language === 'ar' ? 'تم رفض فتح الصفقة (الحد الأقصى)' : 'Trade Rejected (Max Limit)',
@@ -4039,7 +4044,8 @@ export const App: React.FC = () => {
                 }}
                 onClearLogs={() => {
                   setBotLogs(prev => {
-                    const filtered = (prev || []).filter(l => (l.mode || 'PAPER') !== executionMode);
+                    const currentMt = botConfigRef.current.marketType || 'SPOT';
+                    const filtered = (prev || []).filter(l => (l.mode || 'PAPER') !== executionMode || (l.marketType || 'SPOT') !== currentMt);
                     botLogsRef.current = filtered;
                     try {
                       apiStorage.setItem('btc_bot_logs', JSON.stringify(filtered));
@@ -4103,8 +4109,8 @@ export const App: React.FC = () => {
                 activeSignal={activeSignal}
                 language={language}
                 ticker={ticker}
-                activeBotPositions={activeBotPositions}
-                marketType={botConfig.marketType || 'FUTURES'}
+                activeBotPositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
+                marketType={botConfig.marketType || 'SPOT'}
                 onManualClosePosition={handlePanicCloseAll}
               />
             </div>
@@ -4161,7 +4167,7 @@ export const App: React.FC = () => {
               executionMode={executionMode as any}
               binanceConfig={binanceConfig}
               selectedSymbol={selectedSymbol}
-              activeBotPositions={activeBotPositions}
+              activeBotPositions={(activeBotPositions || []).filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))}
             />
           )}
 
@@ -4170,7 +4176,7 @@ export const App: React.FC = () => {
             <TradeHistory
               history={[
                 ...(activeBotPositions || [])
-                  .filter(p => (p.mode || 'PAPER') === executionMode)
+                  .filter(p => (p.mode || 'PAPER') === executionMode && (p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT'))
                   .map(pos => {
                     const liveP = (pos.symbol.toLowerCase() === selectedSymbol.toLowerCase() && ticker?.price) ? ticker.price : (pos.currentPrice || pos.entryPrice);
                     const isLong = pos.decision === 'LONG';
@@ -4204,7 +4210,7 @@ export const App: React.FC = () => {
                     };
                   }),
                 ...(tradeHistory || [])
-                  .filter(t => t.status !== 'ACTIVE')
+                  .filter(t => (t.mode || 'PAPER') === executionMode && (t.marketType || (t.leverage && t.leverage > 1 ? 'FUTURES' : 'SPOT')) === (botConfig.marketType || 'SPOT') && t.status !== 'ACTIVE')
               ]}
               paperWallet={paperWallet}
               language={language}

@@ -3479,10 +3479,29 @@ async function initFrontendAndServices() {
 
 initFrontendAndServices();
 
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', (err: any) => {
+  const msg = err?.message || String(err);
+  if (
+    msg.includes('WebSocket was closed before the connection was established') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('socket hang up') ||
+    msg.includes('ETIMEDOUT')
+  ) {
+    console.warn('[TRANSIENT NETWORK WARNING] Handled WebSocket/Network event:', msg);
+    return;
+  }
   console.error('UNCAUGHT EXCEPTION:', err);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: any, promise) => {
+  const msg = reason?.message || String(reason);
+  if (
+    msg.includes('WebSocket was closed before the connection was established') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('socket hang up')
+  ) {
+    console.warn('[TRANSIENT NETWORK WARNING] Handled Promise rejection:', msg);
+    return;
+  }
   console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });

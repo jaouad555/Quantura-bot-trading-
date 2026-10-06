@@ -92,11 +92,18 @@ class BinanceWebSocketManager {
       this.pingIntervalFutures = null;
     }
     if (this.futuresWs) {
-      try {
-        this.futuresWs.removeAllListeners();
-        this.futuresWs.terminate();
-      } catch (_) {}
+      const wsToClose = this.futuresWs;
       this.futuresWs = null;
+      try {
+        wsToClose.on('error', () => {});
+        wsToClose.removeAllListeners('error');
+        wsToClose.on('error', () => {});
+        if (wsToClose.readyState === WebSocket.OPEN) {
+          wsToClose.close();
+        } else {
+          wsToClose.terminate();
+        }
+      } catch (_) {}
       console.log('[BINANCE WS] 🛑 Futures WebSocket completely disconnected & DISABLED');
     }
   }
@@ -112,11 +119,18 @@ class BinanceWebSocketManager {
       this.pingIntervalSpot = null;
     }
     if (this.spotWs) {
-      try {
-        this.spotWs.removeAllListeners();
-        this.spotWs.terminate();
-      } catch (_) {}
+      const wsToClose = this.spotWs;
       this.spotWs = null;
+      try {
+        wsToClose.on('error', () => {});
+        wsToClose.removeAllListeners('error');
+        wsToClose.on('error', () => {});
+        if (wsToClose.readyState === WebSocket.OPEN) {
+          wsToClose.close();
+        } else {
+          wsToClose.terminate();
+        }
+      } catch (_) {}
       console.log('[BINANCE WS] 🛑 Spot WebSocket completely disconnected & DISABLED');
     }
   }
@@ -172,14 +186,23 @@ class BinanceWebSocketManager {
     try {
       if (this.pingIntervalFutures) clearInterval(this.pingIntervalFutures);
       if (this.futuresWs) {
-        try { this.futuresWs.terminate(); } catch (_) {}
+        try {
+          this.futuresWs.on('error', () => {});
+          this.futuresWs.terminate();
+        } catch (_) {}
+        this.futuresWs = null;
       }
 
       // Binance Futures Mini-Ticker Array Stream
       const wsUrl = 'wss://fstream.binance.com/ws/!miniTicker@arr';
-      this.futuresWs = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
+      this.futuresWs = ws;
 
-      this.futuresWs.on('open', () => {
+      ws.on('error', (err) => {
+        console.warn('[BINANCE WS] Futures WebSocket warning:', err?.message);
+      });
+
+      ws.on('open', () => {
         this.isReconnectingFutures = false;
         if (this.activeMarketType !== 'FUTURES') {
           this.disconnectFutures();
@@ -193,7 +216,7 @@ class BinanceWebSocketManager {
         }, 30000);
       });
 
-      this.futuresWs.on('message', (raw: WebSocket.Data) => {
+      ws.on('message', (raw: WebSocket.Data) => {
         if (this.activeMarketType !== 'FUTURES') return;
         try {
           const items = JSON.parse(raw.toString());
@@ -229,11 +252,7 @@ class BinanceWebSocketManager {
         } catch (_) {}
       });
 
-      this.futuresWs.on('error', (err) => {
-        console.warn('[BINANCE WS] Futures WebSocket warning:', err.message);
-      });
-
-      this.futuresWs.on('close', () => {
+      ws.on('close', () => {
         if (this.pingIntervalFutures) clearInterval(this.pingIntervalFutures);
         this.futuresWs = null;
         if (this.isStarted && this.activeMarketType === 'FUTURES') {
@@ -259,14 +278,23 @@ class BinanceWebSocketManager {
     try {
       if (this.pingIntervalSpot) clearInterval(this.pingIntervalSpot);
       if (this.spotWs) {
-        try { this.spotWs.terminate(); } catch (_) {}
+        try {
+          this.spotWs.on('error', () => {});
+          this.spotWs.terminate();
+        } catch (_) {}
+        this.spotWs = null;
       }
 
       // Binance Spot Mini-Ticker Array Stream
       const wsUrl = 'wss://stream.binance.com:9443/ws/!miniTicker@arr';
-      this.spotWs = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
+      this.spotWs = ws;
 
-      this.spotWs.on('open', () => {
+      ws.on('error', (err) => {
+        console.warn('[BINANCE WS] Spot WebSocket warning:', err?.message);
+      });
+
+      ws.on('open', () => {
         this.isReconnectingSpot = false;
         if (this.activeMarketType !== 'SPOT') {
           this.disconnectSpot();
@@ -280,7 +308,7 @@ class BinanceWebSocketManager {
         }, 30000);
       });
 
-      this.spotWs.on('message', (raw: WebSocket.Data) => {
+      ws.on('message', (raw: WebSocket.Data) => {
         if (this.activeMarketType !== 'SPOT') return;
         try {
           const items = JSON.parse(raw.toString());
@@ -316,11 +344,7 @@ class BinanceWebSocketManager {
         } catch (_) {}
       });
 
-      this.spotWs.on('error', (err) => {
-        console.warn('[BINANCE WS] Spot WebSocket warning:', err.message);
-      });
-
-      this.spotWs.on('close', () => {
+      ws.on('close', () => {
         if (this.pingIntervalSpot) clearInterval(this.pingIntervalSpot);
         this.spotWs = null;
         if (this.isStarted && this.activeMarketType === 'SPOT') {

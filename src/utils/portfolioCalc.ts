@@ -116,7 +116,7 @@ export function calculateDedicatedMarketWallet(
       (currentModeUpper === 'BINANCE_TESTNET' && (posMode === 'TESTNET' || posMode === 'BINANCE_TESTNET')) ||
       (currentModeUpper === 'PAPER' && (posMode === 'PAPER' || !p.mode));
 
-    const posMarket = String(p.marketType || 'FUTURES').toUpperCase();
+    const posMarket = String(p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT')).toUpperCase();
     return modeMatches && posMarket === targetMarket;
   });
 

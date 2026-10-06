@@ -25,8 +25,10 @@ export function logBinanceApiCall(entry: BinanceApiLogEntry) {
   if (apiCallLogs.length > 200) apiCallLogs.pop();
 
   if (entry.httpStatus >= 400 || entry.error || entry.binanceCode) {
-    console.error(
-      `[BINANCE API ERROR] [${entry.executionMode}] [${entry.marketType}] ${entry.endpoint} - ` +
+    const isExpectedAuthMismatch = entry.httpStatus === 401 || entry.binanceCode === -2015;
+    const logFn = isExpectedAuthMismatch ? console.warn : console.error;
+    logFn(
+      `[BINANCE API ${isExpectedAuthMismatch ? 'AUTH NOTICE' : 'ERROR'}] [${entry.executionMode}] [${entry.marketType}] ${entry.endpoint} - ` +
       `Status: ${entry.httpStatus} Code: ${entry.binanceCode || 'N/A'} Msg: ${entry.binanceMessage || entry.error || 'Unknown error'}` +
       (entry.symbol ? ` Symbol: ${entry.symbol}` : '')
     );

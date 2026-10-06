@@ -1060,14 +1060,17 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
     return [];
   }, [botConfig.activePresets]);
 
+  const currentMt = botConfig.marketType || 'SPOT';
   const filteredPositions = (activePositions || []).filter(p => {
     const pMode = p.mode || 'PAPER';
-    return pMode === executionMode;
+    const pMarket = p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT');
+    return pMode === executionMode && pMarket === currentMt;
   });
   const displayPositions = filteredPositions;
   const displayLogs = (logs || []).filter(l => {
     const lMode = l.mode || 'PAPER';
-    return lMode === executionMode;
+    const lMarket = l.marketType || 'SPOT';
+    return lMode === executionMode && lMarket === currentMt;
   });
   const maxTradesLimit = Math.max(1, botConfig?.maxOpenTrades || 3);
   const isAtMaxTrades = displayPositions.length >= maxTradesLimit;
@@ -1164,8 +1167,12 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
   // Performance Stats Calculation: accurately sums realized PnL across history trades, bot logs, and paper wallet
   const historyTrades = useMemo(() => {
-    return (tradeHistory || []).filter(t => (t.mode || 'PAPER') === executionMode && t.status !== 'ACTIVE');
-  }, [tradeHistory, executionMode]);
+    return (tradeHistory || []).filter(t => 
+      (t.mode || 'PAPER') === executionMode && 
+      (t.marketType || (t.leverage && t.leverage > 1 ? 'FUTURES' : 'SPOT')) === currentMt && 
+      t.status !== 'ACTIVE'
+    );
+  }, [tradeHistory, executionMode, currentMt]);
 
   const historyRealizedPnl = useMemo(() => {
     return historyTrades.reduce((acc, t) => acc + (Number(t.profitUsdt || t.pnlUsdt) || 0), 0);
