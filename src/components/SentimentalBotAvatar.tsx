@@ -52,9 +52,8 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
   const [isBlinking, setIsBlinking] = useState(false);
   const [pokeReaction, setPokeReaction] = useState<boolean>(false);
 
-  // Natural organic blinking interval (disabled for compact header size to keep it steady and non-distracting)
+  // Natural organic blinking interval
   useEffect(() => {
-    if (size === 'xs') return;
     let timeoutId: any;
     const interval = setInterval(() => {
       setIsBlinking(true);
@@ -64,7 +63,7 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
       clearInterval(interval);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [size]);
+  }, []);
 
   // Multi-tier Harmonization Matrix: Bot Position Performance + Terminal Market Sentiment
   const currentMood: BotMood = useMemo(() => {
@@ -134,11 +133,11 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
   };
 
   const sizeConfig = {
-    xs: { box: 'w-7 h-7 sm:w-8 sm:h-8', badgeText: 'text-[8px]' },
-    sm: { box: 'w-9 h-9 sm:w-10 sm:h-10', badgeText: 'text-[9px]' },
-    md: { box: 'w-12 h-12 sm:w-14 sm:h-14', badgeText: 'text-[10px]' },
-    lg: { box: 'w-16 h-16 sm:w-20 sm:h-20', badgeText: 'text-xs' },
-    xl: { box: 'w-24 h-24 sm:w-28 sm:h-28', badgeText: 'text-sm' },
+    xs: { box: 'w-7 h-7 sm:w-8 sm:h-8 p-0.5', badgeText: 'text-[8px]' },
+    sm: { box: 'w-9 h-9 sm:w-10 sm:h-10 p-0.5', badgeText: 'text-[9px]' },
+    md: { box: 'w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5', badgeText: 'text-[10px]' },
+    lg: { box: 'w-16 h-16 sm:w-20 sm:h-20 p-1.5', badgeText: 'text-xs' },
+    xl: { box: 'w-24 h-24 sm:w-28 sm:h-28 p-2', badgeText: 'text-sm' },
   }[size];
 
   // Visual Themes, HUD Colors & Deep Contextual Intelligence Descriptions
@@ -263,12 +262,12 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
           }
         }}
         title={`${moodStyles.title} • ${moodStyles.desc} (${isArabic ? 'انقر للتفاعل' : 'Click to interact'})`}
-        className={`relative ${sizeConfig.box} rounded-2xl border bg-gradient-to-b ${moodStyles.bgGradient} ${moodStyles.border} p-1 sm:p-1.5 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer overflow-hidden shadow-sm group`}
+        className={`relative ${sizeConfig.box} rounded-2xl border bg-gradient-to-b ${moodStyles.bgGradient} ${moodStyles.border} flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer overflow-hidden shadow-sm group`}
         style={{ transform: 'translateZ(0)' }}
       >
-        {/* Crisp vector robot avatar contained strictly within 100x100 */}
+        {/* Crisp vector robot avatar */}
         <svg
-          viewBox="0 0 100 100"
+          viewBox="6 2 88 82"
           className="w-full h-full block"
           style={{ shapeRendering: 'geometricPrecision' }}
         >
