@@ -29,6 +29,159 @@ export interface RiskBotAvatarProps {
   className?: string;
 }
 
+export function computeRiskBotEmotion(params: {
+  riskScore?: number;
+  status?: string;
+  emergencyStop?: boolean;
+  circuitBreakerActive?: boolean;
+  antiMartingaleActive?: boolean;
+  dailyLossPercent?: number;
+  drawdownPercent?: number;
+  maxDrawdownLimit?: number;
+  floatingPnlUsdt?: number;
+  realizedPnlUsdt?: number;
+  activePositionsCount?: number;
+  marketSentiment?: string;
+}): RiskBotEmotion {
+  const upperStatus = String(params.status || 'NORMAL').toUpperCase();
+  if (
+    params.emergencyStop ||
+    params.circuitBreakerActive ||
+    upperStatus === 'HALTED' ||
+    upperStatus === 'EMERGENCY' ||
+    upperStatus === 'LOCKED' ||
+    (params.riskScore ?? 0) >= 85
+  ) {
+    return 'CIRCUIT_BREAKER_LOCKDOWN';
+  }
+  if (
+    upperStatus === 'RESTRICTED' ||
+    (params.riskScore ?? 0) >= 70 ||
+    (params.drawdownPercent ?? 0) >= (params.maxDrawdownLimit ?? 10) * 0.75
+  ) {
+    return 'HIGH_RISK_ALERT';
+  }
+  if (
+    upperStatus === 'CAUTION' ||
+    upperStatus === 'WARNING' ||
+    (params.riskScore ?? 0) >= 45 ||
+    (params.dailyLossPercent ?? 0) > 1.5 ||
+    (params.floatingPnlUsdt ?? 0) < -0.05
+  ) {
+    return 'VIGILANT_GUARD';
+  }
+  if (
+    (params.floatingPnlUsdt ?? 0) > 0.05 ||
+    (params.antiMartingaleActive && ((params.activePositionsCount ?? 0) > 0 || (params.realizedPnlUsdt ?? 0) > 0.05))
+  ) {
+    return 'ANTI_MARTINGALE_SCALING';
+  }
+  if (
+    (params.activePositionsCount ?? 0) > 0 ||
+    (params.riskScore ?? 0) >= 15 ||
+    String(params.marketSentiment).toUpperCase() === 'BULLISH'
+  ) {
+    return 'QUANT_CALCULATING';
+  }
+  if (String(params.marketSentiment).toUpperCase() === 'BEARISH') {
+    return 'VIGILANT_GUARD';
+  }
+  return 'SHIELD_ZEN';
+}
+
+export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language = 'ar') {
+  const isArabic = language === 'ar';
+  const isEn = language === 'en';
+  const isFrench = language === 'fr';
+
+  switch (emotion) {
+    case 'SHIELD_ZEN':
+      return {
+        border: 'border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.3)]',
+        bgGradient: 'from-emerald-950/80 via-slate-900 to-slate-950',
+        screenBg: '#022c22',
+        ledColor: '#34d399',
+        beaconColor: '#10b981',
+        badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        btnBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]',
+        title: isArabic ? '🛡️ درع الأمان التام' : isEn ? '🛡️ Capital Shielded' : '🛡️ Bouclier Sécurité Totale',
+        shortLabel: isArabic ? '🛡️ آمن' : isFrench ? '🛡️ SAFE' : '🛡️ SAFE',
+        fullLabel: isArabic ? 'درع الأمان' : isFrench ? 'Sécurisé' : 'Shielded',
+        desc: isArabic ? 'المخاطر 0%، رأس المال محمي تماماً ومطابق لمعايير الأمان' : 'Zero drawdown, capital strictly protected',
+      };
+    case 'QUANT_CALCULATING':
+      return {
+        border: 'border-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
+        bgGradient: 'from-cyan-950/80 via-slate-900 to-slate-950',
+        screenBg: '#04222f',
+        ledColor: '#38bdf8',
+        beaconColor: '#06b6d4',
+        badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+        btnBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]',
+        title: isArabic ? '⚡ حساب المعايير والارتباط' : isEn ? '⚡ Risk Bounds Matrix' : '⚡ Matrice Risque & Corrélation',
+        shortLabel: isArabic ? '⚡ رصد' : isFrench ? '⚡ GUARD' : '⚡ GUARD',
+        fullLabel: isArabic ? 'رصد المخاطر' : isFrench ? 'Analyse Risque' : 'Risk Bounds',
+        desc: isArabic ? 'تحليل لحظي لنسبة كيلي، تقلبات السوق، وحجم العقود الأمثل' : 'Computing Kelly criterion & optimal position size',
+      };
+    case 'VIGILANT_GUARD':
+      return {
+        border: 'border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
+        bgGradient: 'from-amber-950/80 via-slate-900 to-slate-950',
+        screenBg: '#271402',
+        ledColor: '#fbbf24',
+        beaconColor: '#f59e0b',
+        badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+        btnBg: 'bg-amber-500/15 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]',
+        title: isArabic ? '👁️ يقظة دفاعية مشددة' : isEn ? '👁️ Defensive Vigilance' : '👁️ Vigilance Défensive',
+        shortLabel: isArabic ? '👁️ حذر' : isFrench ? '👁️ VIGILANT' : '👁️ VIGILANT',
+        fullLabel: isArabic ? 'يقظة وحذر' : isFrench ? 'Vigilance' : 'Vigilant Guard',
+        desc: isArabic ? 'مراقبة التراجع اليومي والتعرض مع تشديد شروط وقف الخسارة' : 'Guarding drawdown & tightening stop loss barriers',
+      };
+    case 'HIGH_RISK_ALERT':
+      return {
+        border: 'border-orange-500/80 shadow-[0_0_20px_rgba(249,115,22,0.4)]',
+        bgGradient: 'from-orange-950/85 via-slate-900 to-slate-950',
+        screenBg: '#2d0f04',
+        ledColor: '#fb923c',
+        beaconColor: '#f97316',
+        badgeBg: 'bg-orange-500/25 text-orange-300 border-orange-500/50 animate-pulse',
+        btnBg: 'bg-orange-500/20 text-orange-300 border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.3)] animate-pulse',
+        title: isArabic ? '⚠️ تحذير: سقف المخاطرة' : isEn ? '⚠️ High Risk Warning' : '⚠️ Alerte Seuil de Risque',
+        shortLabel: isArabic ? '⚠️ خطر' : isFrench ? '⚠️ ALERTE' : '⚠️ ALERT',
+        fullLabel: isArabic ? 'تحذير مخاطرة' : isFrench ? 'Alerte Risque' : 'High Risk Alert',
+        desc: isArabic ? 'اقتراب التراجع من الحد الأقصى! تجميد فتح الصفقات الجديدة' : 'Drawdown approaching upper threshold limits',
+      };
+    case 'CIRCUIT_BREAKER_LOCKDOWN':
+      return {
+        border: 'border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.5)]',
+        bgGradient: 'from-rose-950/90 via-slate-900 to-slate-950',
+        screenBg: '#350614',
+        ledColor: '#fb7185',
+        beaconColor: '#f43f5e',
+        badgeBg: 'bg-rose-500/30 text-rose-300 border-rose-500/50 animate-pulse',
+        btnBg: 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse',
+        title: isArabic ? '⛔ قاطع الدائرة وقفل الطوارئ' : isEn ? '⛔ Circuit Breaker Lockdown' : '⛔ Coupe-Circuit d\'Urgence',
+        shortLabel: isArabic ? '⛔ مقفل' : isFrench ? '⛔ BLOQUÉ' : '⛔ LOCKED',
+        fullLabel: isArabic ? 'إيقاف وقائي' : isFrench ? 'Coupe-Circuit' : 'Circuit Breaker',
+        desc: isArabic ? 'تفعيل الإيقاف الوقائي الفوري لحماية المحفظة ومنع أي نزيف' : 'Emergency safety lockdown active, trading halted',
+      };
+    case 'ANTI_MARTINGALE_SCALING':
+      return {
+        border: 'border-emerald-400/80 shadow-[0_0_18px_rgba(52,211,153,0.35)]',
+        bgGradient: 'from-emerald-900/80 via-slate-900 to-slate-950',
+        screenBg: '#022c22',
+        ledColor: '#34d399',
+        beaconColor: '#fbbf24',
+        badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        btnBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(52,211,153,0.25)]',
+        title: isArabic ? '🚀 تدرج الأرباح والحماية' : isEn ? '🚀 Anti-Martingale Scale' : '🚀 Scaling Anti-Martingale',
+        shortLabel: isArabic ? '🚀 نمو' : isFrench ? '🚀 SCALE' : '🚀 SCALE',
+        fullLabel: isArabic ? 'تدرج الأرباح' : isFrench ? 'Scaling Gains' : 'Profit Scaling',
+        desc: isArabic ? 'نمو آمن وتأمين للأرباح مع حماية صارمة لرأس المال' : 'Scaling position sizing on consecutive profits safely',
+      };
+  }
+}
+
 const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
   riskScore = 0,
   status = 'NORMAL',
@@ -69,50 +222,20 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
 
   // Determine current emotion tailored specifically for Risk Engine & Live Portfolio State
   const currentEmotion: RiskBotEmotion = useMemo(() => {
-    const upperStatus = String(status || 'NORMAL').toUpperCase();
-    if (
-      emergencyStop ||
-      circuitBreakerActive ||
-      upperStatus === 'HALTED' ||
-      upperStatus === 'EMERGENCY' ||
-      upperStatus === 'LOCKED' ||
-      riskScore >= 85
-    ) {
-      return 'CIRCUIT_BREAKER_LOCKDOWN';
-    }
-    if (
-      upperStatus === 'RESTRICTED' ||
-      riskScore >= 70 ||
-      drawdownPercent >= maxDrawdownLimit * 0.75
-    ) {
-      return 'HIGH_RISK_ALERT';
-    }
-    if (
-      upperStatus === 'CAUTION' ||
-      upperStatus === 'WARNING' ||
-      riskScore >= 45 ||
-      dailyLossPercent > 1.5 ||
-      floatingPnlUsdt < -0.05
-    ) {
-      return 'VIGILANT_GUARD';
-    }
-    if (
-      floatingPnlUsdt > 0.05 ||
-      (antiMartingaleActive && (activePositionsCount > 0 || realizedPnlUsdt > 0.05))
-    ) {
-      return 'ANTI_MARTINGALE_SCALING';
-    }
-    if (
-      activePositionsCount > 0 ||
-      riskScore >= 15 ||
-      String(marketSentiment).toUpperCase() === 'BULLISH'
-    ) {
-      return 'QUANT_CALCULATING';
-    }
-    if (String(marketSentiment).toUpperCase() === 'BEARISH') {
-      return 'VIGILANT_GUARD';
-    }
-    return 'SHIELD_ZEN';
+    return computeRiskBotEmotion({
+      riskScore,
+      status,
+      emergencyStop,
+      circuitBreakerActive,
+      antiMartingaleActive,
+      dailyLossPercent,
+      drawdownPercent,
+      maxDrawdownLimit,
+      floatingPnlUsdt,
+      realizedPnlUsdt,
+      activePositionsCount,
+      marketSentiment,
+    });
   }, [
     emergencyStop,
     circuitBreakerActive,
@@ -143,74 +266,9 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
   }[size];
 
   // Tailored Risk Engine themes, glow, visor background, beacon, and badges
-  const emotionConfig = {
-    SHIELD_ZEN: {
-      border: 'border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.3)]',
-      bgGradient: 'from-emerald-950/80 via-slate-900 to-slate-950',
-      screenBg: '#022c22',
-      ledColor: '#34d399',
-      beaconColor: '#10b981',
-      badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      title: isArabic ? '🛡️ درع الأمان التام' : isEn ? '🛡️ Capital Shielded' : '🛡️ Bouclier Sécurité Totale',
-      shortLabel: isArabic ? '🛡️ آمن' : '🛡️ SAFE',
-      desc: isArabic ? 'المخاطر 0%، رأس المال محمي تماماً ومطابق لمعايير الأمان' : 'Zero drawdown, capital strictly protected',
-    },
-    QUANT_CALCULATING: {
-      border: 'border-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
-      bgGradient: 'from-cyan-950/80 via-slate-900 to-slate-950',
-      screenBg: '#04222f',
-      ledColor: '#38bdf8',
-      beaconColor: '#06b6d4',
-      badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-      title: isArabic ? '⚡ حساب المعايير والارتباط' : isEn ? '⚡ Risk Bounds Matrix' : '⚡ Matrice Risque & Corrélation',
-      shortLabel: isArabic ? '⚡ رصد' : '⚡ GUARD',
-      desc: isArabic ? 'تحليل لحظي لنسبة كيلي، تقلبات السوق، وحجم العقود الأمثل' : 'Computing Kelly criterion & optimal position size',
-    },
-    VIGILANT_GUARD: {
-      border: 'border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
-      bgGradient: 'from-amber-950/80 via-slate-900 to-slate-950',
-      screenBg: '#271402',
-      ledColor: '#fbbf24',
-      beaconColor: '#f59e0b',
-      badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      title: isArabic ? '👁️ يقظة دفاعية مشددة' : isEn ? '👁️ Defensive Vigilance' : '👁️ Vigilance Défensive',
-      shortLabel: isArabic ? '👁️ حذر' : '👁️ VIGILANT',
-      desc: isArabic ? 'مراقبة التراجع اليومي والتعرض مع تشديد شروط وقف الخسارة' : 'Guarding drawdown & tightening stop loss barriers',
-    },
-    HIGH_RISK_ALERT: {
-      border: 'border-orange-500/80 shadow-[0_0_20px_rgba(249,115,22,0.4)]',
-      bgGradient: 'from-orange-950/85 via-slate-900 to-slate-950',
-      screenBg: '#2d0f04',
-      ledColor: '#fb923c',
-      beaconColor: '#f97316',
-      badgeBg: 'bg-orange-500/25 text-orange-300 border-orange-500/50 animate-pulse',
-      title: isArabic ? '⚠️ تحذير: سقف المخاطرة' : isEn ? '⚠️ High Risk Warning' : '⚠️ Alerte Seuil de Risque',
-      shortLabel: isArabic ? '⚠️ خطر' : '⚠️ ALERT',
-      desc: isArabic ? 'اقتراب التراجع من الحد الأقصى! تجميد فتح الصفقات الجديدة' : 'Drawdown approaching upper threshold limits',
-    },
-    CIRCUIT_BREAKER_LOCKDOWN: {
-      border: 'border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.5)]',
-      bgGradient: 'from-rose-950/90 via-slate-900 to-slate-950',
-      screenBg: '#350614',
-      ledColor: '#fb7185',
-      beaconColor: '#f43f5e',
-      badgeBg: 'bg-rose-500/30 text-rose-300 border-rose-500/50 animate-pulse',
-      title: isArabic ? '⛔ قاطع الدائرة وقفل الطوارئ' : isEn ? '⛔ Circuit Breaker Lockdown' : '⛔ Coupe-Circuit d\'Urgence',
-      shortLabel: isArabic ? '⛔ مقفل' : '⛔ LOCKED',
-      desc: isArabic ? 'تفعيل الإيقاف الوقائي الفوري لحماية المحفظة ومنع أي نزيف' : 'Emergency safety lockdown active, trading halted',
-    },
-    ANTI_MARTINGALE_SCALING: {
-      border: 'border-emerald-400/80 shadow-[0_0_18px_rgba(52,211,153,0.35)]',
-      bgGradient: 'from-emerald-900/80 via-slate-900 to-slate-950',
-      screenBg: '#022c22',
-      ledColor: '#34d399',
-      beaconColor: '#fbbf24',
-      badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      title: isArabic ? '🚀 تدرج الأرباح والحماية' : isEn ? '🚀 Anti-Martingale Scale' : '🚀 Scaling Anti-Martingale',
-      shortLabel: isArabic ? '🚀 نمو' : '🚀 SCALE',
-      desc: isArabic ? 'نمو آمن وتأمين للأرباح مع حماية صارمة لرأس المال' : 'Scaling position sizing on consecutive profits safely',
-    },
-  }[currentEmotion];
+  const emotionConfig = useMemo(() => {
+    return getRiskEmotionConfig(currentEmotion, language);
+  }, [currentEmotion, language]);
 
   return (
     <div className={`inline-flex flex-col items-center select-none shrink-0 ${className}`}>
@@ -257,9 +315,6 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
 
           {/* Head Chassis */}
           <rect x="18" y="22" width="64" height="60" rx="16" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-
-          {/* Forehead status quantum core - Risk Security Shield / Badge */}
-          <circle cx="50" cy="28" r="2.4" fill={emotionConfig.ledColor} opacity="0.95" />
 
           {/* Visor Screen */}
           <rect

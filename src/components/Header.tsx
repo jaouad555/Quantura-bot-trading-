@@ -5,7 +5,7 @@ import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { formatTime, getTimezoneLabel } from '../utils/timezone';
 import { TradingPair, RESPECTED_TRADING_PAIRS, formatCoinPrice } from '../utils/tradingPairs';
-import { RiskBotAvatar } from './RiskBotAvatar';
+import { RiskBotAvatar, computeRiskBotEmotion, getRiskEmotionConfig } from './RiskBotAvatar';
 import {
   Radar,
   Activity,
@@ -462,6 +462,22 @@ export const Header: React.FC<HeaderProps> = ({
   }, [ticker?.price]);
 
   const isPricePositive = (ticker?.priceChangePercent24h || 0) >= 0;
+
+  const currentRiskEmotion = useMemo(() => {
+    return computeRiskBotEmotion({
+      riskScore: 0,
+      dailyLossPercent: 0,
+      floatingPnlUsdt: portfolioMetrics.floatingPnl,
+      realizedPnlUsdt: portfolioMetrics.realizedPnl,
+      activePositionsCount: (activeBotPositions || []).length,
+      marketSentiment: isPricePositive ? 'BULLISH' : 'BEARISH',
+      antiMartingaleActive: true,
+    });
+  }, [portfolioMetrics.floatingPnl, portfolioMetrics.realizedPnl, activeBotPositions, isPricePositive]);
+
+  const riskEmotionCfg = useMemo(() => {
+    return getRiskEmotionConfig(currentRiskEmotion, language);
+  }, [currentRiskEmotion, language]);
 
   const getConnectionBadge = () => {
     switch (connectionState) {
@@ -1074,17 +1090,35 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Risk Engine Button */}
+          {/* Risk Engine Button with dynamic live emotion */}
           {onOpenRiskModal && (
             <button
               id="btn-header-risk-modal"
               type="button"
               onClick={onOpenRiskModal}
-              className="h-8 px-2 sm:px-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm"
-              title={isArabic ? 'روبوت إدارة المخاطر المؤسسي (Quantura Risk Engine)' : 'Quantura Risk Management Robot'}
+              className={`h-8 px-1.5 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm ${riskEmotionCfg.btnBg}`}
+              title={
+                isArabic
+                  ? `محرك إدارة المخاطر: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
+                  : `Risk Engine: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
+              }
             >
-              <RiskBotAvatar size="xs" language={language} className="pointer-events-none" />
-              <span className="hidden md:inline">{isArabic ? 'روبوت المخاطر' : 'Risk Bot'}</span>
+              <div className="shrink-0 pointer-events-none flex items-center">
+                <RiskBotAvatar
+                  size="xs"
+                  riskScore={0}
+                  floatingPnlUsdt={portfolioMetrics.floatingPnl}
+                  realizedPnlUsdt={portfolioMetrics.realizedPnl}
+                  activePositionsCount={(activeBotPositions || []).length}
+                  marketSentiment={isPricePositive ? 'BULLISH' : 'BEARISH'}
+                  antiMartingaleActive={true}
+                  language={language}
+                  className="pointer-events-none"
+                />
+              </div>
+              <span className="font-mono font-bold whitespace-nowrap">
+                {riskEmotionCfg.shortLabel}
+              </span>
             </button>
           )}
 
