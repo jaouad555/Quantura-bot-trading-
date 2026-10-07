@@ -13,6 +13,7 @@ export interface SentimentalBotAvatarProps {
   confidence?: number;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   showMoodBadge?: boolean;
+  frameless?: boolean;
   language?: Language;
   circuitBreakerTriggered?: boolean;
   onClick?: () => void;
@@ -41,6 +42,7 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
   confidence = 50,
   size = 'md',
   showMoodBadge = false,
+  frameless = false,
   language = 'ar',
   circuitBreakerTriggered = false,
   onClick,
@@ -133,11 +135,11 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
   };
 
   const sizeConfig = {
-    xs: { box: 'w-7 h-7 sm:w-8 sm:h-8 p-0.5', badgeText: 'text-[8px]' },
-    sm: { box: 'w-9 h-9 sm:w-10 sm:h-10 p-0.5', badgeText: 'text-[9px]' },
-    md: { box: 'w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5', badgeText: 'text-[10px]' },
-    lg: { box: 'w-16 h-16 sm:w-20 sm:h-20 p-1.5', badgeText: 'text-xs' },
-    xl: { box: 'w-24 h-24 sm:w-28 sm:h-28 p-2', badgeText: 'text-sm' },
+    xs: { box: frameless ? 'w-6 h-6 sm:w-6.5 sm:h-6.5' : 'w-7 h-7 sm:w-8 sm:h-8 p-0.5 rounded-lg', badgeText: 'text-[8px]' },
+    sm: { box: frameless ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-9 h-9 sm:w-10 sm:h-10 p-0.5 rounded-xl', badgeText: 'text-[9px]' },
+    md: { box: frameless ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5 rounded-2xl', badgeText: 'text-[10px]' },
+    lg: { box: frameless ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-16 h-16 sm:w-20 sm:h-20 p-1.5 rounded-2xl', badgeText: 'text-xs' },
+    xl: { box: frameless ? 'w-24 h-24 sm:w-28 sm:h-28' : 'w-24 h-24 sm:w-28 sm:h-28 p-2 rounded-3xl', badgeText: 'text-sm' },
   }[size];
 
   // Visual Themes, HUD Colors & Deep Contextual Intelligence Descriptions
@@ -262,7 +264,11 @@ const SentimentalBotAvatarComponent: React.FC<SentimentalBotAvatarProps> = ({
           }
         }}
         title={`${moodStyles.title} • ${moodStyles.desc} (${isArabic ? 'انقر للتفاعل' : 'Click to interact'})`}
-        className={`relative ${sizeConfig.box} rounded-2xl border bg-gradient-to-b ${moodStyles.bgGradient} ${moodStyles.border} flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer overflow-hidden shadow-sm group`}
+        className={`relative ${sizeConfig.box} ${
+          frameless 
+            ? 'bg-transparent border-0 shadow-none p-0 overflow-visible'
+            : `rounded-2xl border bg-gradient-to-b ${moodStyles.bgGradient} ${moodStyles.border} shadow-sm overflow-hidden`
+        } flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 ${onClick ? 'cursor-pointer' : ''} group`}
         style={{ transform: 'translateZ(0)' }}
       >
         {/* Crisp vector robot avatar */}

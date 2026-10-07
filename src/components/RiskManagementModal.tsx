@@ -67,13 +67,18 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
         fetch('/api/risk/audit-logs?limit=25')
       ]);
 
+      let fetchedMetrics: RiskEngineMetrics | null = null;
+      let fetchedConfig: any = null;
+
       if (metricsRes.ok) {
         const m = await metricsRes.json();
+        fetchedMetrics = m;
         setMetrics(m);
       }
       if (configRes.ok) {
         const c: any = await configRes.json();
         if (c) {
+          fetchedConfig = c;
           setRiskConfig(c);
           if (c.riskPerTradePercent !== undefined) setRiskPerTrade(String(c.riskPerTradePercent));
           if (c.maxDailyLossPercent !== undefined) setMaxDailyLoss(String(c.maxDailyLossPercent));
@@ -85,6 +90,13 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
           if (c.maxSymbolExposurePercent !== undefined) setMaxSymbolExposure(String(c.maxSymbolExposurePercent));
           setAntiMartingale(c.antiMartingaleEnabled ?? true);
         }
+      }
+      if (fetchedMetrics || fetchedConfig) {
+        window.dispatchEvent(
+          new CustomEvent('quantura-risk-sync', {
+            detail: { metrics: fetchedMetrics, config: fetchedConfig },
+          })
+        );
       }
       if (auditRes.ok) {
         const a = await auditRes.json();
@@ -249,13 +261,15 @@ export const RiskManagementModal: React.FC<RiskManagementModalProps> = ({
             {/* Dynamic Robot Emotions Icon for Risk Engine - Styled like Terminal Robot */}
             <RiskBotAvatar
               riskScore={currentRiskScore}
-              status={metrics?.riskLockStatus || riskConfig?.riskLockStatus}
-              emergencyStop={metrics?.emergencyStop}
-              circuitBreakerActive={Boolean(metrics?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' || metrics?.riskLockStatus === 'EMERGENCY')}
+              status={metrics?.riskLockStatus || riskConfig?.riskLockStatus || 'NORMAL'}
+              emergencyStop={Boolean(metrics?.emergencyStop ?? riskConfig?.emergencyStop)}
+              circuitBreakerActive={Boolean(metrics?.emergencyStop || riskConfig?.emergencyStop || metrics?.riskLockStatus === 'LOCKED' || metrics?.riskLockStatus === 'EMERGENCY')}
               antiMartingaleActive={antiMartingale}
-              dailyLossPercent={metrics?.dailyLossPercent}
-              drawdownPercent={metrics?.currentDrawdownPercent}
+              dailyLossPercent={metrics?.dailyDrawdownPercent ?? metrics?.dailyLossPercent ?? 0}
+              drawdownPercent={metrics?.maxAccountDrawdownPercent ?? metrics?.currentDrawdownPercent ?? 0}
               maxDrawdownLimit={parseFloat(maxDrawdown) || 10}
+              consecutiveWins={metrics?.consecutiveWins ?? 0}
+              consecutiveLosses={metrics?.consecutiveLosses ?? 0}
               size="md"
               language={language}
             />

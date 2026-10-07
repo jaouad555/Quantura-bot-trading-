@@ -19,12 +19,15 @@ export interface RiskBotAvatarProps {
   dailyLossPercent?: number;
   drawdownPercent?: number;
   maxDrawdownLimit?: number;
+  consecutiveWins?: number;
+  consecutiveLosses?: number;
   floatingPnlUsdt?: number;
   realizedPnlUsdt?: number;
   activePositionsCount?: number;
   marketSentiment?: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   showMoodBadge?: boolean;
+  frameless?: boolean;
   language?: Language;
   onClick?: () => void;
   className?: string;
@@ -39,53 +42,59 @@ export function computeRiskBotEmotion(params: {
   dailyLossPercent?: number;
   drawdownPercent?: number;
   maxDrawdownLimit?: number;
+  consecutiveWins?: number;
+  consecutiveLosses?: number;
   floatingPnlUsdt?: number;
   realizedPnlUsdt?: number;
   activePositionsCount?: number;
   marketSentiment?: string;
 }): RiskBotEmotion {
   const upperStatus = String(params.status || 'NORMAL').toUpperCase();
+  const score = params.riskScore ?? 0;
+  const dailyLoss = params.dailyLossPercent ?? 0;
+  const drawdown = params.drawdownPercent ?? 0;
+  const maxDd = params.maxDrawdownLimit ?? 10;
+
   if (
     params.emergencyStop ||
     params.circuitBreakerActive ||
     upperStatus === 'HALTED' ||
     upperStatus === 'EMERGENCY' ||
     upperStatus === 'LOCKED' ||
-    (params.riskScore ?? 0) >= 85
+    score >= 85
   ) {
     return 'CIRCUIT_BREAKER_LOCKDOWN';
   }
   if (
     upperStatus === 'RESTRICTED' ||
-    (params.riskScore ?? 0) >= 70 ||
-    (params.drawdownPercent ?? 0) >= (params.maxDrawdownLimit ?? 10) * 0.75
+    score >= 70 ||
+    drawdown >= maxDd * 0.75
   ) {
     return 'HIGH_RISK_ALERT';
   }
   if (
     upperStatus === 'CAUTION' ||
     upperStatus === 'WARNING' ||
-    (params.riskScore ?? 0) >= 45 ||
-    (params.dailyLossPercent ?? 0) > 1.5 ||
-    (params.floatingPnlUsdt ?? 0) < -0.05
+    score >= 45 ||
+    dailyLoss > 1.5 ||
+    (params.consecutiveLosses ?? 0) >= 2
   ) {
     return 'VIGILANT_GUARD';
   }
   if (
-    (params.floatingPnlUsdt ?? 0) > 0.05 ||
-    (params.antiMartingaleActive && ((params.activePositionsCount ?? 0) > 0 || (params.realizedPnlUsdt ?? 0) > 0.05))
-  ) {
-    return 'ANTI_MARTINGALE_SCALING';
-  }
-  if (
-    (params.activePositionsCount ?? 0) > 0 ||
-    (params.riskScore ?? 0) >= 15 ||
-    String(params.marketSentiment).toUpperCase() === 'BULLISH'
+    score >= 15 ||
+    dailyLoss > 0 ||
+    drawdown > 0 ||
+    (params.consecutiveLosses ?? 0) === 1
   ) {
     return 'QUANT_CALCULATING';
   }
-  if (String(params.marketSentiment).toUpperCase() === 'BEARISH') {
-    return 'VIGILANT_GUARD';
+  if (
+    params.antiMartingaleActive &&
+    (params.consecutiveWins ?? 0) >= 2 &&
+    score < 15
+  ) {
+    return 'ANTI_MARTINGALE_SCALING';
   }
   return 'SHIELD_ZEN';
 }
@@ -196,27 +205,29 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
   status = 'NORMAL',
   emergencyStop = false,
   circuitBreakerActive = false,
-  antiMartingaleActive = false,
+  antiMartingaleActive = true,
   dailyLossPercent = 0,
   drawdownPercent = 0,
   maxDrawdownLimit = 10,
+  consecutiveWins = 0,
+  consecutiveLosses = 0,
   floatingPnlUsdt = 0,
   realizedPnlUsdt = 0,
   activePositionsCount = 0,
   marketSentiment = 'NEUTRAL',
   size = 'md',
   showMoodBadge = false,
+  frameless = false,
   language = 'ar',
   onClick,
   className = '',
 }) => {
   const isArabic = language === 'ar';
-  const isEn = language === 'en';
 
   const [isBlinking, setIsBlinking] = useState(false);
   const [pokeReaction, setPokeReaction] = useState(false);
 
-  // Natural blinking interval enabled across all sizes including header buttons
+  // Natural synchronized blinking interval across all instances (header & modal)
   useEffect(() => {
     let timeoutId: any;
     const interval = setInterval(() => {
@@ -229,7 +240,7 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
     };
   }, []);
 
-  // Determine current emotion tailored specifically for Risk Engine & Live Portfolio State
+  // Determine current emotion tailored specifically for Risk Engine state
   const currentEmotion: RiskBotEmotion = useMemo(() => {
     return computeRiskBotEmotion({
       riskScore,
@@ -240,6 +251,8 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
       dailyLossPercent,
       drawdownPercent,
       maxDrawdownLimit,
+      consecutiveWins,
+      consecutiveLosses,
       floatingPnlUsdt,
       realizedPnlUsdt,
       activePositionsCount,
@@ -254,6 +267,8 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
     maxDrawdownLimit,
     dailyLossPercent,
     antiMartingaleActive,
+    consecutiveWins,
+    consecutiveLosses,
     floatingPnlUsdt,
     realizedPnlUsdt,
     activePositionsCount,
@@ -267,11 +282,11 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
   };
 
   const sizeConfig = {
-    xs: { box: 'w-7 h-7 sm:w-8 sm:h-8 p-0.5', badgeText: 'text-[8px]' },
-    sm: { box: 'w-9 h-9 sm:w-10 sm:h-10 p-0.5', badgeText: 'text-[9px]' },
-    md: { box: 'w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5', badgeText: 'text-[10px]' },
-    lg: { box: 'w-16 h-16 sm:w-20 sm:h-20 p-1.5', badgeText: 'text-xs' },
-    xl: { box: 'w-24 h-24 sm:w-28 sm:h-28 p-2', badgeText: 'text-sm' },
+    xs: { box: frameless ? 'w-6 h-6 sm:w-6.5 sm:h-6.5' : 'w-6 h-6 sm:w-7 sm:h-7 p-0.5 rounded-lg', badgeText: 'text-[8px]' },
+    sm: { box: frameless ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-9 h-9 sm:w-10 sm:h-10 p-0.5 rounded-xl', badgeText: 'text-[9px]' },
+    md: { box: frameless ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5 rounded-2xl', badgeText: 'text-[10px]' },
+    lg: { box: frameless ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-16 h-16 sm:w-20 sm:h-20 p-1.5 rounded-2xl', badgeText: 'text-xs' },
+    xl: { box: frameless ? 'w-24 h-24 sm:w-28 sm:h-28' : 'w-24 h-24 sm:w-28 sm:h-28 p-2 rounded-3xl', badgeText: 'text-sm' },
   }[size];
 
   // Tailored Risk Engine themes, glow, visor background, beacon, and badges
@@ -281,7 +296,7 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
 
   return (
     <div className={`inline-flex flex-col items-center select-none shrink-0 ${className}`}>
-      {/* Interactive Avatar Frame with exact Terminal Robot cybernetic chassis */}
+      {/* Interactive Avatar Frame with exact Risk Engine Robot cybernetic chassis */}
       <div
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
@@ -293,7 +308,11 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
           }
         }}
         title={`${emotionConfig.title} • ${emotionConfig.desc} (${isArabic ? 'روبوت محرك المخاطر' : 'Risk Engine AI'})`}
-        className={`relative ${sizeConfig.box} rounded-2xl border bg-gradient-to-b ${emotionConfig.bgGradient} ${emotionConfig.border} flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer overflow-hidden shadow-sm group`}
+        className={`relative ${sizeConfig.box} ${
+          frameless
+            ? 'bg-transparent border-0 shadow-none p-0 overflow-visible'
+            : `border bg-gradient-to-b ${emotionConfig.bgGradient} ${emotionConfig.border} shadow-sm overflow-hidden`
+        } flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 ${onClick ? 'cursor-pointer' : ''} group`}
         style={{ transform: 'translateZ(0)' }}
       >
         {/* Precise Vector Robot Chassis identical in size and scale to Terminal Bot Robot */}
@@ -431,12 +450,17 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
       {showMoodBadge && (
         <div className="mt-1.5 flex flex-col items-center">
           <span className={`px-2 py-0.5 rounded-full ${sizeConfig.badgeText} font-black uppercase tracking-wider border font-mono ${emotionConfig.badgeBg} transition-colors flex items-center gap-1.5`}>
-            {emotionConfig.iconName === 'ShieldCheck' && <ShieldCheck className="w-3 h-3 shrink-0 text-emerald-400" />}
-            {emotionConfig.iconName === 'Zap' && <Zap className="w-3 h-3 shrink-0 text-cyan-400" />}
-            {emotionConfig.iconName === 'Eye' && <Eye className="w-3 h-3 shrink-0 text-amber-400" />}
-            {emotionConfig.iconName === 'AlertTriangle' && <AlertTriangle className="w-3 h-3 shrink-0 text-orange-400 animate-pulse" />}
-            {emotionConfig.iconName === 'Lock' && <Lock className="w-3 h-3 shrink-0 text-rose-400 animate-pulse" />}
-            {emotionConfig.iconName === 'TrendingUp' && <TrendingUp className="w-3 h-3 shrink-0 text-emerald-400" />}
+            {(() => {
+              const Icon = {
+                ShieldCheck,
+                Zap,
+                Eye,
+                AlertTriangle,
+                Lock,
+                TrendingUp
+              }[emotionConfig.iconName];
+              return <Icon className="w-3 h-3 shrink-0" />;
+            })()}
             <span>{emotionConfig.title}</span>
           </span>
         </div>

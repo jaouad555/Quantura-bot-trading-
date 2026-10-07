@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { BinanceTicker, ConnectionState, Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, MarketType, DisplayMode, ActiveBotPosition } from '../types';
+import { BinanceTicker, ConnectionState, Language, TimezoneMode, BinanceApiConfig, TradingExecutionMode, PaperWallet, MarketType, DisplayMode, ActiveBotPosition, RiskEngineMetrics } from '../types';
 import { calculatePortfolioMetrics } from '../utils/portfolioCalc';
 import { translations } from '../utils/translations';
 import { formatTime, getTimezoneLabel } from '../utils/timezone';
@@ -189,6 +189,8 @@ export const Header: React.FC<HeaderProps> = ({
     isTesting: false,
   });
   const [isAiStatusModalOpen, setIsAiStatusModalOpen] = useState(false);
+  const [riskMetrics, setRiskMetrics] = useState<RiskEngineMetrics | null>(null);
+  const [riskConfig, setRiskConfig] = useState<any>(null);
 
   // Periodic AI Status Polling
   const fetchAiStatus = async () => {
@@ -216,10 +218,43 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const fetchRiskMetrics = async () => {
+    try {
+      const [metricsRes, configRes] = await Promise.all([
+        fetch('/api/risk/metrics'),
+        fetch('/api/risk/config'),
+      ]);
+      if (metricsRes.ok) {
+        const data = await metricsRes.json();
+        setRiskMetrics(data);
+      }
+      if (configRes.ok) {
+        const cfg = await configRes.json();
+        setRiskConfig(cfg);
+      }
+    } catch {
+      // Silently fail
+    }
+  };
+
   useEffect(() => {
     fetchAiStatus();
-    const interval = setInterval(fetchAiStatus, 20000);
-    return () => clearInterval(interval);
+    fetchRiskMetrics();
+    const aiInterval = setInterval(fetchAiStatus, 20000);
+    const riskInterval = setInterval(fetchRiskMetrics, 4000);
+
+    const handleRiskSync = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail?.metrics) setRiskMetrics(detail.metrics);
+      if (detail?.config) setRiskConfig(detail.config);
+    };
+    window.addEventListener('quantura-risk-sync', handleRiskSync);
+
+    return () => {
+      clearInterval(aiInterval);
+      clearInterval(riskInterval);
+      window.removeEventListener('quantura-risk-sync', handleRiskSync);
+    };
   }, []);
 
   const handleTestAiConnectivity = async () => {
@@ -466,16 +501,22 @@ export const Header: React.FC<HeaderProps> = ({
   const isPricePositive = (ticker?.priceChangePercent24h || 0) >= 0;
 
   const currentRiskEmotion = useMemo(() => {
+    const status = riskMetrics?.riskLockStatus || riskConfig?.riskLockStatus || 'NORMAL';
+    const emergencyStop = Boolean(riskMetrics?.emergencyStop ?? riskConfig?.emergencyStop);
+    const maxDd = parseFloat(String(riskConfig?.maxDrawdownPercent ?? riskConfig?.maxAccountDrawdownPercent ?? 10)) || 10;
     return computeRiskBotEmotion({
-      riskScore: 0,
-      dailyLossPercent: 0,
-      floatingPnlUsdt: portfolioMetrics.floatingPnl,
-      realizedPnlUsdt: portfolioMetrics.realizedPnl,
-      activePositionsCount: (activeBotPositions || []).length,
-      marketSentiment: isPricePositive ? 'BULLISH' : 'BEARISH',
-      antiMartingaleActive: true,
+      riskScore: riskMetrics?.riskScore ?? 0,
+      status,
+      emergencyStop,
+      circuitBreakerActive: Boolean(emergencyStop || status === 'LOCKED' || status === 'EMERGENCY'),
+      antiMartingaleActive: riskConfig?.antiMartingaleEnabled ?? true,
+      dailyLossPercent: riskMetrics?.dailyDrawdownPercent ?? riskMetrics?.dailyLossPercent ?? 0,
+      drawdownPercent: riskMetrics?.maxAccountDrawdownPercent ?? riskMetrics?.currentDrawdownPercent ?? 0,
+      maxDrawdownLimit: maxDd,
+      consecutiveWins: riskMetrics?.consecutiveWins ?? 0,
+      consecutiveLosses: riskMetrics?.consecutiveLosses ?? 0,
     });
-  }, [portfolioMetrics.floatingPnl, portfolioMetrics.realizedPnl, activeBotPositions, isPricePositive]);
+  }, [riskMetrics, riskConfig]);
 
   const riskEmotionCfg = useMemo(() => {
     return getRiskEmotionConfig(currentRiskEmotion, language);
@@ -1092,52 +1133,42 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Risk Engine Button with dynamic live emotion and theme-family icon */}
+          {/* Risk Engine Button with exact same Robot Avatar, colors, and emotions as Quantura Risk Engine Modal */}
           {onOpenRiskModal && (
             <button
               id="btn-header-risk-modal"
               type="button"
               onClick={onOpenRiskModal}
-              className={`h-8 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm ${riskEmotionCfg.btnBg}`}
+              className={`h-8 px-1.5 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm ${riskEmotionCfg.btnBg}`}
               title={
                 isArabic
-                  ? `محرك إدارة المخاطر: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
-                  : `Risk Engine: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
+                  ? `محرك إدارة المخاطر (Quantura Risk Engine): ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
+                  : `Quantura Risk Engine: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
               }
             >
-              <div className="shrink-0 pointer-events-none flex items-center">
+              <div className="shrink-0 pointer-events-none flex items-center justify-center">
                 <RiskBotAvatar
                   size="xs"
-                  riskScore={0}
-                  floatingPnlUsdt={portfolioMetrics.floatingPnl}
-                  realizedPnlUsdt={portfolioMetrics.realizedPnl}
-                  activePositionsCount={(activeBotPositions || []).length}
-                  marketSentiment={isPricePositive ? 'BULLISH' : 'BEARISH'}
-                  antiMartingaleActive={true}
+                  frameless={true}
+                  riskScore={riskMetrics?.riskScore ?? 0}
+                  status={riskMetrics?.riskLockStatus || riskConfig?.riskLockStatus || 'NORMAL'}
+                  emergencyStop={Boolean(riskMetrics?.emergencyStop ?? riskConfig?.emergencyStop)}
+                  circuitBreakerActive={Boolean(
+                    riskMetrics?.emergencyStop ||
+                    riskConfig?.emergencyStop ||
+                    riskMetrics?.riskLockStatus === 'LOCKED' ||
+                    riskMetrics?.riskLockStatus === 'EMERGENCY'
+                  )}
+                  antiMartingaleActive={riskConfig?.antiMartingaleEnabled ?? true}
+                  dailyLossPercent={riskMetrics?.dailyDrawdownPercent ?? riskMetrics?.dailyLossPercent ?? 0}
+                  drawdownPercent={riskMetrics?.maxAccountDrawdownPercent ?? riskMetrics?.currentDrawdownPercent ?? 0}
+                  maxDrawdownLimit={parseFloat(String(riskConfig?.maxDrawdownPercent ?? riskConfig?.maxAccountDrawdownPercent ?? 10)) || 10}
+                  consecutiveWins={riskMetrics?.consecutiveWins ?? 0}
+                  consecutiveLosses={riskMetrics?.consecutiveLosses ?? 0}
                   language={language}
                   className="pointer-events-none"
                 />
               </div>
-
-              {/* Theme-family vector icon */}
-              {riskEmotionCfg.iconName === 'ShieldCheck' && (
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.2} />
-              )}
-              {riskEmotionCfg.iconName === 'Zap' && (
-                <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2.2} />
-              )}
-              {riskEmotionCfg.iconName === 'Eye' && (
-                <Eye className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.2} />
-              )}
-              {riskEmotionCfg.iconName === 'AlertTriangle' && (
-                <AlertTriangle className="w-3.5 h-3.5 text-orange-400 shrink-0 animate-pulse" strokeWidth={2.2} />
-              )}
-              {riskEmotionCfg.iconName === 'Lock' && (
-                <Lock className="w-3.5 h-3.5 text-rose-400 shrink-0 animate-pulse" strokeWidth={2.2} />
-              )}
-              {riskEmotionCfg.iconName === 'TrendingUp' && (
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.2} />
-              )}
 
               <span className="font-mono font-bold whitespace-nowrap">
                 {riskEmotionCfg.shortLabel}
@@ -1279,9 +1310,10 @@ export const Header: React.FC<HeaderProps> = ({
                     : `Trading Bot: ${botEnabled ? 'Active' : 'Disabled'}`
                 }
               >
-                <div className="shrink-0 pointer-events-none flex items-center">
+                <div className="shrink-0 pointer-events-none flex items-center justify-center">
                   <SentimentalBotAvatar
                     enabled={botEnabled}
+                    frameless={true}
                     floatingPnlUsdt={portfolioMetrics.floatingPnl}
                     realizedPnlUsdt={portfolioMetrics.realizedPnl}
                     activePositionsCount={(activeBotPositions || []).length}
