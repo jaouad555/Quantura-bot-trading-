@@ -25,14 +25,72 @@ export function logBinanceApiCall(entry: BinanceApiLogEntry) {
   if (apiCallLogs.length > 200) apiCallLogs.pop();
 
   if (entry.httpStatus >= 400 || entry.error || entry.binanceCode) {
-    const isExpectedAuthMismatch = entry.httpStatus === 401 || entry.binanceCode === -2015;
-    const logFn = isExpectedAuthMismatch ? console.warn : console.error;
+    const isTransientOrGatewayOrAuth =
+      entry.httpStatus >= 500 ||
+      entry.httpStatus === 429 ||
+      entry.httpStatus === 401 ||
+      entry.httpStatus === 0 ||
+      entry.binanceCode === -2015 ||
+      entry.binanceCode === -1021;
+    const logFn = isTransientOrGatewayOrAuth ? console.warn : console.error;
     logFn(
-      `[BINANCE API ${isExpectedAuthMismatch ? 'AUTH NOTICE' : 'ERROR'}] [${entry.executionMode}] [${entry.marketType}] ${entry.endpoint} - ` +
+      `[BINANCE API ${isTransientOrGatewayOrAuth ? 'GATEWAY/AUTH NOTICE' : 'ERROR'}] [${entry.executionMode}] [${entry.marketType}] ${entry.endpoint} - ` +
       `Status: ${entry.httpStatus} Code: ${entry.binanceCode || 'N/A'} Msg: ${entry.binanceMessage || entry.error || 'Unknown error'}` +
       (entry.symbol ? ` Symbol: ${entry.symbol}` : '')
     );
   }
+}
+
+/**
+ * Resilient fetch with automatic single retry on 502/503/504 Gateway errors (common on Binance Testnet)
+ */
+async function resilientBinanceFetch(url: string, options: RequestInit, timeoutMs = 7000): Promise<{ res: Response; data: any }> {
+  let attempt = 0;
+  while (attempt < 2) {
+    attempt++;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      
+      // If temporary gateway hiccup (502, 503, 504) on first attempt, retry once after short backoff
+      if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt === 1) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      
+      const rawText = await res.text().catch(() => '');
+      let data: any = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (rawText.toLowerCase().includes('maintenance')) {
+          data = {
+            code: 503,
+            msg: 'Binance Testnet is currently under maintenance by Binance. Please retry after a few minutes or use Paper Trading.',
+          };
+        } else if (res.status >= 500) {
+          data = {
+            code: res.status,
+            msg: `Binance Testnet Gateway temporary delay (HTTP ${res.status}).`,
+          };
+        }
+      }
+      return { res, data };
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (attempt === 1) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Binance request failed after retries');
 }
 
 export function getBinanceApiLogs(): BinanceApiLogEntry[] {
@@ -329,15 +387,10 @@ export async function fetchAuthoritativeAccount(
     const url = `${baseUrl}${endpoint}?${fullQuery}`;
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(url, {
+      const { res, data } = await resilientBinanceFetch(url, {
         method: 'GET',
         headers: { 'X-MBX-APIKEY': auth.apiKey, 'Accept': 'application/json' },
-        signal: controller.signal,
       });
-      clearTimeout(timeout);
-      const data = await res.json().catch(() => null);
 
       logBinanceApiCall({
         timestamp: Date.now(),
@@ -351,9 +404,12 @@ export async function fetchAuthoritativeAccount(
       });
 
       if (!res.ok || !data) {
+        const errorMsg = res.status === 502 || res.status === 503 || res.status === 504
+          ? `Binance Futures Testnet temporary gateway delay (HTTP ${res.status})`
+          : data?.msg || 'BINANCE CONNECTION ERROR: Failed to fetch Futures account';
         return {
           success: false,
-          error: data?.msg || 'BINANCE CONNECTION ERROR: Failed to fetch Futures account',
+          error: errorMsg,
           binanceCode: data?.code,
           marketType: 'FUTURES',
           executionMode,
@@ -431,15 +487,10 @@ export async function fetchAuthoritativeAccount(
     const url = `${baseUrl}${endpoint}?${fullQuery}`;
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(url, {
+      const { res, data } = await resilientBinanceFetch(url, {
         method: 'GET',
         headers: { 'X-MBX-APIKEY': auth.apiKey, 'Accept': 'application/json' },
-        signal: controller.signal,
       });
-      clearTimeout(timeout);
-      const data = await res.json().catch(() => null);
 
       logBinanceApiCall({
         timestamp: Date.now(),
@@ -453,9 +504,12 @@ export async function fetchAuthoritativeAccount(
       });
 
       if (!res.ok || !data) {
+        const errorMsg = res.status === 502 || res.status === 503 || res.status === 504
+          ? `Binance Spot Testnet temporary gateway delay (HTTP ${res.status})`
+          : data?.msg || 'BINANCE CONNECTION ERROR: Failed to fetch Spot account';
         return {
           success: false,
-          error: data?.msg || 'BINANCE CONNECTION ERROR: Failed to fetch Spot account',
+          error: errorMsg,
           binanceCode: data?.code,
           marketType: 'SPOT',
           executionMode,
