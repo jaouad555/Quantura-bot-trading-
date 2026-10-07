@@ -174,6 +174,7 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [localTgToken, setLocalTgToken] = useState(telegramBotToken);
   const [localTgChatId, setLocalTgChatId] = useState(telegramChatId);
   const [showTgToken, setShowTgToken] = useState(false);
@@ -2762,6 +2763,33 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
 
+                {/* Reset Feedback Notification Banner */}
+                {resetFeedback && (
+                  <div className={`p-4 rounded-xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-200 ${
+                    resetFeedback.type === 'success' 
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' 
+                      : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                  }`}>
+                    {resetFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <div className="text-xs font-bold leading-relaxed">
+                        {resetFeedback.message}
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setResetFeedback(null)}
+                      className="text-slate-400 hover:text-white text-xs cursor-pointer p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
                 {/* Factory Reset Danger Zone */}
                 <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -2876,14 +2904,31 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                 disabled={isResetting}
                 onClick={async () => {
                   setIsResetting(true);
+                  setResetFeedback(null);
                   try {
                     if (onFullReset) {
                       await onFullReset();
                     } else {
                       await apiStorage.resetTradingData();
                     }
-                  } catch (e) {
+                    setCustomBalanceInput('1000');
+                    setResetFeedback({
+                      type: 'success',
+                      message: isArabic
+                        ? '✅ تمت إعادة ضبط المصنع بنجاح! تم تصفير المحفظة إلى 1,000 USDT ومسح جميع الصفقات ومحرك المخاطر، مع الحفاظ على مفاتيح API وتيليغرام ونموذج الذكاء الاصطناعي.'
+                        : '✅ Réinitialisation effectuée avec succès ! Le Risk Engine, le portefeuille (1 000 USDT) et l\'historique ont été remis à zéro. Vos clés et configurations sont préservées.'
+                    });
+                    setTimeout(() => {
+                      setResetFeedback(null);
+                    }, 10000);
+                  } catch (e: any) {
                     console.error('Reset failed', e);
+                    setResetFeedback({
+                      type: 'error',
+                      message: isArabic
+                        ? `❌ حدث خطأ أثناء إعادة الضبط: ${e?.message || 'خطأ غير معروف'}`
+                        : `❌ Échec de la réinitialisation: ${e?.message || 'Erreur inconnue'}`
+                    });
                   } finally {
                     setIsResetting(false);
                     setShowResetConfirm(false);
