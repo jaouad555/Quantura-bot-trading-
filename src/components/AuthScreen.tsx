@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Mail, Key, UserPlus, LogIn, AlertCircle, ShieldCheck, Cpu, Eye, EyeOff, Sparkles, Shield, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
+import { Lock, Mail, Key, UserPlus, LogIn, AlertCircle, ShieldCheck, Cpu, Eye, EyeOff, Sparkles, Shield, ArrowLeft, CheckCircle2, KeyRound, Smartphone } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { apiStorage } from '../utils/apiStorage';
+import { verifyUserAuthCode, verifyTOTP, getOrCreate2FASecret } from '../utils/totp';
 import { Language } from '../types';
 
 interface AuthScreenProps {
@@ -22,7 +23,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
   // 2FA Verification Flow States
   const [is2FAStep, setIs2FAStep] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [expected2FAPin, setExpected2FAPin] = useState('272270');
+  const [expected2FAPin, setExpected2FAPin] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
 
   // Auto-focus 2FA input
@@ -33,7 +34,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
 
     try {
       const cleanEmail = email.trim().toLowerCase() || 'jawman27227@gmail.com';
-      let user2faPin = '272270'; // Default secure 2FA PIN
+      let user2faPin = '';
       
       // Attempt cloud sync / user verification
       try {
@@ -58,7 +59,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
           await setDoc(userRef, {
             email: cleanEmail,
             password,
-            twoFactorPin: '272270',
+            twoFactorPin: '',
             twoFactorEnabled: true,
             createdAt: Date.now()
           }, { merge: true });
@@ -87,29 +88,39 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
     e.preventDefault();
     setError('');
 
-    const cleanCode = twoFactorCode.trim();
-    if (!cleanCode) {
+    const cleanCode = twoFactorCode.trim().replace(/\D/g, '');
+    if (!cleanCode || cleanCode.length !== 6) {
       setError(isArabic ? 'يرجى إدخال رمز التحقق الثنائي المكون من 6 أرقام.' : 'Please enter the 6-digit 2FA code.');
       return;
     }
 
-    // Verify 2FA code (matches saved PIN or master default 272270)
-    if (cleanCode === expected2FAPin || cleanCode === '272270') {
-      const cleanEmail = pendingEmail || 'jawman27227@gmail.com';
+    const cleanEmail = pendingEmail || 'jawman27227@gmail.com';
+    const username = cleanEmail.split('@')[0];
+
+    // Standard RFC 6238 TOTP verification (Google Authenticator, Microsoft Authenticator, 2FAS, Authy, etc.) OR custom user PIN
+    const isValid = verifyUserAuthCode(cleanCode, username, expected2FAPin) || 
+                    verifyTOTP(cleanCode, getOrCreate2FASecret(username)) || 
+                    (expected2FAPin && cleanCode === expected2FAPin);
+
+    if (isValid) {
       try {
         localStorage.setItem('app_is_authenticated', 'true');
         localStorage.setItem('app_email', cleanEmail);
-        localStorage.setItem('app_username', cleanEmail.split('@')[0]);
+        localStorage.setItem('app_username', username);
         localStorage.setItem('app_2fa_verified', 'true');
         sessionStorage.setItem('app_is_authenticated', 'true');
         sessionStorage.setItem('app_email', cleanEmail);
-        sessionStorage.setItem('app_username', cleanEmail.split('@')[0]);
+        sessionStorage.setItem('app_username', username);
         sessionStorage.setItem('app_2fa_verified', 'true');
       } catch {}
 
-      onLogin(cleanEmail.split('@')[0]);
+      onLogin(username);
     } else {
-      setError(isArabic ? 'رمز المصادقة الثنائية 2FA غير صحيح. الرمز الافتراضي لحسابك: 272270' : 'Invalid 2FA code. Default PIN is: 272270');
+      setError(
+        isArabic 
+          ? 'رمز المصادقة الثنائية 2FA غير صحيح. افتح تطبيق المصادقة (Google Authenticator أو أي تطبيق آخر) وأدخل الرمز المباشر المكون من 6 أرقام.' 
+          : 'Code 2FA invalide. Ouvrez votre application d\'authentification (Google/Microsoft/2FAS) et saisissez le code à 6 chiffres.'
+      );
     }
   };
 
@@ -201,13 +212,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
                   <span>{isArabic ? `الحساب: ${pendingEmail}` : `Account: ${pendingEmail}`}</span>
-                  <button
-                    type="button"
-                    onClick={() => setTwoFactorCode(expected2FAPin || '272270')}
-                    className="text-amber-400 hover:text-amber-300 underline font-mono cursor-pointer"
-                  >
-                    {isArabic ? 'رمزك الافتراضي: 272270' : 'Default PIN: 272270'}
-                  </button>
+                  <span className="text-cyan-400 flex items-center gap-1 font-mono text-[10px]">
+                    <Smartphone className="w-3 h-3 text-cyan-400" />
+                    <span>{isArabic ? 'Google/2FAS Authenticator' : 'Authenticator App'}</span>
+                  </span>
                 </div>
               </div>
 

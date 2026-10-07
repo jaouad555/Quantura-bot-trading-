@@ -1,5 +1,6 @@
 import React, { useState, useEffect, memo, useMemo } from 'react';
 import { Language } from '../types';
+import { ShieldCheck, Zap, Eye, AlertTriangle, Lock, TrendingUp } from 'lucide-react';
 
 export type RiskBotEmotion = 
   | 'SHIELD_ZEN' 
@@ -89,6 +90,8 @@ export function computeRiskBotEmotion(params: {
   return 'SHIELD_ZEN';
 }
 
+export type RiskEmotionIconName = 'ShieldCheck' | 'Zap' | 'Eye' | 'AlertTriangle' | 'Lock' | 'TrendingUp';
+
 export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language = 'ar') {
   const isArabic = language === 'ar';
   const isEn = language === 'en';
@@ -97,6 +100,7 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
   switch (emotion) {
     case 'SHIELD_ZEN':
       return {
+        iconName: 'ShieldCheck' as RiskEmotionIconName,
         border: 'border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.3)]',
         bgGradient: 'from-emerald-950/80 via-slate-900 to-slate-950',
         screenBg: '#022c22',
@@ -104,13 +108,14 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#10b981',
         badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
         btnBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]',
-        title: isArabic ? '🛡️ درع الأمان التام' : isEn ? '🛡️ Capital Shielded' : '🛡️ Bouclier Sécurité Totale',
-        shortLabel: isArabic ? '🛡️ آمن' : isFrench ? '🛡️ SAFE' : '🛡️ SAFE',
+        title: isArabic ? 'درع الأمان التام' : isEn ? 'Capital Shielded' : 'Bouclier Sécurité Totale',
+        shortLabel: isArabic ? 'آمن' : isFrench ? 'SAFE' : 'SAFE',
         fullLabel: isArabic ? 'درع الأمان' : isFrench ? 'Sécurisé' : 'Shielded',
         desc: isArabic ? 'المخاطر 0%، رأس المال محمي تماماً ومطابق لمعايير الأمان' : 'Zero drawdown, capital strictly protected',
       };
     case 'QUANT_CALCULATING':
       return {
+        iconName: 'Zap' as RiskEmotionIconName,
         border: 'border-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
         bgGradient: 'from-cyan-950/80 via-slate-900 to-slate-950',
         screenBg: '#04222f',
@@ -118,13 +123,14 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#06b6d4',
         badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
         btnBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]',
-        title: isArabic ? '⚡ حساب المعايير والارتباط' : isEn ? '⚡ Risk Bounds Matrix' : '⚡ Matrice Risque & Corrélation',
-        shortLabel: isArabic ? '⚡ رصد' : isFrench ? '⚡ GUARD' : '⚡ GUARD',
+        title: isArabic ? 'حساب المعايير والارتباط' : isEn ? 'Risk Bounds Matrix' : 'Matrice Risque & Corrélation',
+        shortLabel: isArabic ? 'رصد' : isFrench ? 'GUARD' : 'GUARD',
         fullLabel: isArabic ? 'رصد المخاطر' : isFrench ? 'Analyse Risque' : 'Risk Bounds',
         desc: isArabic ? 'تحليل لحظي لنسبة كيلي، تقلبات السوق، وحجم العقود الأمثل' : 'Computing Kelly criterion & optimal position size',
       };
     case 'VIGILANT_GUARD':
       return {
+        iconName: 'Eye' as RiskEmotionIconName,
         border: 'border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
         bgGradient: 'from-amber-950/80 via-slate-900 to-slate-950',
         screenBg: '#271402',
@@ -132,13 +138,14 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#f59e0b',
         badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
         btnBg: 'bg-amber-500/15 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]',
-        title: isArabic ? '👁️ يقظة دفاعية مشددة' : isEn ? '👁️ Defensive Vigilance' : '👁️ Vigilance Défensive',
-        shortLabel: isArabic ? '👁️ حذر' : isFrench ? '👁️ VIGILANT' : '👁️ VIGILANT',
+        title: isArabic ? 'يقظة دفاعية مشددة' : isEn ? 'Defensive Vigilance' : 'Vigilance Défensive',
+        shortLabel: isArabic ? 'حذر' : isFrench ? 'VIGILANT' : 'VIGILANT',
         fullLabel: isArabic ? 'يقظة وحذر' : isFrench ? 'Vigilance' : 'Vigilant Guard',
         desc: isArabic ? 'مراقبة التراجع اليومي والتعرض مع تشديد شروط وقف الخسارة' : 'Guarding drawdown & tightening stop loss barriers',
       };
     case 'HIGH_RISK_ALERT':
       return {
+        iconName: 'AlertTriangle' as RiskEmotionIconName,
         border: 'border-orange-500/80 shadow-[0_0_20px_rgba(249,115,22,0.4)]',
         bgGradient: 'from-orange-950/85 via-slate-900 to-slate-950',
         screenBg: '#2d0f04',
@@ -146,13 +153,14 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#f97316',
         badgeBg: 'bg-orange-500/25 text-orange-300 border-orange-500/50 animate-pulse',
         btnBg: 'bg-orange-500/20 text-orange-300 border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.3)] animate-pulse',
-        title: isArabic ? '⚠️ تحذير: سقف المخاطرة' : isEn ? '⚠️ High Risk Warning' : '⚠️ Alerte Seuil de Risque',
-        shortLabel: isArabic ? '⚠️ خطر' : isFrench ? '⚠️ ALERTE' : '⚠️ ALERT',
+        title: isArabic ? 'تحذير: سقف المخاطرة' : isEn ? 'High Risk Warning' : 'Alerte Seuil de Risque',
+        shortLabel: isArabic ? 'خطر' : isFrench ? 'ALERTE' : 'ALERT',
         fullLabel: isArabic ? 'تحذير مخاطرة' : isFrench ? 'Alerte Risque' : 'High Risk Alert',
         desc: isArabic ? 'اقتراب التراجع من الحد الأقصى! تجميد فتح الصفقات الجديدة' : 'Drawdown approaching upper threshold limits',
       };
     case 'CIRCUIT_BREAKER_LOCKDOWN':
       return {
+        iconName: 'Lock' as RiskEmotionIconName,
         border: 'border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.5)]',
         bgGradient: 'from-rose-950/90 via-slate-900 to-slate-950',
         screenBg: '#350614',
@@ -160,13 +168,14 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#f43f5e',
         badgeBg: 'bg-rose-500/30 text-rose-300 border-rose-500/50 animate-pulse',
         btnBg: 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse',
-        title: isArabic ? '⛔ قاطع الدائرة وقفل الطوارئ' : isEn ? '⛔ Circuit Breaker Lockdown' : '⛔ Coupe-Circuit d\'Urgence',
-        shortLabel: isArabic ? '⛔ مقفل' : isFrench ? '⛔ BLOQUÉ' : '⛔ LOCKED',
+        title: isArabic ? 'قاطع الدائرة وقفل الطوارئ' : isEn ? 'Circuit Breaker Lockdown' : "Coupe-Circuit d'Urgence",
+        shortLabel: isArabic ? 'مقفل' : isFrench ? 'BLOQUÉ' : 'LOCKED',
         fullLabel: isArabic ? 'إيقاف وقائي' : isFrench ? 'Coupe-Circuit' : 'Circuit Breaker',
         desc: isArabic ? 'تفعيل الإيقاف الوقائي الفوري لحماية المحفظة ومنع أي نزيف' : 'Emergency safety lockdown active, trading halted',
       };
     case 'ANTI_MARTINGALE_SCALING':
       return {
+        iconName: 'TrendingUp' as RiskEmotionIconName,
         border: 'border-emerald-400/80 shadow-[0_0_18px_rgba(52,211,153,0.35)]',
         bgGradient: 'from-emerald-900/80 via-slate-900 to-slate-950',
         screenBg: '#022c22',
@@ -174,8 +183,8 @@ export function getRiskEmotionConfig(emotion: RiskBotEmotion, language: Language
         beaconColor: '#fbbf24',
         badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
         btnBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(52,211,153,0.25)]',
-        title: isArabic ? '🚀 تدرج الأرباح والحماية' : isEn ? '🚀 Anti-Martingale Scale' : '🚀 Scaling Anti-Martingale',
-        shortLabel: isArabic ? '🚀 نمو' : isFrench ? '🚀 SCALE' : '🚀 SCALE',
+        title: isArabic ? 'تدرج الأرباح والحماية' : isEn ? 'Anti-Martingale Scale' : 'Scaling Anti-Martingale',
+        shortLabel: isArabic ? 'نمو' : isFrench ? 'SCALE' : 'SCALE',
         fullLabel: isArabic ? 'تدرج الأرباح' : isFrench ? 'Scaling Gains' : 'Profit Scaling',
         desc: isArabic ? 'نمو آمن وتأمين للأرباح مع حماية صارمة لرأس المال' : 'Scaling position sizing on consecutive profits safely',
       };
@@ -421,7 +430,13 @@ const RiskBotAvatarComponent: React.FC<RiskBotAvatarProps> = ({
       {/* Optional Mood Badge */}
       {showMoodBadge && (
         <div className="mt-1.5 flex flex-col items-center">
-          <span className={`px-2 py-0.5 rounded-full ${sizeConfig.badgeText} font-black uppercase tracking-wider border font-mono ${emotionConfig.badgeBg} transition-colors flex items-center gap-1`}>
+          <span className={`px-2 py-0.5 rounded-full ${sizeConfig.badgeText} font-black uppercase tracking-wider border font-mono ${emotionConfig.badgeBg} transition-colors flex items-center gap-1.5`}>
+            {emotionConfig.iconName === 'ShieldCheck' && <ShieldCheck className="w-3 h-3 shrink-0 text-emerald-400" />}
+            {emotionConfig.iconName === 'Zap' && <Zap className="w-3 h-3 shrink-0 text-cyan-400" />}
+            {emotionConfig.iconName === 'Eye' && <Eye className="w-3 h-3 shrink-0 text-amber-400" />}
+            {emotionConfig.iconName === 'AlertTriangle' && <AlertTriangle className="w-3 h-3 shrink-0 text-orange-400 animate-pulse" />}
+            {emotionConfig.iconName === 'Lock' && <Lock className="w-3 h-3 shrink-0 text-rose-400 animate-pulse" />}
+            {emotionConfig.iconName === 'TrendingUp' && <TrendingUp className="w-3 h-3 shrink-0 text-emerald-400" />}
             <span>{emotionConfig.title}</span>
           </span>
         </div>

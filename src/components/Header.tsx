@@ -52,6 +52,8 @@ import {
   X,
   HelpCircle,
   Cpu,
+  Eye,
+  Lock,
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
@@ -1090,13 +1092,13 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Risk Engine Button with dynamic live emotion */}
+          {/* Risk Engine Button with dynamic live emotion and theme-family icon */}
           {onOpenRiskModal && (
             <button
               id="btn-header-risk-modal"
               type="button"
               onClick={onOpenRiskModal}
-              className={`h-8 px-1.5 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm ${riskEmotionCfg.btnBg}`}
+              className={`h-8 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold transition shrink-0 cursor-pointer active:scale-95 group shadow-sm ${riskEmotionCfg.btnBg}`}
               title={
                 isArabic
                   ? `محرك إدارة المخاطر: ${riskEmotionCfg.title} - ${riskEmotionCfg.desc}`
@@ -1116,6 +1118,27 @@ export const Header: React.FC<HeaderProps> = ({
                   className="pointer-events-none"
                 />
               </div>
+
+              {/* Theme-family vector icon */}
+              {riskEmotionCfg.iconName === 'ShieldCheck' && (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.2} />
+              )}
+              {riskEmotionCfg.iconName === 'Zap' && (
+                <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2.2} />
+              )}
+              {riskEmotionCfg.iconName === 'Eye' && (
+                <Eye className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.2} />
+              )}
+              {riskEmotionCfg.iconName === 'AlertTriangle' && (
+                <AlertTriangle className="w-3.5 h-3.5 text-orange-400 shrink-0 animate-pulse" strokeWidth={2.2} />
+              )}
+              {riskEmotionCfg.iconName === 'Lock' && (
+                <Lock className="w-3.5 h-3.5 text-rose-400 shrink-0 animate-pulse" strokeWidth={2.2} />
+              )}
+              {riskEmotionCfg.iconName === 'TrendingUp' && (
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.2} />
+              )}
+
               <span className="font-mono font-bold whitespace-nowrap">
                 {riskEmotionCfg.shortLabel}
               </span>

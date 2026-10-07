@@ -52,6 +52,8 @@ import {
   Sparkles,
   Sliders,
   CheckCircle2,
+  Smartphone,
+  KeyRound,
   Play,
   Gauge,
   Layers,
@@ -76,6 +78,7 @@ import { calculateMultiMarketPortfolio } from '../utils/portfolioCalc';
 import {
   getOrCreate2FASecret,
   generateNew2FASecret,
+  save2FASecret,
   verifyTOTP,
   getTOTPUri,
   generateQRCodeDataUrl,
@@ -200,10 +203,18 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   const [is2FAActive, setIs2FAActive] = useState(() => is2FAEnabled(userIdent));
   const [copiedKey, setCopiedKey] = useState(false);
   const [setupKey2FA, setSetupKey2FA] = useState(() => getOrCreate2FASecret(username || 'JAOUAD'));
+  const [customKeyInput, setCustomKeyInput] = useState('');
+  const [isEditingKey, setIsEditingKey] = useState(false);
   const [setupQR2FA, setSetupQR2FA] = useState('');
   const [showQRModal, setShowQRModal] = useState(false);
   const [totpCountdown, setTotpCountdown] = useState(getTOTPTimeRemaining());
   const [totpFeedback, setTotpFeedback] = useState<string | null>(null);
+
+  // Master PIN state
+  const [masterPin, setMasterPin] = useState(() => apiStorage.getItem(`2fa_pin_${userIdent}`) || apiStorage.getItem('app_2fa_master_pin') || '');
+  const [newMasterPinInput, setNewMasterPinInput] = useState('');
+  const [isChangingMasterPin, setIsChangingMasterPin] = useState(false);
+  const [pinFeedback, setPinFeedback] = useState<string | null>(null);
   
   // Test PIN / TOTP code validator
   const [testPinInput, setTestPinInput] = useState('');
@@ -363,20 +374,69 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
     setTimeout(() => setTotpFeedback(null), 3500);
   };
 
+  const handleSaveCustomSecret = () => {
+    const clean = customKeyInput.trim().replace(/\s+/g, '').toUpperCase();
+    if (!clean || clean.length < 16) {
+      setTotpFeedback(isArabic ? 'المفتاح السري يجب أن يحتوي على 16 حرفاً على الأقل بتنسيق Base32' : 'Secret Key must be at least 16 Base32 characters');
+      setTimeout(() => setTotpFeedback(null), 3000);
+      return;
+    }
+    save2FASecret(clean, userIdent);
+    setSetupKey2FA(clean);
+    setIsEditingKey(false);
+    setCustomKeyInput('');
+    const uri = getTOTPUri(clean, `Quantura (${username || 'JAOUAD'})`);
+    generateQRCodeDataUrl(uri).then(setSetupQR2FA).catch(console.error);
+    setTotpFeedback(isArabic ? 'تم حفظ المفتاح المخصص بنجاح!' : 'Custom Secret Key saved successfully!');
+    setTimeout(() => setTotpFeedback(null), 3000);
+  };
+
+  const handleSaveMasterPin = () => {
+    const clean = newMasterPinInput.trim().replace(/\D/g, '');
+    if (clean.length !== 6) {
+      setPinFeedback(isArabic ? 'رمز PIN يجب أن يتكون من 6 أرقام تماماً' : 'Master PIN must be exactly 6 digits');
+      setTimeout(() => setPinFeedback(null), 3000);
+      return;
+    }
+    apiStorage.setItem(`2fa_pin_${userIdent}`, clean);
+    apiStorage.setItem('app_2fa_master_pin', clean);
+    setMasterPin(clean);
+    setIsChangingMasterPin(false);
+    setNewMasterPinInput('');
+    setPinFeedback(isArabic ? 'تم تحديث رمز PIN الرئيسي بنجاح! 🔒' : 'Master PIN updated successfully! 🔒');
+    setTimeout(() => setPinFeedback(null), 3000);
+  };
+
+  const handleClearMasterPin = () => {
+    apiStorage.removeItem(`2fa_pin_${userIdent}`);
+    apiStorage.removeItem('app_2fa_master_pin');
+    setMasterPin('');
+    setIsChangingMasterPin(false);
+    setNewMasterPinInput('');
+    setPinFeedback(isArabic ? 'تم إلغاء رمز PIN الافتراضي. الآن الاعتماد 100% على تطبيق المصادقة 2FA TOTP!' : 'PIN cleared. Authentication is now 100% TOTP-app based!');
+    setTimeout(() => setPinFeedback(null), 3500);
+  };
+
   const handleVerifyTestPin = () => {
     const clean = testPinInput.trim().replace(/\D/g, '');
-    const masterPin = apiStorage.getItem('app_2fa_master_pin') || '272270';
-    if (clean === masterPin || verifyTOTP(clean, setupKey2FA)) {
+    const isTotpValid = verifyTOTP(clean, setupKey2FA);
+    const isPinValid = masterPin ? clean === masterPin : false;
+    
+    if (isTotpValid || isPinValid) {
       setTestPinResult('VALID');
-      setTotpFeedback(isArabic ? 'الرمز صحيح ومصرح بالدخول 100% ✅' : 'Valid Code! Authorized Access ✅');
+      setTotpFeedback(
+        isTotpValid 
+          ? (isArabic ? 'رمز TOTP من التطبيق متطابق وصحيح 100% ✅' : 'TOTP Authenticator code is valid 100% ✅')
+          : (isArabic ? 'رمز PIN Master صحيح 100% ✅' : 'Master PIN is valid 100% ✅')
+      );
     } else {
       setTestPinResult('INVALID');
-      setTotpFeedback(isArabic ? 'رمز غير صحيح ❌ حاول مجدداً' : 'Invalid Code ❌ Try again');
+      setTotpFeedback(isArabic ? 'رمز غير صحيح ❌ تأكد من توقيت تطبيق المصادقة أو صحة الرمز' : 'Invalid Code ❌ Check your Authenticator app clock/code');
     }
     setTimeout(() => {
       setTestPinResult(null);
       setTotpFeedback(null);
-    }, 4000);
+    }, 4500);
   };
 
   const handleApplyCustomBalance = () => {
@@ -2122,16 +2182,16 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-white">
-                      {isArabic ? 'الأمان، المصادقة الثنائية ورمز PIN' : 'Sécurité, Authentification 2FA & PIN Master'}
+                      {isArabic ? 'الأمان، المصادقة الثنائية (2FA TOTP)' : 'Sécurité, Authentification 2FA & Clé TOTP'}
                     </h2>
                     <p className="text-xs text-slate-400">
-                      {isArabic ? 'تأمين تسجيل الدخول، رمز التحقق الرئيسي 6 أرقام وتطبيقات Google/Microsoft Authenticator' : 'Two-Factor TOTP authentication, 6-digit Master PIN, and secure sessions.'}
+                      {isArabic ? 'حماية الحساب عبر بروتوكول TOTP المتوافق مع كافة تطبيقات المصادقة (Google / Microsoft / 2FAS / Authy) دون قيود.' : 'RFC 6238 TOTP Two-Factor Authentication compatible with any Authenticator app.'}
                     </p>
                   </div>
                 </div>
 
                 {/* 2FA Master Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-teal-500/5 border border-emerald-500/30 space-y-4">
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-teal-500/5 border border-emerald-500/30 space-y-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
@@ -2172,51 +2232,25 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Master PIN Box */}
-                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-300">
-                        {isArabic ? 'رمز التحقق الثنائي الرئيسي (Master 2FA PIN):' : 'Code PIN Master de Sécurité :'}
-                      </span>
-                      <span className="font-mono font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30 text-sm tracking-wider">
-                        {apiStorage.getItem('app_2fa_master_pin') || '272270'}
-                      </span>
+                  {/* Supported Authenticator Apps Banner */}
+                  <div className="p-3 bg-slate-950/80 border border-slate-800/90 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                    <div className="flex items-center gap-2 text-cyan-300 font-bold">
+                      <Smartphone className="w-4 h-4 text-cyan-400" />
+                      <span>{isArabic ? 'التطبيقات المتوافقة 100%:' : 'Applications compatibles :'}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      {isArabic 
-                        ? '🔒 عند تسجيل الدخول أو فتح التطبيق من متصفح جديد، يتطلب النظام إدخال هذا الرمز أو رمز TOTP لتأكيد هويتك.' 
-                        : '🔒 Required upon login from any new browser or session to guarantee unauthorized access prevention.'}
-                    </p>
-                  </div>
-
-                  {/* Interactive PIN / TOTP Code Test Tool */}
-                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
-                    <label className="block text-xs font-bold text-slate-300">
-                      {isArabic ? 'تجربة واختبار رمز 2FA أو Master PIN الآن:' : 'Tester votre code 2FA ou PIN Master :'}
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={testPinInput}
-                        onChange={(e) => setTestPinInput(e.target.value)}
-                        placeholder="Ex: 272270"
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm tracking-widest text-center focus:outline-none focus:border-cyan-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleVerifyTestPin}
-                        className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition cursor-pointer active:scale-95 shadow-md shadow-cyan-500/20"
-                      >
-                        {isArabic ? 'تحقق' : 'Vérifier'}
-                      </button>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">Google Authenticator</span>
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">Microsoft Authenticator</span>
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">2FAS</span>
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">Authy</span>
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">Bitwarden / 1Password</span>
                     </div>
                   </div>
 
                   {/* TOTP Secret & QR Code Actions */}
-                  <div className="space-y-2 pt-2">
+                  <div className="space-y-3 pt-1">
                     <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                      <span className="text-slate-400 font-mono">{isArabic ? 'المفتاح السري (Secret Key):' : 'Secret Key (TOTP):'}</span>
+                      <span className="text-slate-300 font-mono font-bold">{isArabic ? 'المفتاح السري لربط التطبيق (TOTP Secret Key):' : 'Clé Secrète TOTP :'}</span>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
@@ -2236,16 +2270,145 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
                         </button>
                         <button
                           type="button"
+                          onClick={() => setIsEditingKey(!isEditingKey)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 font-mono text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95"
+                        >
+                          <KeyRound className="w-3 h-3" />
+                          <span>{isEditingKey ? (isArabic ? 'إلغاء' : 'Annuler') : (isArabic ? 'تخصيص المفتاح' : 'Clé personnalisée')}</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleRegenerateKey}
                           className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 font-mono text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95"
                         >
                           <RefreshCw className="w-3 h-3" />
-                          <span>{isArabic ? 'تجديد' : 'Nouveau'}</span>
+                          <span>{isArabic ? 'توليد عشوائي جديد' : 'Générer nouvelle'}</span>
                         </button>
                       </div>
                     </div>
-                    <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-slate-300 break-all select-all">
-                      {setupKey2FA}
+
+                    {isEditingKey ? (
+                      <div className="bg-slate-950 p-3 rounded-xl border border-cyan-500/40 space-y-2">
+                        <label className="text-[11px] text-cyan-300 font-bold block">
+                          {isArabic ? 'أدخل مفتاح Base32 خاص بك (من تطبيقك المفضل):' : 'Entrez votre propre clé secrète Base32 :'}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customKeyInput}
+                            onChange={(e) => setCustomKeyInput(e.target.value)}
+                            placeholder="Ex: JBSWY3DPEHPK3PXP"
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-cyan-400 uppercase"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveCustomSecret}
+                            className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs cursor-pointer active:scale-95"
+                          >
+                            {isArabic ? 'حفظ المفتاح' : 'Enregistrer'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-xs text-cyan-300 break-all select-all flex items-center justify-between">
+                        <span>{setupKey2FA}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Master PIN Box (Optional fallback) */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs font-bold text-slate-200">
+                          {isArabic ? 'رمز PIN الاحتياطي (Master PIN):' : 'Code PIN de secours (Master PIN) :'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {masterPin ? (
+                          <span className="font-mono font-black text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/30 text-xs tracking-wider">
+                            {masterPin}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                            {isArabic ? 'غير محدد (اعتماد كلي على 2FA)' : 'Non configuré (100% TOTP)'}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsChangingMasterPin(!isChangingMasterPin)}
+                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono transition cursor-pointer"
+                        >
+                          {isChangingMasterPin ? (isArabic ? 'إلغاء' : 'Annuler') : (isArabic ? 'تعديل' : 'Modifier')}
+                        </button>
+                        {masterPin && (
+                          <button
+                            type="button"
+                            onClick={handleClearMasterPin}
+                            className="px-2 py-0.5 rounded bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[10px] font-mono transition cursor-pointer"
+                            title={isArabic ? 'حذف رمز PIN والاعتماد فقط على التطبيق' : 'Supprimer le code PIN'}
+                          >
+                            {isArabic ? 'حذف PIN' : 'Supprimer'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isChangingMasterPin && (
+                      <div className="pt-2 border-t border-slate-800/80 flex gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={newMasterPinInput}
+                          onChange={(e) => setNewMasterPinInput(e.target.value.replace(/\D/g, ''))}
+                          placeholder="Ex: 849201"
+                          className="w-36 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-xs text-center tracking-widest focus:outline-none focus:border-amber-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveMasterPin}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer active:scale-95"
+                        >
+                          {isArabic ? 'حفظ رمز PIN الجديد' : 'Enregistrer PIN'}
+                        </button>
+                      </div>
+                    )}
+
+                    {pinFeedback && (
+                      <div className="text-xs font-mono font-bold p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                        {pinFeedback}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      {isArabic 
+                        ? '💡 يمكنك الاعتماد كلياً على أي تطبيق للمصادقة عبر مسح الرمز QR، أو تعيين رمز PIN شخصي اختياري حسب رغبتك.' 
+                        : '💡 Utilisez n\'importe quelle application d\'authentification TOTP via QR Code, ou définissez votre propre code PIN personnel.'}
+                    </p>
+                  </div>
+
+                  {/* Interactive Real-Time Code Verification Tester */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                    <label className="block text-xs font-bold text-slate-200">
+                      {isArabic ? 'اختبار تحقق الرمز الحي (Test Live 2FA Code):' : 'Tester le code direct de votre application 2FA :'}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={testPinInput}
+                        onChange={(e) => setTestPinInput(e.target.value.replace(/\D/g, ''))}
+                        placeholder={isArabic ? 'أدخل الرمز الظاهر في تطبيقك الآن' : 'Code à 6 chiffres de votre appli'}
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm tracking-widest text-center focus:outline-none focus:border-cyan-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyTestPin}
+                        className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition cursor-pointer active:scale-95 shadow-md shadow-cyan-500/20"
+                      >
+                        {isArabic ? 'فحص ومطابقة' : 'Vérifier'}
+                      </button>
                     </div>
 
                     {totpFeedback && (
@@ -2662,10 +2825,10 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-300 leading-relaxed">
               {isArabic 
-                ? 'امسح هذا الرمز باستخدام تطبيق Google Authenticator أو Authy لإضافة حساب Quantura.' 
-                : 'Scan this code with Google Authenticator or Authy to connect your account.'}
+                ? 'امسح رمز الاستجابة السريعة (QR) بأي تطبيق للمصادقة تختاره (مثل Google Authenticator أو 2FAS أو Microsoft أو Authy) لإضافة الحساب.' 
+                : 'Scannez ce QR Code avec n\'importe quelle application d\'authentification (Google Authenticator, 2FAS, Microsoft, Authy, etc.).'}
             </p>
 
             <button
