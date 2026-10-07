@@ -73,7 +73,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { ChatGPTLogo } from './AiLogos';
+import { ChatGPTLogo, DeepSeekLogo, GeminiLogo, QwenLogo } from './AiLogos';
 import { calculateMultiMarketPortfolio } from '../utils/portfolioCalc';
 import {
   getOrCreate2FASecret,
@@ -124,7 +124,7 @@ export interface SettingsViewProps {
   onFullReset?: () => void | Promise<void>;
 }
 
-type SettingsSection = 'general' | 'binance' | 'wallet' | 'bot' | 'security' | 'notifications' | 'backup' | 'chatgpt';
+type SettingsSection = 'general' | 'binance' | 'wallet' | 'bot' | 'security' | 'notifications' | 'backup' | 'chatgpt' | 'ai_models';
 
 const AVAILABLE_PAIRS = RESPECTED_TRADING_PAIRS.map((p) => ({
   symbol: p.symbol,
@@ -180,6 +180,33 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
   const [showTgToken, setShowTgToken] = useState(false);
   const [isTestingTg, setIsTestingTg] = useState(false);
   const [tgFeedback, setTgFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  // AI API Keys state (DeepSeek, OpenAI, Gemini)
+  const [localDeepSeekKey, setLocalDeepSeekKey] = useState(() => apiStorage.getItem('DEEPSEEK_API_KEY') || '');
+  const [showDeepSeekKey, setShowDeepSeekKey] = useState(false);
+  const [localOpenAiKey, setLocalOpenAiKey] = useState(() => apiStorage.getItem('OPENAI_API_KEY') || '');
+  const [showOpenAiKey, setShowOpenAiKey] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleSaveAiKeys = () => {
+    if (localDeepSeekKey.trim()) {
+      apiStorage.setItem('DEEPSEEK_API_KEY', localDeepSeekKey.trim());
+    } else {
+      apiStorage.removeItem('DEEPSEEK_API_KEY');
+    }
+
+    if (localOpenAiKey.trim()) {
+      apiStorage.setItem('OPENAI_API_KEY', localOpenAiKey.trim());
+    } else {
+      apiStorage.removeItem('OPENAI_API_KEY');
+    }
+
+    setAiFeedback({
+      type: 'success',
+      message: isArabic ? 'تم حفظ مفاتيح الذكاء الاصطناعي بنجاح!' : 'AI API Keys saved successfully!'
+    });
+    setTimeout(() => setAiFeedback(null), 3500);
+  };
 
   // Custom balance input state
   const [customBalanceInput, setCustomBalanceInput] = useState((paperWallet?.balance ?? 1000).toString());
@@ -667,10 +694,10 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
     },
     {
       id: 'chatgpt' as SettingsSection,
-      label: 'ChatGPT (OpenAI)',
-      desc: isArabic ? 'نموذج ChatGPT للتحليل الكمي الذكي' : 'ChatGPT AI model status & connectivity',
-      icon: (props: any) => <ChatGPTLogo {...props} active={openAiConfig?.isConnected ?? false} />,
-      badge: openAiConfig?.isConnected ? 'ACTIVE' : null,
+      label: isArabic ? 'الذكاء الاصطناعي و DeepSeek' : isEn ? 'AI Models & DeepSeek' : 'Modèles IA & DeepSeek',
+      desc: isArabic ? 'مفاتيح DeepSeek V3/R1، ChatGPT GPT-4o ونماذج التحليل' : isEn ? 'DeepSeek V3/R1, ChatGPT GPT-4o & AI API keys' : 'Clés DeepSeek V3/R1, OpenAI GPT-4o & IA',
+      icon: (props: any) => <DeepSeekLogo {...props} active={!!localDeepSeekKey || (openAiConfig?.isConnected ?? false)} />,
+      badge: localDeepSeekKey ? 'DEEPSEEK ON' : (openAiConfig?.isConnected ? 'ACTIVE' : null),
       badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30'
     },
     {
@@ -2633,33 +2660,191 @@ const SettingsViewComponent: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
-            {/* SECTION: CHATGPT (OPENAI) */}
+            {/* SECTION: AI MODELS & DEEPSEEK */}
             {activeSection === 'chatgpt' && (
-              <div key="section-chatgpt" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
+              <div key="section-ai-models" className="bg-[#090e1c] border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-all duration-150">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
                   <div className="p-2.5 rounded-2xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-                    <ChatGPTLogo active={openAiConfig?.isConnected ?? false} className="w-5 h-5" />
+                    <DeepSeekLogo active={true} className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-white">ChatGPT (OpenAI GPT-4o)</h2>
+                    <h2 className="text-base font-bold text-white">
+                      {isArabic ? 'نماذج الذكاء الاصطناعي ومفاتيح API' : 'AI Models & Quantitative Engines'}
+                    </h2>
                     <p className="text-xs text-slate-400">
-                      {isArabic ? 'حالة ربط نموذج ChatGPT عبر متغيرات البيئة (.env)' : 'OpenAI ChatGPT model integration via server environment (.env)'}
+                      {isArabic ? 'إدارة مفاتيح ربط DeepSeek V3/R1، ChatGPT ونماذج الذكاء الاصطناعي' : 'Manage DeepSeek, OpenAI GPT-4o, and Gemini analytical engines'}
                     </p>
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ChatGPTLogo active={openAiConfig?.isConnected ?? false} className="w-6 h-6" />
-                    <div>
-                      <div className="text-sm font-bold text-white font-mono">OPENAI_API_KEY (.env)</div>
-                      <div className="text-xs text-slate-400">
-                        {isArabic ? 'يتم قراءة المفتاح تلقائياً من ملف .env على السيرفر لتشغيل نموذج GPT-4o.' : 'Automatically loaded from server .env to power GPT-4o quantitative analysis.'}
+
+                {/* Feedback Message */}
+                {aiFeedback && (
+                  <div className={`p-3.5 rounded-xl text-xs font-mono border flex items-center gap-2 ${
+                    aiFeedback.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{aiFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* Card 1: DeepSeek (V3 & R1 Reasoner) */}
+                <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <DeepSeekLogo active={true} className="w-6 h-6" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">DeepSeek AI</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                            V3 & R1 Reasoner
+                          </span>
+                          {localDeepSeekKey ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              CONFIGURED
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              OPTIONAL
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {isArabic 
+                            ? 'أدخل مفتاح DeepSeek API الخاص بك لتفعيل التحليل الاستدلالي المباشر V3 و R1 Reasoner.'
+                            : 'Enter your DeepSeek API Key to unlock real-time DeepSeek V3 and R1 reasoning.'}
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                    gpt-4o
-                  </span>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                      <span>DEEPSEEK_API_KEY</span>
+                      <a 
+                        href="https://platform.deepseek.com/api_keys" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-sans"
+                      >
+                        <span>{isArabic ? 'الحصول على المفتاح (DeepSeek Platform)' : 'Get DeepSeek API Key'}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showDeepSeekKey ? 'text' : 'password'}
+                        placeholder="sk-..."
+                        value={localDeepSeekKey}
+                        onChange={(e) => setLocalDeepSeekKey(e.target.value)}
+                        autoComplete="off"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeepSeekKey(!showDeepSeekKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      >
+                        {showDeepSeekKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: OpenAI (ChatGPT GPT-4o) */}
+                <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <ChatGPTLogo active={openAiConfig?.isConnected ?? !!localOpenAiKey} className="w-6 h-6" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">ChatGPT (OpenAI)</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            GPT-4o
+                          </span>
+                          {openAiConfig?.isConnected || localOpenAiKey ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400">
+                              STANDBY
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {isArabic 
+                            ? 'مفتاح OpenAI لتشغيل استنتاجات نموذج GPT-4o الكمي.'
+                            : 'OpenAI API key to power GPT-4o quantitative conclusions.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                      <span>OPENAI_API_KEY</span>
+                      <a 
+                        href="https://platform.openai.com/api-keys" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-sans"
+                      >
+                        <span>{isArabic ? 'الحصول على المفتاح (OpenAI Platform)' : 'Get OpenAI API Key'}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showOpenAiKey ? 'text' : 'password'}
+                        placeholder="sk-proj-..."
+                        value={localOpenAiKey}
+                        onChange={(e) => setLocalOpenAiKey(e.target.value)}
+                        autoComplete="off"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOpenAiKey(!showOpenAiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      >
+                        {showOpenAiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Google Gemini & Qwen (Built-in Server Engines) */}
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <GeminiLogo active={true} className="w-6 h-6" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">Google Gemini 2.5 Flash / 3.8 Pro</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          BUILT-IN (DEFAULT)
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {isArabic 
+                          ? 'النموذج الافتراضي المدمج بالسيرفر، يعمل تلقائياً وبشكل مجاني دون الحاجة لأي إعداد.'
+                          : 'Default server-side engine, works automatically without requiring custom keys.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveAiKeys}
+                    className="w-full py-3 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-98"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isArabic ? 'حفظ إعدادات ومفاتيح الذكاء الاصطناعي' : 'Save AI Configuration'}</span>
+                  </button>
                 </div>
               </div>
             )}
