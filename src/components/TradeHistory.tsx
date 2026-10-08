@@ -872,15 +872,17 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 relative overflow-hidden hover:border-slate-700 transition shadow-lg">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-cyan-400" />
-              <span>{isArabic ? 'معدل النجاح وتوزيع الصفقات' : 'Taux de Réussite (Win Rate)'}</span>
+              <Award className={`w-4 h-4 ${analytics.winRate >= 50 ? 'text-emerald-400' : analytics.winRate >= 40 ? 'text-amber-400' : 'text-rose-400'}`} />
+              <span>{isArabic ? 'نسبة الصفقات الرابحة (Win Rate)' : 'Taux de Trades Gagnants (Win Rate)'}</span>
             </span>
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
               {analytics.winCount}W / {analytics.lossCount}L
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-white">{analytics.winRate.toFixed(1)}%</span>
+            <span className={`text-2xl font-black font-mono ${analytics.winRate >= 50 ? 'text-emerald-400' : analytics.winRate >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
+              {analytics.winRate.toFixed(1)}%
+            </span>
             <span className="text-xs text-slate-400 font-mono">
               ({analytics.closedCount} {isArabic ? 'مغلقة' : 'clôturés'})
             </span>

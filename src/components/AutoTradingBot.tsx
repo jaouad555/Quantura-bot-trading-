@@ -2437,10 +2437,10 @@ export const AutoTradingBot: React.FC<AutoTradingBotProps> = ({
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
           <div className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isArabic ? 'نسبة النجاح (Win Rate)' : (isFrench ? 'Taux de Réussite' : 'Win Rate')}</span>
+            <Target className={`w-3.5 h-3.5 ${(Number(winRate) || 0) >= 50 ? 'text-emerald-400' : (Number(winRate) || 0) >= 40 ? 'text-amber-400' : 'text-rose-400'}`} />
+            <span>{isArabic ? 'نسبة الصفقات الرابحة (Win Rate)' : (isFrench ? 'Taux de Trades Gagnants' : 'Win Rate')}</span>
           </div>
-          <div className="text-base sm:text-lg font-bold text-white font-mono">
+          <div className={`text-base sm:text-lg font-bold font-mono ${(Number(winRate) || 0) >= 50 ? 'text-emerald-400' : (Number(winRate) || 0) >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
             {winRate}%
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">
