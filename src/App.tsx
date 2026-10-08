@@ -386,8 +386,18 @@ export const App: React.FC = () => {
     }
   });
 
+  const fetchLiveBinanceBalanceRef = useRef<() => Promise<any> | void>(() => {});
+
   const handleSetExecutionMode = useCallback((mode: TradingExecutionMode) => {
     setExecutionMode(mode);
+    if (mode === 'PAPER') {
+      // Disconnect Binance immediately in Paper mode
+      setBinanceConfig(prev => ({
+        ...prev,
+        isConnected: false,
+        accountInfo: null,
+      }));
+    }
     try {
       apiStorage.setItem('trading_execution_mode', mode);
       apiStorage.setItem('app_execution_mode', mode);
@@ -406,6 +416,13 @@ export const App: React.FC = () => {
         body: JSON.stringify({ key: 'trading_execution_mode', value: mode }),
       }).catch(() => {});
     } catch {}
+    if (mode !== 'PAPER') {
+      setTimeout(() => {
+        if (fetchLiveBinanceBalanceRef.current) {
+          fetchLiveBinanceBalanceRef.current();
+        }
+      }, 100);
+    }
   }, []);
 
   const lastCanTradeDiagnosticRef = useRef<number>(0);
@@ -413,6 +430,16 @@ export const App: React.FC = () => {
 
   // Fetch live Binance account balances (Futures / Spot) and canTrade permissions
   const fetchLiveBinanceBalance = useCallback(async () => {
+    // In PAPER mode, strictly disconnect Binance and do not poll
+    if (executionModeRef.current === 'PAPER') {
+      setBinanceConfig(prev => ({
+        ...prev,
+        isConnected: false,
+        accountInfo: null,
+      }));
+      return;
+    }
+
     try {
       const isSpot = (binanceConfigRef.current?.marketType || botConfigRef.current?.marketType || 'SPOT') === 'SPOT';
       const currentMt = isSpot ? 'SPOT' : 'FUTURES';
@@ -484,6 +511,7 @@ export const App: React.FC = () => {
       console.warn('Error polling Binance live balance:', err);
     }
   }, []);
+  fetchLiveBinanceBalanceRef.current = fetchLiveBinanceBalance;
 
   // Synchronize live open positions directly from Binance (Spot balances & Futures positions)
   const syncBinanceLivePositions = useCallback(async () => {
@@ -621,6 +649,7 @@ export const App: React.FC = () => {
     fetch('/api/config/binance')
       .then(res => res.json())
       .then(data => {
+        const isPaper = executionModeRef.current === 'PAPER';
         if (data.configured) {
           setBinanceConfig(prev => ({
             ...prev,
@@ -628,9 +657,11 @@ export const App: React.FC = () => {
             apiSecret: prev.apiSecret && !prev.apiSecret.includes('...') && prev.apiSecret !== '****************' ? prev.apiSecret : '',
             useTestnet: data.useTestnet !== undefined ? data.useTestnet : prev.useTestnet,
             marketType: data.marketType || prev.marketType,
-            isConnected: true
+            isConnected: !isPaper,
           }));
-          fetchLiveBinanceBalance();
+          if (!isPaper) {
+            fetchLiveBinanceBalance();
+          }
         } else {
           setBinanceConfig(prev => ({ ...prev, isConnected: false, apiKey: '', apiSecret: '' }));
         }
@@ -638,15 +669,17 @@ export const App: React.FC = () => {
       .catch(console.error);
   }, [fetchLiveBinanceBalance]);
 
-  // Periodic live account, balances & real positions reconciliation every 1s
+  // Periodic live account, balances & real positions reconciliation every 1s (only when in Testnet/Live)
   useEffect(() => {
-    fetchLiveBinanceBalance();
-    if (executionMode === 'BINANCE_TESTNET' || executionMode === 'BINANCE_LIVE') {
+    if (executionMode !== 'PAPER') {
+      fetchLiveBinanceBalance();
       syncBinanceLivePositions();
+    } else {
+      setBinanceConfig(prev => ({ ...prev, isConnected: false, accountInfo: null }));
     }
     const interval = setInterval(() => {
-      fetchLiveBinanceBalance();
-      if (executionModeRef.current === 'BINANCE_TESTNET' || executionModeRef.current === 'BINANCE_LIVE') {
+      if (executionModeRef.current !== 'PAPER') {
+        fetchLiveBinanceBalance();
         syncBinanceLivePositions();
       }
     }, 1000);

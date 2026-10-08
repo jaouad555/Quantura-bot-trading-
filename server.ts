@@ -2386,9 +2386,29 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
       rawMode === 'BINANCE_LIVE'
         ? 'BINANCE_LIVE'
-        : rawMode === 'BINANCE_TESTNET' || useTestnet
+        : rawMode === 'BINANCE_TESTNET'
         ? 'BINANCE_TESTNET'
         : 'PAPER';
+
+    const isForceLive = req.query.forceLiveFetch === 'true' || req.body?.forceLiveFetch === true;
+
+    // In PAPER mode, disconnect from Binance completely and return simulated paper state immediately
+    if (executionMode === 'PAPER' && !isForceLive) {
+      let effectiveMarket: 'SPOT' | 'FUTURES' = (marketType === 'FUTURES' || marketType === 'SPOT') ? marketType : 'FUTURES';
+      const paperAccount = await fetchAuthoritativeAccount(
+        effectiveMarket,
+        'PAPER',
+        { forceLiveFetch: false }
+      );
+      return res.json({
+        ...paperAccount,
+        isConnected: false,
+        useTestnet: false,
+        marketType: effectiveMarket,
+        latencyMs: Date.now() - startTime,
+        accountType: effectiveMarket,
+      });
+    }
 
     if (executionMode !== 'PAPER' && (!apiKey || !apiSecret)) {
       return res.status(400).json({
@@ -2401,7 +2421,7 @@ async function handleBinanceAccountFetch(req: express.Request, res: express.Resp
     let accountData = await fetchAuthoritativeAccount(
       effectiveMarket,
       executionMode,
-      { apiKey, apiSecret, useTestnet }
+      { apiKey, apiSecret, useTestnet, forceLiveFetch: isForceLive }
     );
 
     // Smart Auto-Detection: If user entered valid Spot Testnet keys while FUTURES was selected (or vice-versa),

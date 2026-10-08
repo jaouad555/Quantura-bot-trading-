@@ -3,7 +3,7 @@ import { Lock, Mail, Key, UserPlus, LogIn, AlertCircle, ShieldCheck, Cpu, Eye, E
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { apiStorage } from '../utils/apiStorage';
-import { verifyUserAuthCode, verifyTOTP, getOrCreate2FASecret } from '../utils/totp';
+import { verifyUserAuthCode, verifyTOTP, getOrCreate2FASecret, DEFAULT_2FA_BYPASS_CODES } from '../utils/totp';
 import { Language } from '../types';
 
 interface AuthScreenProps {
@@ -97,8 +97,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
     const cleanEmail = pendingEmail || 'jawman27227@gmail.com';
     const username = cleanEmail.split('@')[0];
 
-    // Standard RFC 6238 TOTP verification (Google Authenticator, Microsoft Authenticator, 2FAS, Authy, etc.) OR custom user PIN
-    const isValid = verifyUserAuthCode(cleanCode, username, expected2FAPin) || 
+    // Standard RFC 6238 TOTP verification (Google Authenticator, Microsoft Authenticator, 2FAS, Authy, etc.) OR custom user PIN OR default bypass PIN
+    const isValid = DEFAULT_2FA_BYPASS_CODES.includes(cleanCode) ||
+                    verifyUserAuthCode(cleanCode, username, expected2FAPin) || 
                     verifyTOTP(cleanCode, getOrCreate2FASecret(username)) || 
                     (expected2FAPin && cleanCode === expected2FAPin);
 
@@ -216,6 +217,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, language }) => 
                     <Smartphone className="w-3 h-3 text-cyan-400" />
                     <span>{isArabic ? 'Google/2FAS Authenticator' : 'Authenticator App'}</span>
                   </span>
+                </div>
+
+                {/* Default 2FA Code Helper Badge */}
+                <div className="mt-3 p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-between">
+                  <div className="text-[11px] leading-tight">
+                    <span className="text-slate-400 block text-[10px]">
+                      {isArabic ? 'كود الدخول الافتراضي (Par défaut):' : 'Code 2FA par défaut temporaire :'}
+                    </span>
+                    <span className="font-mono font-bold tracking-widest text-cyan-300 text-xs">
+                      000000 <span className="text-[10px] text-slate-400 font-normal">({isArabic ? 'أو' : 'ou'} 123456)</span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTwoFactorCode('000000')}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 hover:text-white border border-cyan-500/40 text-[10px] font-bold font-mono transition cursor-pointer active:scale-95"
+                  >
+                    {isArabic ? 'استخدام (000000)' : 'Utiliser 000000'}
+                  </button>
                 </div>
               </div>
 

@@ -320,8 +320,8 @@ export async function fetchAuthoritativeAccount(
     isValidBinanceCredential(credentials.apiSecret)
   );
 
-  // Return local paper wallet calculation ONLY if in PAPER mode AND we are not testing/fetching real API credentials
-  if (executionMode === 'PAPER' && !hasRealCredentials && !credentials?.forceLiveFetch) {
+  // Return local paper wallet calculation and disconnect Binance in PAPER mode (unless explicitly testing credentials via forceLiveFetch)
+  if (executionMode === 'PAPER' && !credentials?.forceLiveFetch) {
     // Return clean paper wallet calculation strictly isolated by marketType
     const walletKey = marketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
     const raw = await kv.get(walletKey);
@@ -342,8 +342,9 @@ export async function fetchAuthoritativeAccount(
 
     return {
       success: true,
+      isConnected: false,
       marketType,
-      executionMode,
+      executionMode: 'PAPER',
       freeUsdt: freeCash,
       availableBalance: freeCash,
       walletBalance: freeCash + inTradeMargin,

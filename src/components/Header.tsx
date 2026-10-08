@@ -890,69 +890,78 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Binance API / Live Button with Official Binance Diamond Logo & Glowing Yellow on Connected State */}
-          {onOpenBinanceModal && (
-            <button
-              id="btn-header-binance-status"
-              type="button"
-              onClick={onOpenBinanceModal}
-              className={`h-8 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition-all duration-300 shadow-xs shrink-0 cursor-pointer active:scale-95 ${
-                binanceConfig?.isConnected
-                  ? 'bg-amber-400/15 text-amber-300 border-amber-400/60 hover:bg-amber-400/25 shadow-[0_0_14px_rgba(251,191,36,0.3)]'
-                  : 'bg-slate-900/60 text-slate-500 border-slate-800/80 hover:border-slate-700 hover:text-slate-400 opacity-60 hover:opacity-100 grayscale hover:grayscale-0 shadow-none'
-              }`}
-              title={
-                binanceConfig?.isConnected
-                  ? (isArabic
-                      ? `بينانس متصل بنجاح (${executionMode === 'BINANCE_LIVE' ? 'حساب حقيقي' : 'API نشط'}) - اضغط للإعدادات`
-                      : `Binance API Connected (${executionMode === 'BINANCE_LIVE' ? 'Real Live' : 'Connected'}) - Click to manage`)
-                  : (isArabic
-                      ? 'بينانس غير متصل (المفتاح معطل أو غير مدخل) - اضغط للاتصال'
-                      : 'Binance Disconnected (API Offline) - Click to connect')
-              }
-            >
-              {/* Official Binance Diamond SVG Logo */}
-              <svg 
-                viewBox="0 0 24 24" 
-                className={`w-4 h-4 shrink-0 transition-transform duration-300 ${
-                  binanceConfig?.isConnected 
-                    ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)] scale-105' 
-                    : 'text-slate-500 opacity-50'
-                }`} 
-                fill="currentColor"
+          {onOpenBinanceModal && (() => {
+            const isBinanceConnected = executionMode !== 'PAPER' && Boolean(binanceConfig?.isConnected);
+            return (
+              <button
+                id="btn-header-binance-status"
+                type="button"
+                onClick={onOpenBinanceModal}
+                className={`h-8 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-[10px] sm:text-xs font-mono font-bold transition-all duration-300 shadow-xs shrink-0 cursor-pointer active:scale-95 ${
+                  isBinanceConnected
+                    ? 'bg-amber-400/15 text-amber-300 border-amber-400/60 hover:bg-amber-400/25 shadow-[0_0_14px_rgba(251,191,36,0.3)]'
+                    : 'bg-slate-900/60 text-slate-500 border-slate-800/80 hover:border-slate-700 hover:text-slate-400 opacity-60 hover:opacity-100 grayscale hover:grayscale-0 shadow-none'
+                }`}
+                title={
+                  executionMode === 'PAPER'
+                    ? (isArabic
+                        ? 'وضع المحاكاة (Paper Trading) نشط - الاتصال بحساب بايننس مقطوع والزر مطفأ (اضغط للإعدادات)'
+                        : isFrench
+                        ? 'Mode Paper Trading actif - Connexion Binance coupée et bouton éteint (Cliquer pour gérer)'
+                        : 'Paper Trading Active - Binance Connection Disconnected & Off (Click to manage)')
+                    : isBinanceConnected
+                    ? (isArabic
+                        ? `بينانس متصل بنجاح (${executionMode === 'BINANCE_LIVE' ? 'حساب حقيقي' : 'Testnet نشط'}) - اضغط للإعدادات`
+                        : `Binance API Connected (${executionMode === 'BINANCE_LIVE' ? 'Real Live' : 'Testnet'}) - Click to manage`)
+                    : (isArabic
+                        ? 'بينانس غير متصل (المفتاح معطل أو غير مدخل) - اضغط للاتصال'
+                        : 'Binance Disconnected (API Offline) - Click to connect')
+                }
               >
-                {/* Center Diamond */}
-                <path d="M12 9.27L9.27 12L12 14.73L14.73 12L12 9.27Z" />
-                {/* Top Diamond */}
-                <path d="M12 2L8.27 5.73L10.27 7.73L12 6L13.73 7.73L15.73 5.73L12 2Z" />
-                {/* Bottom Diamond */}
-                <path d="M12 22L15.73 18.27L13.73 16.27L12 18L10.27 16.27L8.27 18.27L12 22Z" />
-                {/* Left Diamond */}
-                <path d="M2 12L5.73 15.73L7.73 13.73L6 12L7.73 10.27L5.73 8.27L2 12Z" />
-                {/* Right Diamond */}
-                <path d="M22 12L18.27 8.27L16.27 10.27L18 12L16.27 13.73L18.27 15.73L22 12Z" />
-              </svg>
+                {/* Official Binance Diamond SVG Logo */}
+                <svg 
+                  viewBox="0 0 24 24" 
+                  className={`w-4 h-4 shrink-0 transition-transform duration-300 ${
+                    isBinanceConnected 
+                      ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)] scale-105' 
+                      : 'text-slate-500 opacity-50'
+                  }`} 
+                  fill="currentColor"
+                >
+                  {/* Center Diamond */}
+                  <path d="M12 9.27L9.27 12L12 14.73L14.73 12L12 9.27Z" />
+                  {/* Top Diamond */}
+                  <path d="M12 2L8.27 5.73L10.27 7.73L12 6L13.73 7.73L15.73 5.73L12 2Z" />
+                  {/* Bottom Diamond */}
+                  <path d="M12 22L15.73 18.27L13.73 16.27L12 18L10.27 16.27L8.27 18.27L12 22Z" />
+                  {/* Left Diamond */}
+                  <path d="M2 12L5.73 15.73L7.73 13.73L6 12L7.73 10.27L5.73 8.27L2 12Z" />
+                  {/* Right Diamond */}
+                  <path d="M22 12L18.27 8.27L16.27 10.27L18 12L16.27 13.73L18.27 15.73L22 12Z" />
+                </svg>
 
-              {/* Status Indicator Dot & Label */}
-              {binanceConfig?.isConnected ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)]"></span>
-                  </span>
-                  <span className="font-bold text-amber-300 tracking-wide">
-                    {executionMode === 'BINANCE_LIVE' ? 'LIVE' : 'BINANCE'}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                  <span className="text-slate-500 tracking-wide">
-                    BINANCE
-                  </span>
-                </div>
-              )}
-            </button>
-          )}
+                {/* Status Indicator Dot & Label */}
+                {isBinanceConnected ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)]"></span>
+                    </span>
+                    <span className="font-bold text-amber-300 tracking-wide">
+                      {executionMode === 'BINANCE_LIVE' ? 'LIVE' : 'TESTNET'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                    <span className="text-slate-500 tracking-wide">
+                      BINANCE
+                    </span>
+                  </div>
+                )}
+              </button>
+            );
+          })()}
 
           {/* Dedicated Strategies & Auto Bot Shortcut */}
           {onNavigateTab && (
