@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan to enable zero-decimal cryptocurrencies (PEPE, SHIB, BONK, FLOKI) across Spot and Futures markets with automated 1000x multiplier symbol mapping, dynamic decimal precision, and adapted Risk Engine volatility and spread thresholds.",
+  "updatedAt":  "2026-10-09T19:28:32.454371743Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
