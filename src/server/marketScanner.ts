@@ -411,20 +411,26 @@ async function processTradingSignal(
   const symUpper = (symbol || '').toUpperCase().trim();
   if (!symUpper) return;
 
-  // CRITICAL GATE 0: In-Flight Lock & Strict Cooldown Gate
-  if (inFlightExecutionLocks.has(symUpper)) {
-    console.log(`[TRADE BLOCKED] ${symUpper} - Execution lock currently active.`);
+  // CRITICAL GATE 0: In-Flight Lock & Strict Cooldown Gate (Scoped by MarketType)
+  const kvMtInit = await kv.get('app_binance_market_type');
+  const initMarketType: 'SPOT' | 'FUTURES' = (kvMtInit === 'SPOT' || kvMtInit === 'FUTURES')
+    ? (kvMtInit as 'SPOT' | 'FUTURES')
+    : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
+  const lockKey = `${initMarketType}_${symUpper}`;
+
+  if (inFlightExecutionLocks.has(lockKey)) {
+    console.log(`[TRADE BLOCKED] ${symUpper} (${initMarketType}) - Execution lock currently active.`);
     return;
   }
 
-  const nextAllowedTime = symbolCooldownMap.get(symUpper) || 0;
+  const nextAllowedTime = symbolCooldownMap.get(lockKey) || 0;
   if (Date.now() < nextAllowedTime) {
     const waitSec = Math.ceil((nextAllowedTime - Date.now()) / 1000);
-    console.log(`[COOLDOWN] ${symUpper} in strict cooldown (${waitSec}s remaining)`);
+    console.log(`[COOLDOWN] ${symUpper} (${initMarketType}) in strict cooldown (${waitSec}s remaining)`);
     return;
   }
 
-  inFlightExecutionLocks.add(symUpper);
+  inFlightExecutionLocks.add(lockKey);
 
   try {
     // CRITICAL GATE 0.5: Re-check latest authoritative botConfig from KV
@@ -436,8 +442,15 @@ async function processTradingSignal(
       return;
     }
 
-    if (latestConfig.circuitBreakerTripped) {
-      console.log(`[TRADE BLOCKED] ${symUpper} - Circuit Breaker Tripped`);
+    const kvMt = await kv.get('app_binance_market_type');
+    const effectiveMarketType: 'SPOT' | 'FUTURES' = (kvMt === 'SPOT' || kvMt === 'FUTURES') 
+      ? (kvMt as 'SPOT' | 'FUTURES') 
+      : ((latestConfig.marketType === 'SPOT' || latestConfig.marketType === 'FUTURES') ? latestConfig.marketType : 'SPOT');
+
+    const cbScopeKey = `${mode}_${effectiveMarketType}`;
+    const isScopeTripped = Boolean(latestConfig.circuitBreakerTrippedByScope?.[cbScopeKey]);
+    if (isScopeTripped) {
+      console.log(`[TRADE BLOCKED] ${symUpper} - Circuit Breaker Tripped for scope ${cbScopeKey}`);
       return;
     }
 
@@ -450,7 +463,7 @@ async function processTradingSignal(
     }
 
     // CRITICAL GATE 1: Authorization with StrategyManager
-    const isSpotMode = (latestConfig.marketType || config.marketType) === 'SPOT';
+    const isSpotMode = effectiveMarketType === 'SPOT';
     if (isSpotMode && signal.decision === 'SHORT') {
       console.log(`[SPOT BLOCKED] ${symUpper} SHORT - Short selling is not allowed in Spot trading mode (Long/Buy only).`);
       return;
@@ -468,11 +481,6 @@ async function processTradingSignal(
     }
 
     // CRITICAL GATE 1.5: Final Authoritative Execution Guard
-    const kvMt = await kv.get('app_binance_market_type');
-    const effectiveMarketType: 'SPOT' | 'FUTURES' = (kvMt === 'SPOT' || kvMt === 'FUTURES') 
-      ? (kvMt as 'SPOT' | 'FUTURES') 
-      : ((config.marketType === 'SPOT' || config.marketType === 'FUTURES') ? config.marketType : 'SPOT');
-
     const executionClientId = `quantura_${symUpper}_${Date.now()}`;
     const guard = await canSubmitOrder({
       isManual: false,
@@ -533,39 +541,43 @@ async function processTradingSignal(
             return;
         }
         
-        // Strict Duplicate position check: Only 1 position per asset allowed
+        // Strict Duplicate position check: Only 1 position per asset allowed within this mode & marketType
         const existing = currentModePositions.find((p: any) => p.symbol.toUpperCase() === symUpper);
         if (existing) {
-            console.log(`[DEDUPLICATION] ${symUpper} already has an active position.`);
-            symbolCooldownMap.set(symUpper, Date.now() + 60000);
+            console.log(`[DEDUPLICATION] ${symUpper} already has an active position in ${marketType} (${mode}).`);
+            symbolCooldownMap.set(`${marketType}_${symUpper}`, Date.now() + 60000);
             return;
         }
 
-        // Cooldown check from trade history
+        // Cooldown check from trade history strictly scoped to current mode & marketType
         const histStr = await kv.get('btc_trade_history');
         const history = histStr ? JSON.parse(histStr) : [];
-        const symbolHistory = history.filter((h: any) => h.symbol && h.symbol.toUpperCase() === symUpper);
+        const symbolHistory = history.filter((h: any) => {
+            const hMode = h.mode || 'PAPER';
+            const hMarket = h.marketType || (h.leverage && h.leverage > 1 ? 'FUTURES' : 'SPOT');
+            return h.symbol && h.symbol.toUpperCase() === symUpper && hMode === mode && hMarket === marketType;
+        });
         if (symbolHistory.length > 0) {
             const timestamps = symbolHistory.map((h: any) => h.closedAt || h.timestamp || 0).filter((t: number) => t > 0);
             const lastClosed = timestamps.length > 0 ? Math.max(...timestamps) : 0;
             const cooldownMs = Math.max(15, config.cooldownMinutes || 20) * 60 * 1000;
             if (lastClosed > 0 && Date.now() - lastClosed < cooldownMs) {
-                console.log(`[COOLDOWN] ${symUpper} in cooldown (${Math.ceil((cooldownMs - (Date.now() - lastClosed)) / 60000)}m remaining)`);
-                symbolCooldownMap.set(symUpper, lastClosed + cooldownMs);
+                console.log(`[COOLDOWN] ${symUpper} in cooldown for ${marketType} (${Math.ceil((cooldownMs - (Date.now() - lastClosed)) / 60000)}m remaining)`);
+                symbolCooldownMap.set(`${marketType}_${symUpper}`, lastClosed + cooldownMs);
                 return;
             }
         }
 
         // -----------------------------------------------------------------
-        // SIZING & BALANCE RESOLUTION (Strict PAPER vs LIVE isolation)
+        // SIZING & BALANCE RESOLUTION (Strict PAPER vs LIVE & SPOT vs FUTURES isolation)
         // -----------------------------------------------------------------
         let totalEquity = 0;
         let availableBalance = 0;
 
         if (isExchangeMode) {
-          const realAcc = await fetchRealBinanceAccountDirect();
+          const realAcc = await fetchRealBinanceAccountDirect(effectiveMarketType, mode);
           if (!realAcc.success || !realAcc.canTrade || realAcc.freeUsdt <= 0 || realAcc.totalUsdtEquity <= 0) {
-            console.log(`[TRADE BLOCKED] ${symUpper} ${mode} Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
+            console.log(`[TRADE BLOCKED] ${symUpper} ${mode} (${effectiveMarketType}) Trading Blocked: Binance real account unavailable or zero balance (${realAcc.error || 'Zero funds'})`);
             return;
           }
           totalEquity = realAcc.totalUsdtEquity;
@@ -680,6 +692,7 @@ async function processTradingSignal(
       stopLoss: safeSl,
       takeProfit: { tp1: safeTp1, tp2: safeTp2, tp3: safeTp3 },
       marketType: effectiveMarketType,
+      executionMode: (mode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : mode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER') as 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE',
       leverage: lev,
       accountEquity: totalEquity,
       availableBalance: availableBalance,
@@ -697,7 +710,7 @@ async function processTradingSignal(
       },
     };
 
-    const riskEvaluation = await riskEngine.evaluateProposal(riskProposal, positions);
+    const riskEvaluation = await riskEngine.evaluateProposal(riskProposal, currentModePositions);
     if (riskEvaluation.decision === 'REJECTED') {
       const rejResult = recordSignalRejection(symbol, signal.strategyId, riskEvaluation.reasonCode, riskEvaluation.message);
       if (rejResult.isCircuitBreaker) {
@@ -821,6 +834,7 @@ async function processTradingSignal(
       pnlUsdt: 0,
       reason: `[${signal.strategyName}] الهامش: $${margin.toFixed(2)} (${config.tradeAllocationPercent || 25}%) | حجم العقد: $${notional.toFixed(2)} (${lev}x)`,
       mode: mode,
+      marketType: isFutures ? 'FUTURES' : 'SPOT',
       strategyId: signal.strategyId,
       strategyName: signal.strategyName,
     };
@@ -852,9 +866,9 @@ async function processTradingSignal(
     freshPositions.push(newPos);
     await kv.set('btc_active_bot_positions', JSON.stringify(freshPositions));
     
-    // Activate strict 20-minute cooldown on symbol after opening trade
+    // Activate strict 20-minute cooldown on symbol after opening trade (scoped to marketType)
     const cooldownMs = Math.max(15, config.cooldownMinutes || 20) * 60 * 1000;
-    symbolCooldownMap.set(symUpper, Date.now() + cooldownMs);
+    symbolCooldownMap.set(`${marketType}_${symUpper}`, Date.now() + cooldownMs);
 
     // Reset rejection counter on successful position creation
     resetSignalRejection(symUpper, signal.strategyId);

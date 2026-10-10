@@ -279,15 +279,16 @@ export const startTelegramSync = () => {
       lastSyncPositionsCount = positions.length;
       lastSyncTimestamp = now;
 
-      const walletStr = await kv.get('btc_paper_wallet');
+      const walletKey = marketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+      const walletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
       const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
       let unrealizedPnl = 0;
       let availableBalance = wallet.balance || 0;
-      let totalEquity = wallet.balance || 1000;
+      let totalEquity = wallet.totalEquity || wallet.balance || 1000;
 
       if (isExchange) {
-        const realAcc = await fetchRealBinanceAccountDirect();
+        const realAcc = await fetchRealBinanceAccountDirect(marketType, mode);
         if (realAcc.success) {
           availableBalance = realAcc.freeUsdt || 0;
           totalEquity = realAcc.totalUsdtEquity || realAcc.freeUsdt || 0;
@@ -714,7 +715,8 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
           inTradeMargin += (pos.marginUsdt || pos.remainingAmountUsdt || 0);
         }
 
-        const walletStr = await kv.get('btc_paper_wallet');
+        const walletKey = marketType === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+        const walletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
         const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, realizedPnl: 0 };
 
         let availableBalance = wallet.balance || 0;
@@ -723,7 +725,7 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
         let latencyMs = 24;
 
         if (isExchange) {
-          const realAccount = await fetchRealBinanceAccountDirect();
+          const realAccount = await fetchRealBinanceAccountDirect(marketType, mode);
           if (realAccount.success) {
             availableBalance = realAccount.freeUsdt || 0;
             totalEquity = realAccount.totalUsdtEquity || realAccount.freeUsdt || 0;
@@ -918,15 +920,22 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
       // --- 5. TRADE HISTORY & METRICS ---
       case '/history':
       case '/trades': {
+        const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+        const kvMarketType = (await kv.get('app_binance_market_type')) || 'SPOT';
         const histStr = await kv.get('btc_trade_history');
-        const history: any[] = histStr ? JSON.parse(histStr) : [];
+        const allHistory: any[] = histStr ? JSON.parse(histStr) : [];
+        const history = allHistory.filter((t: any) => {
+          const tMode = t.mode || 'PAPER';
+          const tMarket = t.marketType || (t.leverage && t.leverage > 1 ? 'FUTURES' : 'SPOT');
+          return tMode === mode && tMarket === kvMarketType;
+        });
         if (history.length === 0) {
-          await sendServerTelegramNotification(`ℹ️ لا توجد صفقات مغلقة مسجلة في السجل حتى الآن.`, chatId);
+          await sendServerTelegramNotification(`ℹ️ لا توجد صفقات مغلقة مسجلة في السجل لوضع ${mode} (${kvMarketType}) حتى الآن.`, chatId);
           break;
         }
 
         const recent = history.slice(0, 6);
-        let histText = `📜 <b>سجل آخر الصفقات المكتملة (${recent.length}):</b>\n\n`;
+        let histText = `📜 <b>سجل آخر الصفقات المكتملة (${kvMarketType} - ${recent.length}):</b>\n\n`;
         for (let i = 0; i < recent.length; i++) {
           const t = recent[i];
           const isWin = (t.profitUsdt || t.pnlUsdt || 0) >= 0;
@@ -948,24 +957,35 @@ async function handleTelegramCommand(command: string, argument: string, chatId: 
 
       case '/risk':
       case '/metrics': {
+        const mode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+        const kvMarketType = (await kv.get('app_binance_market_type')) || 'SPOT';
         const configStr = await kv.get('btc_bot_config');
         const config = configStr ? JSON.parse(configStr) : {};
         const histStr = await kv.get('btc_trade_history');
-        const history: any[] = histStr ? JSON.parse(histStr) : [];
+        const allHistory: any[] = histStr ? JSON.parse(histStr) : [];
+        const history = allHistory.filter((t: any) => {
+          const tMode = t.mode || 'PAPER';
+          const tMarket = t.marketType || (t.leverage && t.leverage > 1 ? 'FUTURES' : 'SPOT');
+          return tMode === mode && tMarket === kvMarketType;
+        });
         
         const totalTrades = history.length;
         const winTrades = history.filter((t: any) => (t.profitUsdt || t.pnlUsdt || 0) > 0).length;
         const winRate = totalTrades > 0 ? ((winTrades / totalTrades) * 100).toFixed(1) : '0.0';
         const totalRealizedPnl = history.reduce((acc: number, t: any) => acc + (t.profitUsdt || t.pnlUsdt || 0), 0);
+        const riskEngine = RiskEngine.getInstance();
+        const riskCfg = riskEngine.getConfig(mode, kvMarketType);
+        const cbKey = `${mode}_${kvMarketType}`;
+        const isCbTripped = Boolean(config.circuitBreakerTrippedByScope?.[cbKey]) || riskCfg.riskLockStatus !== 'NORMAL';
 
-        const riskText = `🛡️ <b>تقرير إدارة المخاطر والأداء (Risk & Performance)</b>\n\n` +
+        const riskText = `🛡️ <b>تقرير إدارة المخاطر والأداء (${kvMarketType} - ${mode})</b>\n\n` +
           `• <b>نسبة نجاح الصفقات (Win Rate):</b> ${winRate}%\n` +
           `• <b>إجمالي الصفقات المكتملة:</b> ${totalTrades} صفقة (${winTrades} رابحة)\n` +
           `• <b>إجمالي الأرباح المحققة:</b> ${totalRealizedPnl >= 0 ? '+' : ''}$${totalRealizedPnl.toFixed(2)} USDT\n` +
-          `• <b>أقصى تراجع يومي مسموح (Daily Drawdown Limit):</b> ${config.dailyDrawdownLimitPercent || 5}%\n` +
+          `• <b>أقصى تراجع يومي مسموح:</b> ${riskCfg.maxDailyLossPercent || config.dailyDrawdownLimitPercent || 5}%\n` +
           `• <b>توزيع رأس المال لكل صفقة:</b> ${config.tradeAllocationPercent || 25}%\n` +
           `• <b>أقصى عدد صفقات متزامنة:</b> ${config.maxOpenTrades || 3} صفقات\n` +
-          `• <b>قاطع الدائرة الآلي (Circuit Breaker):</b> ${config.circuitBreakerTripped ? '🔴 نشط (حماية رأس المال)' : '🟢 سليم'}`;
+          `• <b>قاطع الدائرة الآلي (${kvMarketType}):</b> ${isCbTripped ? '🔴 نشط (حماية رأس المال)' : '🟢 سليم'}`;
 
         await sendServerTelegramNotification(riskText, chatId);
         break;
@@ -1406,12 +1426,16 @@ export interface RealBinanceAccountInfo {
  * Direct real Binance account state query for backend risk validation and execution sizing.
  * Strictly separates Spot and Futures, and never mixes Testnet with Live.
  */
-export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccountInfo> => {
+export const fetchRealBinanceAccountDirect = async (
+  overrideMarketType?: 'SPOT' | 'FUTURES',
+  overrideExecutionMode?: string
+): Promise<RealBinanceAccountInfo> => {
   const config = await getBinanceConfig();
-  const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+  const rawMode = overrideExecutionMode || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
   const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
     rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
-  const effectiveMarketType: 'SPOT' | 'FUTURES' = config.marketType === 'SPOT' ? 'SPOT' : 'FUTURES';
+  const effectiveMarketType: 'SPOT' | 'FUTURES' =
+    overrideMarketType ? overrideMarketType : (config.marketType === 'SPOT' ? 'SPOT' : 'FUTURES');
 
   if (!config.isConnected || !config.apiKey || !config.apiSecret) {
     return {
@@ -1427,7 +1451,7 @@ export const fetchRealBinanceAccountDirect = async (): Promise<RealBinanceAccoun
   const result = await fetchAuthoritativeAccount(effectiveMarketType, executionMode, {
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
-    useTestnet: config.useTestnet,
+    useTestnet: executionMode === 'BINANCE_TESTNET' ? true : (executionMode === 'BINANCE_LIVE' ? false : config.useTestnet),
   });
 
   return {
@@ -1720,7 +1744,8 @@ export const reconcilePaperWalletDirect = async () => {
     const currentMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
     const activeMarketType = (await kv.get('app_binance_market_type')) || 'SPOT';
 
-    const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER' || h.mode === currentMode);
+    // CRITICAL ISOLATION: Paper wallet reconciliation ONLY counts PAPER trades, NEVER Testnet or Live trades!
+    const paperTrades = history.filter((h: any) => !h.mode || h.mode === 'PAPER');
     const uniquePaperTrades = paperTrades.filter((h: any) => {
       const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
       if (seenHistoryIds.has(id)) return false;
@@ -1728,10 +1753,10 @@ export const reconcilePaperWalletDirect = async () => {
       return true;
     });
 
-    // Get active open positions
+    // Get active open positions strictly for PAPER mode
     const posStr = await kv.get('btc_active_bot_positions');
     const positions = posStr ? JSON.parse(posStr) : [];
-    const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER' || p.mode === currentMode));
+    const activePaperPositions = positions.filter((p: any) => !isPositionPermanentlyClosed(p.id) && (!p.mode || p.mode === 'PAPER'));
 
     const baseCapitalStr = await kv.get('paper_wallet_initial_deposit');
     const defaultBaseCapital = baseCapitalStr ? (Number(baseCapitalStr) || 1000) : 1000;
@@ -1889,36 +1914,65 @@ export const startBotEngine = () => {
       const botConfigStr = await kv.get('btc_bot_config');
       const botConfig = botConfigStr ? JSON.parse(botConfigStr) : { enabled: false };
 
-      // DAILY DRAWDOWN & CIRCUIT BREAKER EVALUATION (Server-Side Automated Protection)
-      if (botConfig.enabled && botConfig.dailyDrawdownLimitPercent && botConfig.dailyDrawdownLimitPercent > 0 && !botConfig.circuitBreakerTripped) {
+      // DAILY DRAWDOWN & CIRCUIT BREAKER EVALUATION (Strictly Scoped per ExecutionMode + MarketType)
+      const currentModeForCb = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+      const currentMarketForCb = ((await kv.get('app_binance_market_type')) || botConfig.marketType || 'SPOT') as 'SPOT' | 'FUTURES';
+      const cbScopeKey = `${currentModeForCb}_${currentMarketForCb}`;
+      const isScopeTripped = Boolean(botConfig.circuitBreakerTrippedByScope?.[cbScopeKey]);
+
+      if (botConfig.enabled && botConfig.dailyDrawdownLimitPercent && botConfig.dailyDrawdownLimitPercent > 0 && !isScopeTripped) {
         const startOfTodayUtc = new Date().setUTCHours(0, 0, 0, 0);
-        const baselineTime = Math.max(startOfTodayUtc, botConfig.circuitBreakerResetAt || 0);
+        const scopeResetAt = botConfig.circuitBreakerResetAtByScope?.[cbScopeKey] || botConfig.circuitBreakerResetAt || 0;
+        const baselineTime = Math.max(startOfTodayUtc, scopeResetAt);
         const logsStr = await kv.get('btc_bot_logs');
         const logs = logsStr ? JSON.parse(logsStr) : [];
-        const todayLogs = logs.filter((l: any) => l.timestamp >= baselineTime);
-        const todayRealizedLoss = todayLogs.reduce((acc: number, l: any) => acc + (l.pnlUsdt || 0), 0);
+        // Strictly filter logs by BOTH execution mode AND marketType so Spot losses never trip Futures or vice versa!
+        const todayScopedLogs = logs.filter((l: any) => {
+          const lMode = l.mode || 'PAPER';
+          const lMarket = l.marketType || (l.leverage && l.leverage > 1 ? 'FUTURES' : 'SPOT');
+          return l.timestamp >= baselineTime && lMode === currentModeForCb && lMarket === currentMarketForCb;
+        });
+        const todayRealizedLoss = todayScopedLogs.reduce((acc: number, l: any) => acc + (l.pnlUsdt || 0), 0);
 
-        const walletStr = await kv.get('btc_paper_wallet');
-        const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000 };
-        const totalEquity = Math.max(10, wallet.balance || 1000);
+        let totalEquity = 1000;
+        if (currentModeForCb === 'PAPER') {
+          const walletKey = currentMarketForCb === 'SPOT' ? 'btc_paper_wallet_spot' : 'btc_paper_wallet_futures';
+          const walletStr = (await kv.get(walletKey)) || (await kv.get('btc_paper_wallet'));
+          const wallet = walletStr ? JSON.parse(walletStr) : { balance: 1000, totalEquity: 1000 };
+          totalEquity = Math.max(10, wallet.totalEquity || wallet.balance || 1000);
+        } else {
+          const realAcc = await fetchRealBinanceAccountDirect(currentMarketForCb, currentModeForCb);
+          if (realAcc.success && realAcc.totalUsdtEquity > 0) {
+            totalEquity = realAcc.totalUsdtEquity;
+          }
+        }
         const maxDailyLossAllowedUsdt = totalEquity * (botConfig.dailyDrawdownLimitPercent / 100);
 
         if (todayRealizedLoss <= -maxDailyLossAllowedUsdt) {
-          console.log(`[SERVER CIRCUIT BREAKER ACTIVATED] Daily loss reached -$${Math.abs(todayRealizedLoss).toFixed(2)}. Tripping circuit breaker and pausing bot.`);
-          botConfig.enabled = false;
-          botConfig.circuitBreakerTripped = true;
-          botConfig.circuitBreakerTrippedAt = Date.now();
+          console.log(`[SERVER CIRCUIT BREAKER ACTIVATED] [${cbScopeKey}] Daily loss reached -$${Math.abs(todayRealizedLoss).toFixed(2)}. Tripping scoped circuit breaker.`);
+          if (!botConfig.circuitBreakerTrippedByScope) botConfig.circuitBreakerTrippedByScope = {};
+          botConfig.circuitBreakerTrippedByScope[cbScopeKey] = true;
           await kv.set('btc_bot_config', JSON.stringify(botConfig));
 
+          // Also lock the RiskEngine for this specific scope only
+          try {
+            await RiskEngine.getInstance().setEmergencyStop(
+              true,
+              `Daily loss limit reached (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) in ${currentMarketForCb} (${currentModeForCb})`,
+              currentModeForCb,
+              currentMarketForCb
+            );
+          } catch {}
+
           sendServerTelegramNotification(
-            `⛔ <b>CIRCUIT BREAKER ACTIVATED (SAFETY LOCK)</b>\n\n` +
-            `🚨 Max daily loss limit (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) was reached.\n` +
-            `🛑 Trading Bot was automatically PAUSED to preserve remaining capital.`
+            `⛔ <b>CIRCUIT BREAKER ACTIVATED (${currentMarketForCb} - ${currentModeForCb})</b>\n\n` +
+            `🚨 Max daily loss limit (-$${Math.abs(todayRealizedLoss).toFixed(2)} / ${botConfig.dailyDrawdownLimitPercent}%) was reached for <b>${currentMarketForCb}</b>.\n` +
+            `🛑 New entries in ${currentMarketForCb} (${currentModeForCb}) are paused to preserve capital (other markets remain unaffected).`
           );
 
           recordPushAlertDirect({
-            title: `⛔ Circuit Breaker Activated!`,
-            body: `Max daily loss limit reached (-$${Math.abs(todayRealizedLoss).toFixed(2)}). Bot paused automatically to protect capital.`,
+            title: `⛔ [${currentMarketForCb}] Circuit Breaker Activated!`,
+            body: `Max daily loss limit reached (-$${Math.abs(todayRealizedLoss).toFixed(2)}) in ${currentMarketForCb} (${currentModeForCb}).`,
             type: 'SYSTEM',
             symbol: 'PORTFOLIO',
           }).catch(() => {});
@@ -2104,6 +2158,8 @@ export const startBotEngine = () => {
             pnlPercent: -100,
             reason: `Liquidation threshold reached (-100% Margin Depleted)`,
             mode: pos.mode || 'PAPER',
+            marketType: pos.marketType || 'FUTURES',
+            leverage: lev,
           });
 
           historyToAdd.push({
@@ -2124,6 +2180,8 @@ export const startBotEngine = () => {
             confidence: pos.confidence || 75,
             strategyName: pos.strategyName,
             mode: pos.mode || 'PAPER',
+            marketType: pos.marketType || 'FUTURES',
+            leverage: lev,
           });
 
           try {
@@ -2132,6 +2190,8 @@ export const startBotEngine = () => {
               symbol: pos.symbol,
               strategyName: pos.strategyName,
               durationMs: Date.now() - (pos.openedAt || Date.now()),
+              executionMode: pos.mode || 'PAPER',
+              marketType: pos.marketType || 'FUTURES',
             });
           } catch (err) {}
 
@@ -2235,6 +2295,8 @@ export const startBotEngine = () => {
             pnlPercent: roeMetrics.netROE,
             reason: `TP1 achieved (50% closed at ${currentP}, SL secured at fee-aware breakeven)`,
             mode: pos.mode || 'PAPER',
+            marketType: pos.marketType || (lev > 1 ? 'FUTURES' : 'SPOT'),
+            leverage: lev,
           });
         }
         
@@ -2308,6 +2370,8 @@ export const startBotEngine = () => {
             pnlPercent: roeMetrics.netROE,
             reason: `TP2 achieved (50% remaining closed at ${currentP}, SL advanced to TP1)`,
             mode: pos.mode || 'PAPER',
+            marketType: pos.marketType || (lev > 1 ? 'FUTURES' : 'SPOT'),
+            leverage: lev,
           });
         }
         
@@ -2369,6 +2433,7 @@ export const startBotEngine = () => {
             symbol: pos.symbol,
           }).catch(() => {});
 
+          const posMarketTypeResolved = pos.marketType || (lev > 1 ? 'FUTURES' : 'SPOT');
           logsToAdd.push({
             id: `log-server-${Date.now()}-${i}`,
             timestamp: Date.now(),
@@ -2380,7 +2445,9 @@ export const startBotEngine = () => {
             pnlUsdt: Math.round(tranchePnl * 100) / 100,
             pnlPercent: Math.round(roeMetrics.netROE * 100) / 100,
             reason: isTp3 ? `TP3 target achieved (${currentP})` : (pos.isTrailingActive ? `Trailing Stop triggered (${currentP})` : `Stop Loss hit (${currentP})`),
-            mode: pos.mode || 'PAPER'
+            mode: pos.mode || 'PAPER',
+            marketType: posMarketTypeResolved,
+            leverage: lev,
           });
 
           const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || pos.remainingAmountUsdt || 10;
@@ -2404,10 +2471,12 @@ export const startBotEngine = () => {
             strategyName: pos.strategyName,
             pnlHistory: pos.pnlHistory,
             mode: pos.mode || 'PAPER',
+            marketType: posMarketTypeResolved,
+            leverage: lev,
           });
 
           // Enforce 20 minutes cooldown on this symbol to prevent repeated immediate re-entry
-          symbolCooldownMap.set(pos.symbol.toUpperCase().trim(), Date.now() + 20 * 60 * 1000);
+          symbolCooldownMap.set(`${posMarketTypeResolved}_${pos.symbol.toUpperCase().trim()}`, Date.now() + 20 * 60 * 1000);
 
           try {
             const riskEngine = RiskEngine.getInstance();
@@ -2415,6 +2484,8 @@ export const startBotEngine = () => {
               symbol: pos.symbol,
               strategyName: pos.strategyName,
               durationMs: Date.now() - (pos.openedAt || Date.now()),
+              executionMode: pos.mode || 'PAPER',
+              marketType: posMarketTypeResolved,
             });
           } catch (err) {
             console.error('[SERVER ENGINE] Risk Engine record error:', err);
@@ -2577,28 +2648,38 @@ export const closePositionDirect = async (
     const histStr = await kv.get('btc_trade_history');
     const history = histStr ? JSON.parse(histStr) : [];
     const initialMargin = pos.initialAmountUsdt || pos.marginUsdt || marginClosed || 10;
-    const historyItem = extraData?.tradeHistoryItem || {
-      id: `history-manual-${Date.now()}`,
-      posId: posId,
-      timestamp: Date.now(),
-      closedAt: Date.now(),
-      symbol: pos.symbol,
-      decision: pos.decision,
-      timeframe: '1h',
-      entryPrice: pos.entryPrice,
-      exitPrice: currentP,
-      tp1: pos.tp1,
-      tp2: pos.tp2,
-      tp3: pos.tp3,
-      stopLoss: pos.stopLoss,
-      status: totalTradePnl >= 0 ? 'TP_MANUAL' : 'SL_MANUAL',
-      profitPercent: Math.round(((totalTradePnl / initialMargin) * 100) * 100) / 100,
-      profitUsdt: Math.round(totalTradePnl * 100) / 100,
-      confidence: pos.confidence || 75,
-      strategyName: pos.strategyName,
-      pnlHistory: pos.pnlHistory,
-      mode: pos.mode || 'PAPER',
-    };
+    const posMarketTypeResolved = pos.marketType || (lev > 1 ? 'FUTURES' : 'SPOT');
+    const historyItem = extraData?.tradeHistoryItem
+      ? {
+          ...extraData.tradeHistoryItem,
+          mode: extraData.tradeHistoryItem.mode || pos.mode || 'PAPER',
+          marketType: extraData.tradeHistoryItem.marketType || posMarketTypeResolved,
+          leverage: extraData.tradeHistoryItem.leverage || lev,
+        }
+      : {
+          id: `history-manual-${Date.now()}`,
+          posId: posId,
+          timestamp: Date.now(),
+          closedAt: Date.now(),
+          symbol: pos.symbol,
+          decision: pos.decision,
+          timeframe: '1h',
+          entryPrice: pos.entryPrice,
+          exitPrice: currentP,
+          tp1: pos.tp1,
+          tp2: pos.tp2,
+          tp3: pos.tp3,
+          stopLoss: pos.stopLoss,
+          status: totalTradePnl >= 0 ? 'TP_MANUAL' : 'SL_MANUAL',
+          profitPercent: Math.round(((totalTradePnl / initialMargin) * 100) * 100) / 100,
+          profitUsdt: Math.round(totalTradePnl * 100) / 100,
+          confidence: pos.confidence || 75,
+          strategyName: pos.strategyName,
+          pnlHistory: pos.pnlHistory,
+          mode: pos.mode || 'PAPER',
+          marketType: posMarketTypeResolved,
+          leverage: lev,
+        };
     const seenHistIds = new Set<string>();
     const deduplicatedHist = [historyItem, ...history].filter((h: any) => {
       const id = h.posId || h.id || `${h.symbol}_${h.timestamp}`;
@@ -2627,7 +2708,7 @@ export const closePositionDirect = async (
       pnlPercent: Math.round(roePercent * 100) / 100,
       reason,
       mode: pos.mode || 'PAPER',
-      marketType: pos.marketType,
+      marketType: posMarketTypeResolved,
       leverage: lev,
     };
     await kv.set('btc_bot_logs', JSON.stringify([logItem, ...logs].slice(0, 500)));
@@ -2638,6 +2719,8 @@ export const closePositionDirect = async (
         symbol: pos.symbol,
         strategyName: pos.strategyName,
         durationMs: Date.now() - (pos.openedAt || Date.now()),
+        executionMode: pos.mode || 'PAPER',
+        marketType: posMarketTypeResolved,
       });
     } catch (err) {}
 
@@ -2649,31 +2732,51 @@ export const closePositionDirect = async (
 };
 
 /**
- * Panic close all active positions immediately
+ * Panic close active positions strictly for the specified executionMode and marketType (so one market never liquidates another)
  */
-export const panicCloseAllDirect = async (fallbackPositions?: any[]) => {
+export const panicCloseAllDirect = async (
+  fallbackPositions?: any[],
+  targetExecutionMode?: string,
+  targetMarketType?: string
+) => {
   try {
+    const activeMode = targetExecutionMode || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+    const activeMarket = targetMarketType || (await kv.get('app_binance_market_type')) || 'SPOT';
+
     const posStr = await kv.get('btc_active_bot_positions');
-    let positions = posStr ? JSON.parse(posStr) : [];
-    if (!Array.isArray(positions) || positions.length === 0) {
+    let allPositions = posStr ? JSON.parse(posStr) : [];
+    if (!Array.isArray(allPositions) || allPositions.length === 0) {
       if (Array.isArray(fallbackPositions) && fallbackPositions.length > 0) {
-        positions = fallbackPositions;
+        allPositions = fallbackPositions;
       } else {
         await reconcilePaperWalletDirect();
         return { success: true, closedCount: 0 };
       }
     }
 
-    for (const pos of positions) {
+    // Filter only positions belonging to the active mode & marketType
+    const positionsToClose = allPositions.filter((p: any) => {
+      const pMode = p.mode || 'PAPER';
+      const pMarket = p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT');
+      return pMode === activeMode && pMarket === activeMarket;
+    });
+
+    for (const pos of positionsToClose) {
       if (pos && pos.id) {
-        await closePositionDirect(pos.id, undefined, 'Panic emergency close all');
+        await closePositionDirect(pos.id, undefined, `Panic emergency close (${activeMarket} - ${activeMode})`);
       }
     }
 
-    await kv.set('btc_active_bot_positions', '[]');
+    // Keep positions belonging to other modes/markets untouched!
+    const remainingOtherScopePositions = allPositions.filter((p: any) => {
+      const pMode = p.mode || 'PAPER';
+      const pMarket = p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT');
+      return !(pMode === activeMode && pMarket === activeMarket);
+    });
+    await kv.set('btc_active_bot_positions', JSON.stringify(remainingOtherScopePositions));
     await reconcilePaperWalletDirect();
 
-    return { success: true, closedCount: positions.length };
+    return { success: true, closedCount: positionsToClose.length };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

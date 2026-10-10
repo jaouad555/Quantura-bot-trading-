@@ -90,6 +90,26 @@ export interface RiskEngineConfig {
   riskLockStatus: RiskLockStatus;
   riskLockReason?: string;
   riskLockTimestamp?: number;
+  executionMode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
+  marketType?: 'SPOT' | 'FUTURES';
+  scopeKey?: string;
+}
+
+export type RiskScopeKey = string; // e.g., 'PAPER_SPOT' | 'PAPER_FUTURES' | 'BINANCE_TESTNET_SPOT' | 'BINANCE_TESTNET_FUTURES' | 'BINANCE_LIVE_SPOT' | 'BINANCE_LIVE_FUTURES'
+
+export function buildRiskScopeKey(
+  executionMode?: string,
+  marketType?: string
+): RiskScopeKey {
+  const normMode =
+    executionMode === 'BINANCE_LIVE'
+      ? 'BINANCE_LIVE'
+      : executionMode === 'BINANCE_TESTNET'
+      ? 'BINANCE_TESTNET'
+      : 'PAPER';
+  const normMarket =
+    String(marketType || '').toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT';
+  return `${normMode}_${normMarket}`;
 }
 
 export interface OrderBookDepth {
@@ -154,6 +174,7 @@ export interface ActivePositionSnapshot {
   positionSizeUsdt: number; // Notional value
   leverage: number;
   marketType: 'SPOT' | 'FUTURES';
+  mode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
   unrealizedPnlUsdt: number;
   unrealizedRoePercent: number;
   strategyName?: string;
@@ -171,6 +192,8 @@ export interface RiskEvaluationResult {
   symbol: string;
   side: 'LONG' | 'SHORT';
   marketType: 'SPOT' | 'FUTURES';
+  executionMode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
+  scopeKey?: string;
   approvedQuantity: number;
   approvedMarginUsdt: number;
   approvedLeverage: number;
@@ -212,6 +235,9 @@ export interface RiskEvaluationResult {
 }
 
 export interface RiskEngineMetrics {
+  executionMode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
+  marketType?: 'SPOT' | 'FUTURES';
+  scopeKey?: string;
   startingDailyEquity: number;
   currentEquity: number;
   peakEquity: number;
@@ -254,6 +280,8 @@ export interface RiskAuditEntry {
   symbol: string;
   side: 'LONG' | 'SHORT';
   marketType: 'SPOT' | 'FUTURES';
+  executionMode?: 'BINANCE_LIVE' | 'BINANCE_TESTNET' | 'PAPER';
+  scopeKey?: string;
   decision: RiskDecision;
   reasonCode?: RejectionCode;
   message: string;

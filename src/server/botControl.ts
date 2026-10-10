@@ -47,7 +47,10 @@ setInterval(() => {
 /**
  * Single Authoritative Source for Bot Engine State
  */
-export async function getAuthoritativeBotState(): Promise<AuthoritativeBotState> {
+export async function getAuthoritativeBotState(
+  overrideExecutionMode?: string,
+  overrideMarketType?: string
+): Promise<AuthoritativeBotState> {
   let botConfig: any = { enabled: false, marketType: 'SPOT', activePresets: [] };
   try {
     const raw = await kv.get('btc_bot_config');
@@ -56,15 +59,17 @@ export async function getAuthoritativeBotState(): Promise<AuthoritativeBotState>
     console.warn('[BOT CONTROL] Error reading btc_bot_config:', e);
   }
 
-  const rawMode = (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
+  const rawMode = overrideExecutionMode || (await kv.get('trading_execution_mode')) || (await kv.get('app_execution_mode')) || 'PAPER';
   const executionMode: 'PAPER' | 'BINANCE_TESTNET' | 'BINANCE_LIVE' =
     rawMode === 'BINANCE_LIVE' ? 'BINANCE_LIVE' : (rawMode === 'BINANCE_TESTNET' ? 'BINANCE_TESTNET' : 'PAPER');
 
-  const rawMt = (await kv.get('app_binance_market_type')) || botConfig.marketType || 'SPOT';
-  const marketType: 'SPOT' | 'FUTURES' = rawMt === 'FUTURES' ? 'FUTURES' : 'SPOT';
+  const rawMt = overrideMarketType || (await kv.get('app_binance_market_type')) || botConfig.marketType || 'SPOT';
+  const marketType: 'SPOT' | 'FUTURES' = String(rawMt).toUpperCase() === 'FUTURES' ? 'FUTURES' : 'SPOT';
 
   const isEnabled = Boolean(botConfig.enabled);
-  const isCircuitBreaker = Boolean(botConfig.circuitBreakerTripped);
+  const scopeKey = `${executionMode}_${marketType}`;
+  // Strictly check the scoped circuit breaker so Spot losses never pause Futures or vice versa
+  const isCircuitBreaker = Boolean(botConfig.circuitBreakerTrippedByScope?.[scopeKey]);
 
   let status: 'RUNNING' | 'STOPPED' | 'PAUSED' = 'STOPPED';
   if (isCircuitBreaker) {
@@ -98,6 +103,7 @@ export interface OrderSubmissionGuardParams {
   price?: number;
 }
 
+
 export interface GuardEvaluationResult {
   allowed: boolean;
   reason?: string;
@@ -114,20 +120,25 @@ export async function canSubmitOrder(params: OrderSubmissionGuardParams): Promis
   const normSymbol = (params.symbol || '').toUpperCase().trim();
   const normSide = (params.side || '').toUpperCase().trim();
   const normMarket = params.marketType || 'SPOT';
+  const normMode = params.executionMode || 'PAPER';
 
   // 1. Reduce-Only / Position Close Guard:
-  // If an order is explicitly closing an existing position (reduceOnly), verify the position genuinely exists
+  // If an order is explicitly closing an existing position (reduceOnly), verify the position genuinely exists in this scope
   if (params.isReduceOnly) {
     try {
       const posStr = await kv.get('btc_active_bot_positions');
       const positions = posStr ? JSON.parse(posStr) : [];
-      const hasPos = positions.some((p: any) => p && p.symbol && p.symbol.toUpperCase() === normSymbol);
+      const hasPos = positions.some((p: any) => {
+        const pMarket = p.marketType || (p.leverage && p.leverage > 1 ? 'FUTURES' : 'SPOT');
+        const pMode = p.mode || 'PAPER';
+        return p && p.symbol && p.symbol.toUpperCase() === normSymbol && pMarket === normMarket && pMode === normMode;
+      });
       if (!hasPos) {
-        console.warn(`[EXECUTION GUARD] Reduce-only order rejected: No active position found for ${normSymbol}`);
+        console.warn(`[EXECUTION GUARD] Reduce-only order rejected: No active position found for ${normSymbol} in ${normMarket} (${normMode})`);
         return {
           allowed: false,
           code: 'NO_POSITION_TO_CLOSE',
-          reason: `Cannot submit reduce-only order: No open position found for ${normSymbol}`,
+          reason: `Cannot submit reduce-only order: No open position found for ${normSymbol} in ${normMarket}`,
         };
       }
     } catch (_) {}
@@ -138,15 +149,14 @@ export async function canSubmitOrder(params: OrderSubmissionGuardParams): Promis
   if (params.isManual) {
     if (normMarket === 'SPOT' && (normSide === 'SELL' || normSide === 'SHORT')) {
       // In Spot, a new open order cannot be a short/sell without holding
-      // (Sell orders in Spot can only reduce existing holdings)
     }
     return { allowed: true };
   }
 
-  // 3. Automatic Orders: MUST pass Authoritative Bot State verification
-  const botState = await getAuthoritativeBotState();
+  // 3. Automatic Orders: MUST pass Authoritative Bot State verification for the specific scope
+  const botState = await getAuthoritativeBotState(normMode, normMarket);
 
-  if (!botState.enabled || botState.status === 'STOPPED') {
+  if (!botState.enabled && !botState.circuitBreakerTripped) {
     const msg = `[EXECUTION GUARD REJECT] Bot is STOPPED / DISABLED. Automatic order rejected for ${normSymbol} (${normSide}).`;
     console.warn(msg);
     return {
@@ -157,12 +167,12 @@ export async function canSubmitOrder(params: OrderSubmissionGuardParams): Promis
   }
 
   if (botState.circuitBreakerTripped || botState.status === 'PAUSED') {
-    const msg = `[EXECUTION GUARD REJECT] Circuit Breaker is active. Trading paused for ${normSymbol}.`;
+    const msg = `[EXECUTION GUARD REJECT] Circuit Breaker is active for ${normMarket} (${normMode}). Trading paused for ${normSymbol}.`;
     console.warn(msg);
     return {
       allowed: false,
       code: 'CIRCUIT_BREAKER_ACTIVE',
-      reason: `Circuit Breaker is active due to daily loss protection. Order rejected.`,
+      reason: `Circuit Breaker is active for ${normMarket} (${normMode}) due to daily loss protection. Order rejected.`,
     };
   }
 
@@ -243,14 +253,14 @@ export async function canSubmitOrder(params: OrderSubmissionGuardParams): Promis
     }
   } catch (_) {}
 
-  // 9. Cooldown Check
-  const nextAllowed = symbolCooldownMap.get(normSymbol) || 0;
+  // 9. Cooldown Check (Market-Scoped)
+  const nextAllowed = symbolCooldownMap.get(`${normMarket}_${normSymbol}`) || 0;
   if (Date.now() < nextAllowed) {
     const remainingSec = Math.ceil((nextAllowed - Date.now()) / 1000);
     return {
       allowed: false,
       code: 'SYMBOL_IN_COOLDOWN',
-      reason: `Symbol ${normSymbol} is in cooldown (${remainingSec}s remaining).`,
+      reason: `Symbol ${normSymbol} is in cooldown for ${normMarket} (${remainingSec}s remaining).`,
     };
   }
 
